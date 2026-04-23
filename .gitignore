@@ -1,0 +1,20 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+Cargo.lock.bak
+
+# Env
+.env
+.env.*
+!.env.example
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log

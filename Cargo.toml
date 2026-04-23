@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/rollup",
+    "crates/modules",
+    "crates/client-rs",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+authors = ["Ligate Labs <hello@ligate.io>"]
+repository = "https://github.com/ligate-io/ligate-chain"
+homepage = "https://ligate.io"
+publish = false
+rust-version = "1.87"
+
+[workspace.dependencies]
+# Sovereign SDK — pinned to nightly rev. Bump alongside module work.
+# Consumed via `{ workspace = true }` in member crates once module code lands (issue #4+).
+sov-rollup-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-modules-api      = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-state            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+
+# Shared workspace dependencies
+anyhow     = "1.0"
+thiserror  = "1.0"
+serde      = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing    = "0.1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
