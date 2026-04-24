@@ -1,0 +1,20 @@
+[package]
+name = "attestation"
+description = "Ligate Themisra attestation module — Proof of Prompt receipts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+serde.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

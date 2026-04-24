@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/rollup",
-    "crates/modules",
+    "crates/modules/attestation",
     "crates/client-rs",
 ]
 
@@ -14,7 +14,7 @@ authors = ["Ligate Labs <hello@ligate.io>"]
 repository = "https://github.com/ligate-io/ligate-chain"
 homepage = "https://ligate.io"
 publish = false
-rust-version = "1.87"
+rust-version = "1.93"
 
 [workspace.dependencies]
 # Sovereign SDK — pinned to nightly rev. Bump alongside module work.
@@ -29,6 +29,8 @@ thiserror  = "1.0"
 serde      = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing    = "0.1"
+borsh      = { version = "1.5", features = ["bytes", "derive"] }
+sha2       = "0.10"
 
 [profile.release]
 lto = "thin"
