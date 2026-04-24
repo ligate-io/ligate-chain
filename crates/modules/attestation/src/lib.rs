@@ -383,6 +383,44 @@ pub enum AttestationError {
     /// `context.sender()` did not produce a 32-byte representation.
     #[error("sender address is not 32 bytes")]
     BadSenderLength,
+
+    /// The same pubkey appeared twice in one submission's signatures vector.
+    #[error("duplicate attestor pubkey in signatures")]
+    DuplicateSignaturePubkey,
+
+    /// A signature's pubkey was not a member of the schema's attestor set.
+    #[error("signature pubkey is not in the schema's attestor set")]
+    UnknownAttestorPubkey,
+
+    /// A signature's pubkey bytes did not decode as a valid ed25519 point.
+    #[error("signature pubkey is not a valid ed25519 point")]
+    InvalidAttestorPubkey,
+
+    /// A signature's raw bytes were not the 64 bytes ed25519 expects.
+    #[error("signature length {actual} != expected 64 for ed25519")]
+    BadSignatureLength {
+        /// Length that was actually submitted.
+        actual: usize,
+    },
+
+    /// A signature did not verify against the canonical attestation digest.
+    #[error("signature did not verify against attestation digest")]
+    InvalidSignature,
+
+    /// Fewer valid signatures than the schema's attestor set requires.
+    #[error("quorum not met: {provided} valid signatures, need {required}")]
+    BelowThreshold {
+        /// Count of valid signatures in the submission.
+        provided: u8,
+        /// Threshold required by the schema's attestor set.
+        required: u8,
+    },
+
+    /// A schema referenced an attestor set that no longer exists at submit
+    /// time. Should be unreachable given the register-time invariants, but
+    /// surfaced as an explicit error to keep state-transition code honest.
+    #[error("schema's attestor set is missing from state")]
+    MissingAttestorSet,
 }
 
 // ============================================================================
@@ -527,10 +565,17 @@ impl<C: Context> AttestationModule<C> {
 
     /// Handle [`CallMessage::SubmitAttestation`].
     ///
-    /// Signature validation is **stubbed** in this revision (issue #20 owns
-    /// the real ed25519 verification + quorum enforcement). For now we just
-    /// require the schema and the signatures vector to be structurally
-    /// well-formed.
+    /// Enforces:
+    /// 1. Schema exists.
+    /// 2. `(schema_id, payload_hash)` has not been written before.
+    /// 3. Every signature is valid ed25519 over the canonical
+    ///    [`SignedAttestationPayload`] digest.
+    /// 4. Every signing pubkey is a member of the schema's [`AttestorSet`].
+    /// 5. No pubkey appears twice in the submission.
+    /// 6. Count of valid signatures is at least the attestor set's
+    ///    `threshold`.
+    ///
+    /// Fee charging is still stubbed here; #22 owns it.
     fn handle_submit_attestation(
         &self,
         schema_id: SchemaId,
@@ -539,19 +584,18 @@ impl<C: Context> AttestationModule<C> {
         context: &C,
         working_set: &mut WorkingSet<C>,
     ) -> anyhow::Result<CallResponse> {
-        if self.schemas.get(&schema_id, working_set).is_none() {
-            return Err(AttestationError::UnknownSchema.into());
-        }
+        let schema =
+            self.schemas.get(&schema_id, working_set).ok_or(AttestationError::UnknownSchema)?;
 
         let key = (schema_id, payload_hash);
         if self.attestations.get(&key, working_set).is_some() {
             return Err(AttestationError::DuplicateAttestation.into());
         }
 
-        // TODO(#20): verify each `AttestorSignature` against the schema's
-        // `AttestorSet`, check quorum threshold, enforce no-duplicate-pubkeys.
-        // TODO(#22): charge `ATTESTATION_FEE` via bank and split per
-        // schema.fee_routing_bps / schema.fee_routing_addr.
+        let attestor_set = self
+            .attestor_sets
+            .get(&schema.attestor_set, working_set)
+            .ok_or(AttestationError::MissingAttestorSet)?;
 
         let submitter = sender_to_address::<C>(context.sender())?;
         // TODO: pull the real block timestamp once WorkingSet exposes it
@@ -559,6 +603,16 @@ impl<C: Context> AttestationModule<C> {
         // wired in #13). For now, attestations carry `timestamp = 0`; the
         // write-once key prevents replay either way.
         let timestamp = 0u64;
+
+        // Canonical digest attestors sign over. Must be computed after we
+        // know `submitter` and `timestamp`; those are part of what's signed.
+        let digest =
+            SignedAttestationPayload { schema_id, payload_hash, submitter, timestamp }.digest();
+
+        validate_signatures(&signatures, &attestor_set, &digest)?;
+
+        // TODO(#22): charge `ATTESTATION_FEE` via bank and split per
+        // schema.fee_routing_bps / schema.fee_routing_addr.
 
         self.attestations.set(
             &key,
@@ -585,6 +639,71 @@ fn sender_to_address<C: Context>(sender: &C::Address) -> anyhow::Result<Address>
     let mut out = [0u8; 32];
     out.copy_from_slice(bytes);
     Ok(out)
+}
+
+/// Validate a submission's [`AttestorSignature`] vector against an
+/// [`AttestorSet`] and the canonical attestation digest.
+///
+/// Enforces, in order:
+/// 1. No duplicate pubkey within the submission.
+/// 2. Each pubkey is a member of `set.members`.
+/// 3. Each pubkey bytes decode as a valid ed25519 point.
+/// 4. Each signature's raw bytes are 64 bytes long.
+/// 5. The ed25519 signature verifies against `digest` for its pubkey.
+/// 6. The count of valid signatures is at least `set.threshold`.
+///
+/// Ed25519 is the only scheme accepted in v0. BLS aggregates or other
+/// schemes would be added as separate variants later; `AttestorSignature.sig`
+/// is `Vec<u8>` today precisely to leave room for that.
+fn validate_signatures(
+    signatures: &[AttestorSignature],
+    set: &AttestorSet,
+    digest: &Hash32,
+) -> anyhow::Result<()> {
+    use std::collections::BTreeSet;
+
+    use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+
+    let members: BTreeSet<&PubKey> = set.members.iter().collect();
+    let mut seen: BTreeSet<PubKey> = BTreeSet::new();
+    let mut valid: u16 = 0;
+
+    for attested in signatures {
+        if !seen.insert(attested.pubkey) {
+            return Err(AttestationError::DuplicateSignaturePubkey.into());
+        }
+
+        if !members.contains(&attested.pubkey) {
+            return Err(AttestationError::UnknownAttestorPubkey.into());
+        }
+
+        let verifying_key = VerifyingKey::from_bytes(&attested.pubkey)
+            .map_err(|_| AttestationError::InvalidAttestorPubkey)?;
+
+        let sig_bytes: [u8; 64] = attested
+            .sig
+            .as_slice()
+            .try_into()
+            .map_err(|_| AttestationError::BadSignatureLength { actual: attested.sig.len() })?;
+        let signature = Signature::from_bytes(&sig_bytes);
+
+        if verifying_key.verify(digest, &signature).is_err() {
+            return Err(AttestationError::InvalidSignature.into());
+        }
+
+        valid = valid.saturating_add(1);
+    }
+
+    let valid_u8: u8 = valid.min(u16::from(u8::MAX)) as u8;
+    if valid_u8 < set.threshold {
+        return Err(AttestationError::BelowThreshold {
+            provided: valid_u8,
+            required: set.threshold,
+        }
+        .into());
+    }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -821,6 +940,7 @@ mod tests {
 
 #[cfg(test)]
 mod state_transition_tests {
+    use ed25519_dalek::{Signer, SigningKey};
     use sov_modules_api::default_context::DefaultContext;
     use sov_modules_api::{Address as SovAddress, Module as _, WorkingSet};
     use sov_prover_storage_manager::new_orphan_storage;
@@ -829,18 +949,47 @@ mod state_transition_tests {
 
     type TestModule = AttestationModule<DefaultContext>;
 
+    /// Address the `fresh()` context uses as `sender`; also the owner of
+    /// any schema registered inside a test using that context.
+    const TEST_SENDER: Address = [1u8; 32];
+
     fn fresh() -> (TestModule, DefaultContext, WorkingSet<DefaultContext>, tempfile::TempDir) {
         let tmpdir = tempfile::tempdir().unwrap();
         let working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
-        let sender = SovAddress::from([1u8; 32]);
+        let sender = SovAddress::from(TEST_SENDER);
         let sequencer = SovAddress::from([9u8; 32]);
         let context = DefaultContext::new(sender, sequencer, 1);
         let module = TestModule::default();
         (module, context, working_set, tmpdir)
     }
 
+    /// Deterministic signers seeded from `[i; 32]`. Keeps test sigs
+    /// reproducible. Identity of each signer is stable across runs.
+    fn sample_signers() -> Vec<SigningKey> {
+        (1u8..=3).map(|i| SigningKey::from_bytes(&[i; 32])).collect()
+    }
+
+    fn members_of(signers: &[SigningKey]) -> Vec<PubKey> {
+        signers.iter().map(|sk| sk.verifying_key().to_bytes()).collect()
+    }
+
     fn sample_members() -> Vec<PubKey> {
-        vec![[1u8; 32], [2u8; 32], [3u8; 32]]
+        members_of(&sample_signers())
+    }
+
+    /// Canonical attestation digest matching what the module computes at
+    /// submit time. `submitter` in tests is always [`TEST_SENDER`];
+    /// `timestamp` is still 0 (block-header access lands with #13).
+    fn digest_for(schema_id: SchemaId, payload_hash: Hash32) -> Hash32 {
+        SignedAttestationPayload { schema_id, payload_hash, submitter: TEST_SENDER, timestamp: 0 }
+            .digest()
+    }
+
+    fn sign_with(sk: &SigningKey, digest: &Hash32) -> AttestorSignature {
+        AttestorSignature {
+            pubkey: sk.verifying_key().to_bytes(),
+            sig: sk.sign(digest).to_bytes().to_vec(),
+        }
     }
 
     #[test]
@@ -988,16 +1137,17 @@ mod state_transition_tests {
     #[test]
     fn full_register_register_submit_flow() {
         let (module, context, mut ws, _td) = fresh();
+        let signers = sample_signers();
 
-        // 1. Register attestor set
+        // 1. Register attestor set (threshold 2 of 3)
         module
             .call(
-                CallMessage::RegisterAttestorSet { members: sample_members(), threshold: 2 },
+                CallMessage::RegisterAttestorSet { members: members_of(&signers), threshold: 2 },
                 &context,
                 &mut ws,
             )
             .expect("register attestor set");
-        let attestor_set_id = AttestorSet::derive_id(&sample_members(), 2);
+        let attestor_set_id = AttestorSet::derive_id(&members_of(&signers), 2);
 
         // 2. Register schema
         module
@@ -1013,21 +1163,16 @@ mod state_transition_tests {
                 &mut ws,
             )
             .expect("register schema");
-        let owner = [1u8; 32]; // matches the sender in fresh()
-        let schema_id = Schema::derive_id(&owner, "themisra.proof-of-prompt", 1);
+        let schema_id = Schema::derive_id(&TEST_SENDER, "themisra.proof-of-prompt", 1);
 
-        // 3. Submit attestation
+        // 3. Submit attestation signed by 2 of 3 (meets threshold)
         let payload_hash = [0x42u8; 32];
+        let digest = digest_for(schema_id, payload_hash);
+        let signatures = vec![sign_with(&signers[0], &digest), sign_with(&signers[1], &digest)];
+
         module
             .call(
-                CallMessage::SubmitAttestation {
-                    schema_id,
-                    payload_hash,
-                    signatures: vec![AttestorSignature {
-                        pubkey: [1u8; 32],
-                        sig: vec![0xAAu8; 64],
-                    }],
-                },
+                CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
                 &context,
                 &mut ws,
             )
@@ -1039,7 +1184,7 @@ mod state_transition_tests {
         let stored = stored.unwrap();
         assert_eq!(stored.schema_id, schema_id);
         assert_eq!(stored.payload_hash, payload_hash);
-        assert_eq!(stored.submitter, owner);
+        assert_eq!(stored.submitter, TEST_SENDER);
 
         // 5. Write-once: resubmitting same (schema_id, payload_hash) must fail
         let res = module.call(
@@ -1048,5 +1193,164 @@ mod state_transition_tests {
             &mut ws,
         );
         assert!(res.is_err(), "duplicate (schema_id, payload_hash) must be rejected");
+    }
+
+    // --------- Signature validation reject paths -----------------------------
+
+    /// Set up schema + attestor set and return (schema_id, digest_for_hash).
+    /// Threshold 2 of 3. Used by every signature-validation test below.
+    fn sig_test_setup(
+        module: &TestModule,
+        context: &DefaultContext,
+        ws: &mut WorkingSet<DefaultContext>,
+        payload_hash: Hash32,
+    ) -> (SchemaId, Hash32) {
+        let signers = sample_signers();
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: members_of(&signers), threshold: 2 },
+                context,
+                ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&members_of(&signers), 2);
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "sig-test".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                context,
+                ws,
+            )
+            .unwrap();
+        let schema_id = Schema::derive_id(&TEST_SENDER, "sig-test", 1);
+        let digest = digest_for(schema_id, payload_hash);
+        (schema_id, digest)
+    }
+
+    #[test]
+    fn submit_below_threshold_rejects() {
+        let (module, context, mut ws, _td) = fresh();
+        let payload_hash = [0x01u8; 32];
+        let (schema_id, digest) = sig_test_setup(&module, &context, &mut ws, payload_hash);
+        let signers = sample_signers();
+
+        // Only 1 signature, threshold is 2.
+        let signatures = vec![sign_with(&signers[0], &digest)];
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected BelowThreshold");
+    }
+
+    #[test]
+    fn submit_with_unknown_pubkey_rejects() {
+        let (module, context, mut ws, _td) = fresh();
+        let payload_hash = [0x02u8; 32];
+        let (schema_id, digest) = sig_test_setup(&module, &context, &mut ws, payload_hash);
+        let signers = sample_signers();
+
+        // One legit sig, one signed by a stranger not in the attestor set.
+        let stranger = SigningKey::from_bytes(&[99u8; 32]);
+        let signatures = vec![sign_with(&signers[0], &digest), sign_with(&stranger, &digest)];
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected UnknownAttestorPubkey");
+    }
+
+    #[test]
+    fn submit_with_invalid_signature_rejects() {
+        let (module, context, mut ws, _td) = fresh();
+        let payload_hash = [0x03u8; 32];
+        let (schema_id, digest) = sig_test_setup(&module, &context, &mut ws, payload_hash);
+        let signers = sample_signers();
+
+        // Valid sig + one whose bytes are corrupted (flip a bit).
+        let mut corrupted = sign_with(&signers[0], &digest);
+        corrupted.sig[0] ^= 0x01;
+        let signatures = vec![sign_with(&signers[1], &digest), corrupted];
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected InvalidSignature");
+    }
+
+    #[test]
+    fn submit_with_duplicate_pubkey_rejects() {
+        let (module, context, mut ws, _td) = fresh();
+        let payload_hash = [0x04u8; 32];
+        let (schema_id, digest) = sig_test_setup(&module, &context, &mut ws, payload_hash);
+        let signers = sample_signers();
+
+        // Same signer twice, even though both signatures are technically valid.
+        let s = sign_with(&signers[0], &digest);
+        let signatures = vec![s.clone(), s];
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected DuplicateSignaturePubkey");
+    }
+
+    #[test]
+    fn submit_with_bad_sig_length_rejects() {
+        let (module, context, mut ws, _td) = fresh();
+        let payload_hash = [0x05u8; 32];
+        let (schema_id, digest) = sig_test_setup(&module, &context, &mut ws, payload_hash);
+        let signers = sample_signers();
+
+        // Take a legit sig but truncate the raw bytes.
+        let mut truncated = sign_with(&signers[0], &digest);
+        truncated.sig.truncate(63);
+        let signatures = vec![sign_with(&signers[1], &digest), truncated];
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected BadSignatureLength");
+    }
+
+    #[test]
+    fn submit_digest_is_bound_to_submitter_and_timestamp() {
+        // Signing the wrong submitter produces a signature that doesn't
+        // verify against the module-computed digest. This locks in the
+        // invariant that submitter and timestamp are part of what attestors
+        // sign, not caller-controlled free variables.
+        let (module, context, mut ws, _td) = fresh();
+        let payload_hash = [0x06u8; 32];
+        let (schema_id, _correct_digest) = sig_test_setup(&module, &context, &mut ws, payload_hash);
+        let signers = sample_signers();
+
+        let wrong_submitter_digest = SignedAttestationPayload {
+            schema_id,
+            payload_hash,
+            submitter: [0xFFu8; 32], // not TEST_SENDER
+            timestamp: 0,
+        }
+        .digest();
+
+        let signatures = vec![
+            sign_with(&signers[0], &wrong_submitter_digest),
+            sign_with(&signers[1], &wrong_submitter_digest),
+        ];
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "digest bound to submitter should reject mis-signed attestation");
     }
 }
