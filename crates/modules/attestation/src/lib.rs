@@ -21,20 +21,17 @@
 //!
 //! # Scope of this crate
 //!
-//! **Types + state layout only.** State transitions (`call`), genesis,
-//! query RPC, and fee-split enforcement land in sibling issues once the
-//! Sovereign SDK integration is unblocked. The receipt store is aliased
-//! to [`BTreeMap`] as a stand-in for `sov_modules_api::StateMap` so
-//! downstream crates (Themisra's schema crate, the client SDK, unit
-//! tests) can name the type against a concrete shape.
+//! Protocol-shaped data types + the [`AttestationModule`] struct with its
+//! state layout wired to the real `sov_modules_api::StateMap`. State
+//! transition implementations (`call`), genesis config, RPC endpoints,
+//! and fee-split enforcement land in sibling issues (#7, #8, #20–#22).
 
 #![deny(missing_docs)]
-
-use std::collections::BTreeMap;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sov_modules_api::{Context, ModuleInfo, StateMap};
 
 // ----- Primitive aliases ------------------------------------------------------
 
@@ -215,7 +212,7 @@ impl SignedAttestationPayload {
     /// library helper so attestor quorum software and SDKs don't have
     /// to re-implement the encoding rule.
     pub fn digest(&self) -> Hash32 {
-        let bytes = borsh::to_vec(self).expect("Borsh serialization of owned data is infallible");
+        let bytes = self.try_to_vec().expect("Borsh serialization of owned data is infallible");
         Sha256::digest(&bytes).into()
     }
 }
@@ -272,19 +269,37 @@ pub enum CallMessage {
     },
 }
 
-// ----- State layout (placeholder) --------------------------------------------
+// ----- Module struct ---------------------------------------------------------
 
-/// Schema store, keyed by [`SchemaId`]. Placeholder for the eventual
-/// `sov_modules_api::StateMap<SchemaId, Schema>` — see crate-level docs.
-pub type SchemaStore = BTreeMap<SchemaId, Schema>;
+/// The Ligate attestation module.
+///
+/// Three state fields map 1-to-1 to the three protocol entities:
+///
+/// - [`AttestationModule::schemas`] — `SchemaId → Schema`
+/// - [`AttestationModule::attestor_sets`] — `AttestorSetId → AttestorSet`
+/// - [`AttestationModule::attestations`] — `(SchemaId, PayloadHash) → Attestation`
+///
+/// Call handlers and genesis config live in sibling issues; this struct
+/// exists to lock down the state layout that every other piece of the
+/// module keys off.
+#[derive(Clone, ModuleInfo)]
+pub struct AttestationModule<C: Context> {
+    /// Module's own on-chain address. Filled by the runtime.
+    #[address]
+    pub address: C::Address,
 
-/// Attestor-set store, keyed by [`AttestorSetId`]. Placeholder for the
-/// eventual `sov_modules_api::StateMap<AttestorSetId, AttestorSet>`.
-pub type AttestorSetStore = BTreeMap<AttestorSetId, AttestorSet>;
+    /// Schema registry: `SchemaId → Schema`.
+    #[state]
+    pub schemas: StateMap<SchemaId, Schema>,
 
-/// Attestation store, keyed by [`AttestationKey`]. Placeholder for the
-/// eventual `sov_modules_api::StateMap<AttestationKey, Attestation>`.
-pub type AttestationStore = BTreeMap<AttestationKey, Attestation>;
+    /// AttestorSet registry: `AttestorSetId → AttestorSet`.
+    #[state]
+    pub attestor_sets: StateMap<AttestorSetId, AttestorSet>,
+
+    /// Attestation store: `(SchemaId, PayloadHash) → Attestation`.
+    #[state]
+    pub attestations: StateMap<AttestationKey, Attestation>,
+}
 
 // ----- Protocol constants -----------------------------------------------------
 
@@ -304,6 +319,15 @@ pub const DEFAULT_ATTESTATION_FEE_LGT_MICROS: u64 = 1_000; // 0.001 $LGT at 6 de
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn round_trip_borsh<T>(value: T)
+    where
+        T: BorshSerialize + BorshDeserialize + PartialEq + std::fmt::Debug,
+    {
+        let bytes = value.try_to_vec().expect("encode");
+        let decoded = T::try_from_slice(&bytes).expect("decode");
+        assert_eq!(value, decoded);
+    }
 
     fn sample_address(n: u8) -> Address {
         [n; 32]
@@ -345,31 +369,22 @@ mod tests {
 
     #[test]
     fn schema_borsh_round_trip() {
-        let original = sample_schema();
-        let bytes = borsh::to_vec(&original).expect("encode");
-        let decoded: Schema = borsh::from_slice(&bytes).expect("decode");
-        assert_eq!(original, decoded);
+        round_trip_borsh(sample_schema());
     }
 
     #[test]
     fn attestor_set_borsh_round_trip() {
-        let original = sample_attestor_set();
-        let bytes = borsh::to_vec(&original).expect("encode");
-        let decoded: AttestorSet = borsh::from_slice(&bytes).expect("decode");
-        assert_eq!(original, decoded);
+        round_trip_borsh(sample_attestor_set());
     }
 
     #[test]
     fn attestation_borsh_round_trip() {
-        let original = sample_attestation();
-        let bytes = borsh::to_vec(&original).expect("encode");
-        let decoded: Attestation = borsh::from_slice(&bytes).expect("decode");
-        assert_eq!(original, decoded);
+        round_trip_borsh(sample_attestation());
     }
 
     #[test]
     fn call_message_borsh_round_trip() {
-        let msgs = vec![
+        for msg in [
             CallMessage::RegisterAttestorSet {
                 members: vec![sample_pubkey(1), sample_pubkey(2)],
                 threshold: 1,
@@ -389,25 +404,19 @@ mod tests {
                     sig: vec![0xcd; 64],
                 }],
             },
-        ];
-        for msg in msgs {
-            let bytes = borsh::to_vec(&msg).expect("encode");
-            let decoded: CallMessage = borsh::from_slice(&bytes).expect("decode");
-            assert_eq!(msg, decoded);
+        ] {
+            round_trip_borsh(msg);
         }
     }
 
     #[test]
     fn signed_payload_borsh_round_trip() {
-        let original = SignedAttestationPayload {
+        round_trip_borsh(SignedAttestationPayload {
             schema_id: [9u8; 32],
             payload_hash: [1u8; 32],
             submitter: sample_address(7),
             timestamp: 1_234_567_890,
-        };
-        let bytes = borsh::to_vec(&original).expect("encode");
-        let decoded: SignedAttestationPayload = borsh::from_slice(&bytes).expect("decode");
-        assert_eq!(original, decoded);
+        });
     }
 
     // ------ JSON round-trips (serde) -------------------------------------
