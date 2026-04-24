@@ -43,3 +43,14 @@ jobs:
           toolchain: 1.93.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-targets
+
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --all-targets

@@ -34,6 +34,7 @@ use std::collections::BTreeMap;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 // ----- Primitive aliases ------------------------------------------------------
 
@@ -121,6 +122,42 @@ pub struct Schema {
     pub fee_routing_addr: Option<Address>,
 }
 
+impl Schema {
+    /// Derive a [`SchemaId`] from its defining tuple.
+    ///
+    /// Formula: `SHA-256(owner ‖ name ‖ version_le_bytes)`. The
+    /// state-transition re-runs this at registration and stores the
+    /// derived id on-chain, so downstream consumers never have to trust
+    /// a submitter-claimed id.
+    pub fn derive_id(owner: &Address, name: &str, version: u32) -> SchemaId {
+        let mut hasher = Sha256::new();
+        hasher.update(owner);
+        hasher.update(name.as_bytes());
+        hasher.update(version.to_le_bytes());
+        hasher.finalize().into()
+    }
+}
+
+impl AttestorSet {
+    /// Derive an [`AttestorSetId`] from members + threshold.
+    ///
+    /// Members are **sorted internally** before hashing so the set id is
+    /// independent of the caller's input order. The state transition
+    /// stores members in the same sorted order it uses for derivation.
+    /// Duplicate pubkeys are preserved (the state transition rejects
+    /// sets with duplicates at registration).
+    pub fn derive_id(members: &[PubKey], threshold: u8) -> AttestorSetId {
+        let mut sorted = members.to_vec();
+        sorted.sort_unstable();
+        let mut hasher = Sha256::new();
+        for m in &sorted {
+            hasher.update(m);
+        }
+        hasher.update([threshold]);
+        hasher.finalize().into()
+    }
+}
+
 // ----- Attestation ------------------------------------------------------------
 
 /// Key used for the attestation store: `(schema_id, payload_hash)`.
@@ -169,6 +206,18 @@ pub struct SignedAttestationPayload {
     pub submitter: Address,
     /// See [`Attestation::timestamp`].
     pub timestamp: u64,
+}
+
+impl SignedAttestationPayload {
+    /// SHA-256 of the canonical Borsh encoding of this payload.
+    ///
+    /// This is the digest each attestor signs over. Exposed as a
+    /// library helper so attestor quorum software and SDKs don't have
+    /// to re-implement the encoding rule.
+    pub fn digest(&self) -> Hash32 {
+        let bytes = borsh::to_vec(self).expect("Borsh serialization of owned data is infallible");
+        Sha256::digest(&bytes).into()
+    }
 }
 
 // ----- Messages ---------------------------------------------------------------
@@ -247,3 +296,237 @@ pub const MAX_BUILDER_BPS: u16 = 5000;
 /// Placeholder constant — real fee sizing is a governance parameter set
 /// at launch. Documented here for reference against the spec.
 pub const DEFAULT_ATTESTATION_FEE_LGT_MICROS: u64 = 1_000; // 0.001 $LGT at 6 decimals
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_address(n: u8) -> Address {
+        [n; 32]
+    }
+
+    fn sample_pubkey(n: u8) -> PubKey {
+        [n; 32]
+    }
+
+    fn sample_schema() -> Schema {
+        Schema {
+            owner: sample_address(42),
+            name: "themisra.proof-of-prompt".to_string(),
+            version: 1,
+            attestor_set: [7u8; 32],
+            fee_routing_bps: 2500,
+            fee_routing_addr: Some(sample_address(99)),
+        }
+    }
+
+    fn sample_attestor_set() -> AttestorSet {
+        AttestorSet {
+            members: vec![sample_pubkey(1), sample_pubkey(2), sample_pubkey(3)],
+            threshold: 2,
+        }
+    }
+
+    fn sample_attestation() -> Attestation {
+        Attestation {
+            schema_id: [3u8; 32],
+            payload_hash: [4u8; 32],
+            submitter: sample_address(5),
+            timestamp: 1_700_000_000,
+            signatures: vec![AttestorSignature { pubkey: sample_pubkey(1), sig: vec![0xab; 64] }],
+        }
+    }
+
+    // ------ Borsh round-trips --------------------------------------------
+
+    #[test]
+    fn schema_borsh_round_trip() {
+        let original = sample_schema();
+        let bytes = borsh::to_vec(&original).expect("encode");
+        let decoded: Schema = borsh::from_slice(&bytes).expect("decode");
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn attestor_set_borsh_round_trip() {
+        let original = sample_attestor_set();
+        let bytes = borsh::to_vec(&original).expect("encode");
+        let decoded: AttestorSet = borsh::from_slice(&bytes).expect("decode");
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn attestation_borsh_round_trip() {
+        let original = sample_attestation();
+        let bytes = borsh::to_vec(&original).expect("encode");
+        let decoded: Attestation = borsh::from_slice(&bytes).expect("decode");
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn call_message_borsh_round_trip() {
+        let msgs = vec![
+            CallMessage::RegisterAttestorSet {
+                members: vec![sample_pubkey(1), sample_pubkey(2)],
+                threshold: 1,
+            },
+            CallMessage::RegisterSchema {
+                name: "foo.bar".into(),
+                version: 3,
+                attestor_set: [8u8; 32],
+                fee_routing_bps: 1000,
+                fee_routing_addr: Some(sample_address(10)),
+            },
+            CallMessage::SubmitAttestation {
+                schema_id: [1u8; 32],
+                payload_hash: [2u8; 32],
+                signatures: vec![AttestorSignature {
+                    pubkey: sample_pubkey(1),
+                    sig: vec![0xcd; 64],
+                }],
+            },
+        ];
+        for msg in msgs {
+            let bytes = borsh::to_vec(&msg).expect("encode");
+            let decoded: CallMessage = borsh::from_slice(&bytes).expect("decode");
+            assert_eq!(msg, decoded);
+        }
+    }
+
+    #[test]
+    fn signed_payload_borsh_round_trip() {
+        let original = SignedAttestationPayload {
+            schema_id: [9u8; 32],
+            payload_hash: [1u8; 32],
+            submitter: sample_address(7),
+            timestamp: 1_234_567_890,
+        };
+        let bytes = borsh::to_vec(&original).expect("encode");
+        let decoded: SignedAttestationPayload = borsh::from_slice(&bytes).expect("decode");
+        assert_eq!(original, decoded);
+    }
+
+    // ------ JSON round-trips (serde) -------------------------------------
+
+    #[test]
+    fn schema_json_round_trip() {
+        let original = sample_schema();
+        let json = serde_json::to_string(&original).expect("encode");
+        let decoded: Schema = serde_json::from_str(&json).expect("decode");
+        assert_eq!(original, decoded);
+    }
+
+    #[test]
+    fn attestation_json_round_trip() {
+        let original = sample_attestation();
+        let json = serde_json::to_string(&original).expect("encode");
+        let decoded: Attestation = serde_json::from_str(&json).expect("decode");
+        assert_eq!(original, decoded);
+    }
+
+    // ------ Schema::derive_id --------------------------------------------
+
+    #[test]
+    fn schema_derive_id_is_deterministic() {
+        let a = Schema::derive_id(&sample_address(1), "foo", 1);
+        let b = Schema::derive_id(&sample_address(1), "foo", 1);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn schema_derive_id_separates_owners() {
+        // Same name + version, different owner → different schema_id.
+        // This is the core anti-squatting property: namespaces are
+        // owner-scoped, not global.
+        let owner_a = Schema::derive_id(&sample_address(1), "themisra.pop", 1);
+        let owner_b = Schema::derive_id(&sample_address(2), "themisra.pop", 1);
+        assert_ne!(owner_a, owner_b);
+    }
+
+    #[test]
+    fn schema_derive_id_bumps_on_version() {
+        let v1 = Schema::derive_id(&sample_address(1), "foo", 1);
+        let v2 = Schema::derive_id(&sample_address(1), "foo", 2);
+        assert_ne!(v1, v2);
+    }
+
+    #[test]
+    fn schema_derive_id_separates_names() {
+        let a = Schema::derive_id(&sample_address(1), "foo", 1);
+        let b = Schema::derive_id(&sample_address(1), "bar", 1);
+        assert_ne!(a, b);
+    }
+
+    // ------ AttestorSet::derive_id ---------------------------------------
+
+    #[test]
+    fn attestor_set_derive_id_is_deterministic() {
+        let members = vec![sample_pubkey(1), sample_pubkey(2)];
+        let a = AttestorSet::derive_id(&members, 1);
+        let b = AttestorSet::derive_id(&members, 1);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn attestor_set_derive_id_ignores_member_order() {
+        // Member ordering is a canonical-encoding detail; the set id
+        // must be order-independent so SDKs don't have to pre-sort.
+        let a = AttestorSet::derive_id(&[sample_pubkey(1), sample_pubkey(2)], 1);
+        let b = AttestorSet::derive_id(&[sample_pubkey(2), sample_pubkey(1)], 1);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn attestor_set_derive_id_depends_on_threshold() {
+        let members = vec![sample_pubkey(1), sample_pubkey(2)];
+        let t1 = AttestorSet::derive_id(&members, 1);
+        let t2 = AttestorSet::derive_id(&members, 2);
+        assert_ne!(t1, t2);
+    }
+
+    #[test]
+    fn attestor_set_derive_id_depends_on_members() {
+        let a = AttestorSet::derive_id(&[sample_pubkey(1)], 1);
+        let b = AttestorSet::derive_id(&[sample_pubkey(2)], 1);
+        assert_ne!(a, b);
+    }
+
+    // ------ SignedAttestationPayload::digest -----------------------------
+
+    #[test]
+    fn signed_payload_digest_is_deterministic() {
+        let payload = SignedAttestationPayload {
+            schema_id: [1u8; 32],
+            payload_hash: [2u8; 32],
+            submitter: sample_address(3),
+            timestamp: 1_000_000,
+        };
+        assert_eq!(payload.digest(), payload.digest());
+    }
+
+    #[test]
+    fn signed_payload_digest_changes_with_fields() {
+        let base = SignedAttestationPayload {
+            schema_id: [1u8; 32],
+            payload_hash: [2u8; 32],
+            submitter: sample_address(3),
+            timestamp: 1_000_000,
+        };
+        let mut mutated = base.clone();
+        mutated.timestamp += 1;
+        assert_ne!(base.digest(), mutated.digest());
+    }
+
+    // ------ Protocol constants -------------------------------------------
+
+    #[test]
+    fn max_builder_bps_is_half() {
+        // Documenting the invariant explicitly so a future refactor
+        // doesn't silently raise the cap without thought.
+        assert_eq!(MAX_BUILDER_BPS, 5000);
+    }
+}
