@@ -1350,6 +1350,15 @@ dependencies = [
 [[package]]
 name = "ligate-client"
 version = "0.0.1"
+dependencies = [
+ "attestation",
+ "borsh",
+ "ed25519-dalek",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+]
 
 [[package]]
 name = "ligate-rollup"
