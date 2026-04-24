@@ -18,3 +18,6 @@ Cargo.lock.bak
 
 # Logs
 *.log
+
+# Claude Code worktree metadata
+/.claude/
