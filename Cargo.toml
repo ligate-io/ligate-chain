@@ -19,9 +19,10 @@ rust-version = "1.93"
 [workspace.dependencies]
 # Sovereign SDK — pinned to the same rev that `sov-rollup-starter` uses.
 # v0.3-era (known-compiling baseline). Bump alongside SDK upgrades.
-sov-rollup-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-modules-api      = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-state            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-rollup-interface       = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-modules-api            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-state                  = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-prover-storage-manager = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
 
 # Shared workspace dependencies
 anyhow     = "1.0"
@@ -36,6 +37,7 @@ sha2       = "0.10"
 # module RPC method derives (see starter's sov-accounts/sov-bank pattern),
 # node RPC server, and client-rs transport. Pin matches starter.
 jsonrpsee  = { version = "0.20.1", features = ["jsonrpsee-types", "macros", "server", "http-client"] }
+tempfile   = "3.8"
 
 [profile.release]
 lto = "thin"

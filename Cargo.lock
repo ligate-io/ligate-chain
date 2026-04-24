@@ -113,6 +113,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "sov-modules-api",
+ "sov-prover-storage-manager",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

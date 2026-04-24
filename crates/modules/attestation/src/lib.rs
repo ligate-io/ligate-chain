@@ -1,4 +1,4 @@
-//! Ligate attestation protocol — generic on-chain attestation primitive.
+//! Ligate attestation protocol, generic on-chain attestation primitive.
 //!
 //! This crate implements the protocol's data shapes and state layout.
 //! See [`docs/protocol/attestation-v0.md`][spec] for the full specification.
@@ -16,7 +16,7 @@
 //! | [`Attestation`]  | `(schema_id, payload_hash)` | [`CallMessage::SubmitAttestation`] |
 //!
 //! Reads (`get_schema`, `get_attestor_set`, `get_attestation`, listing variants)
-//! are exposed via query RPC and deliberately absent from [`CallMessage`] —
+//! are exposed via query RPC and deliberately absent from [`CallMessage`] ,
 //! verification is a read, not a state-mutating transaction.
 //!
 //! # Scope of this crate
@@ -24,14 +24,17 @@
 //! Protocol-shaped data types + the [`AttestationModule`] struct with its
 //! state layout wired to the real `sov_modules_api::StateMap`. State
 //! transition implementations (`call`), genesis config, RPC endpoints,
-//! and fee-split enforcement land in sibling issues (#7, #8, #20–#22).
+//! and fee-split enforcement land in sibling issues (#7, #8, #20-#22).
 
 #![deny(missing_docs)]
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sov_modules_api::{Context, ModuleInfo, StateMap};
+use sov_modules_api::{
+    prelude::*, CallResponse, Context, Error, Module, ModuleInfo, StateMap, WorkingSet,
+};
+use thiserror::Error as ThisError;
 
 // ----- Primitive aliases ------------------------------------------------------
 
@@ -55,14 +58,14 @@ pub type AttestorSetId = Hash32;
 
 // ----- AttestorSet ------------------------------------------------------------
 
-/// A quorum of signers. **Immutable once registered** — to "rotate" an
+/// A quorum of signers. **Immutable once registered**, to "rotate" an
 /// attestor set, register a new one and bump any affected schema to a new
 /// version that points at the new [`AttestorSetId`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct AttestorSet {
     /// Ordered list of attestor public keys.
     ///
-    /// Order matters for the derivation of [`AttestorSetId`] — callers
+    /// Order matters for the derivation of [`AttestorSetId`], callers
     /// must supply a canonical (e.g. lexicographic) ordering, and the
     /// state transition re-hashes to verify before accepting.
     pub members: Vec<PubKey>,
@@ -91,7 +94,7 @@ pub struct AttestorSignature {
 
 /// An app's attestation shape and rules.
 ///
-/// Registration is permissionless — anyone with enough $LGT to pay the
+/// Registration is permissionless, anyone with enough $LGT to pay the
 /// registration fee can register a schema. Name collisions across owners
 /// are allowed (different `owner` bytes → different [`SchemaId`]); social
 /// identity of the "real" schema owner lives off-chain.
@@ -114,7 +117,7 @@ pub struct Schema {
     /// v0; governance-adjustable in v1+.
     pub fee_routing_bps: u16,
     /// Destination of the builder's fee share. `None` iff
-    /// `fee_routing_bps == 0` — the state transition rejects dangling
+    /// `fee_routing_bps == 0`, the state transition rejects dangling
     /// routing and orphan addresses at registration time.
     pub fee_routing_addr: Option<Address>,
 }
@@ -159,7 +162,7 @@ impl AttestorSet {
 
 /// Key used for the attestation store: `(schema_id, payload_hash)`.
 ///
-/// Each pair is write-once — resubmitting the same pair is rejected by
+/// Each pair is write-once, resubmitting the same pair is rejected by
 /// the state transition. This is also what provides replay protection for
 /// the attestor signatures.
 pub type AttestationKey = (SchemaId, Hash32);
@@ -275,9 +278,9 @@ pub enum CallMessage {
 ///
 /// Three state fields map 1-to-1 to the three protocol entities:
 ///
-/// - [`AttestationModule::schemas`] — `SchemaId → Schema`
-/// - [`AttestationModule::attestor_sets`] — `AttestorSetId → AttestorSet`
-/// - [`AttestationModule::attestations`] — `(SchemaId, PayloadHash) → Attestation`
+/// - [`AttestationModule::schemas`], `SchemaId → Schema`
+/// - [`AttestationModule::attestor_sets`], `AttestorSetId → AttestorSet`
+/// - [`AttestationModule::attestations`], `(SchemaId, PayloadHash) → Attestation`
 ///
 /// Call handlers and genesis config live in sibling issues; this struct
 /// exists to lock down the state layout that every other piece of the
@@ -308,9 +311,281 @@ pub struct AttestationModule<C: Context> {
 pub const MAX_BUILDER_BPS: u16 = 5000;
 
 /// Default attestation fee in $LGT, in the chain's smallest unit.
-/// Placeholder constant — real fee sizing is a governance parameter set
+/// Placeholder constant. Real fee sizing is a governance parameter set
 /// at launch. Documented here for reference against the spec.
 pub const DEFAULT_ATTESTATION_FEE_LGT_MICROS: u64 = 1_000; // 0.001 $LGT at 6 decimals
+
+// ============================================================================
+// Errors
+// ============================================================================
+
+/// Typed errors produced by the attestation module's call handlers.
+///
+/// These convert into [`sov_modules_api::Error`] (via [`anyhow::Error`]) when
+/// returned from a Module handler, so callers of the RPC can pattern-match
+/// on the wire shape while the chain runtime stays generic.
+#[derive(Debug, ThisError)]
+pub enum AttestationError {
+    /// `threshold` was greater than the number of supplied members.
+    #[error("attestor set threshold ({threshold}) exceeds member count ({count})")]
+    ThresholdExceedsMembers {
+        /// Supplied threshold.
+        threshold: u8,
+        /// Number of members supplied.
+        count: usize,
+    },
+
+    /// A threshold of 0 was supplied, which would accept attestations with no
+    /// signatures.
+    #[error("attestor set threshold must be at least 1")]
+    ZeroThreshold,
+
+    /// Members list was empty.
+    #[error("attestor set must have at least one member")]
+    EmptyAttestorSet,
+
+    /// An attestor set with this derived id already exists.
+    #[error("attestor set already registered")]
+    DuplicateAttestorSet,
+
+    /// A schema with this derived id already exists (same owner, name, version).
+    #[error("schema already registered")]
+    DuplicateSchema,
+
+    /// Schema registration referenced an [`AttestorSetId`] that isn't stored.
+    #[error("schema references an unregistered attestor set")]
+    UnknownAttestorSet,
+
+    /// `fee_routing_bps` exceeded the protocol cap [`MAX_BUILDER_BPS`].
+    #[error("fee routing bps ({bps}) exceeds protocol cap ({cap})")]
+    FeeRoutingExceedsCap {
+        /// Supplied basis points.
+        bps: u16,
+        /// Protocol cap (v0: 5000 = 50%).
+        cap: u16,
+    },
+
+    /// Fee routing was misconfigured: address set without basis points, or
+    /// basis points > 0 without an address.
+    #[error(
+        "fee routing misconfigured: address and basis points must be set together or both absent"
+    )]
+    OrphanFeeRouting,
+
+    /// Submission referenced a [`SchemaId`] that isn't stored.
+    #[error("schema not found")]
+    UnknownSchema,
+
+    /// An attestation with this `(schema_id, payload_hash)` already exists.
+    #[error("attestation already exists for this (schema_id, payload_hash)")]
+    DuplicateAttestation,
+
+    /// `context.sender()` did not produce a 32-byte representation.
+    #[error("sender address is not 32 bytes")]
+    BadSenderLength,
+}
+
+// ============================================================================
+// Module implementation
+// ============================================================================
+
+impl<C: Context> Module for AttestationModule<C> {
+    type Context = C;
+    type Config = ();
+    type CallMessage = CallMessage;
+    type Event = ();
+
+    fn genesis(
+        &self,
+        _config: &Self::Config,
+        _working_set: &mut WorkingSet<C>,
+    ) -> Result<(), Error> {
+        // v0: no pre-seeded state. Schemas and attestor sets are registered
+        // via tx after launch. Genesis-seeding (e.g. for the Themisra attestor
+        // set) lands with #8.
+        Ok(())
+    }
+
+    fn call(
+        &self,
+        msg: Self::CallMessage,
+        context: &Self::Context,
+        working_set: &mut WorkingSet<C>,
+    ) -> Result<CallResponse, Error> {
+        match msg {
+            CallMessage::RegisterAttestorSet { members, threshold } => {
+                Ok(self.handle_register_attestor_set(members, threshold, working_set)?)
+            }
+            CallMessage::RegisterSchema {
+                name,
+                version,
+                attestor_set,
+                fee_routing_bps,
+                fee_routing_addr,
+            } => Ok(self.handle_register_schema(
+                name,
+                version,
+                attestor_set,
+                fee_routing_bps,
+                fee_routing_addr,
+                context,
+                working_set,
+            )?),
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures } => Ok(self
+                .handle_submit_attestation(
+                    schema_id,
+                    payload_hash,
+                    signatures,
+                    context,
+                    working_set,
+                )?),
+        }
+    }
+}
+
+impl<C: Context> AttestationModule<C> {
+    /// Handle [`CallMessage::RegisterAttestorSet`].
+    fn handle_register_attestor_set(
+        &self,
+        members: Vec<PubKey>,
+        threshold: u8,
+        working_set: &mut WorkingSet<C>,
+    ) -> anyhow::Result<CallResponse> {
+        if members.is_empty() {
+            return Err(AttestationError::EmptyAttestorSet.into());
+        }
+        if threshold == 0 {
+            return Err(AttestationError::ZeroThreshold.into());
+        }
+        if usize::from(threshold) > members.len() {
+            return Err(AttestationError::ThresholdExceedsMembers {
+                threshold,
+                count: members.len(),
+            }
+            .into());
+        }
+
+        // Store members in sorted order so later reads match the id derivation.
+        let mut sorted_members = members;
+        sorted_members.sort_unstable();
+
+        let id = AttestorSet::derive_id(&sorted_members, threshold);
+        if self.attestor_sets.get(&id, working_set).is_some() {
+            return Err(AttestationError::DuplicateAttestorSet.into());
+        }
+
+        self.attestor_sets.set(
+            &id,
+            &AttestorSet { members: sorted_members, threshold },
+            working_set,
+        );
+
+        Ok(CallResponse::default())
+    }
+
+    /// Handle [`CallMessage::RegisterSchema`].
+    #[allow(clippy::too_many_arguments)]
+    fn handle_register_schema(
+        &self,
+        name: String,
+        version: u32,
+        attestor_set: AttestorSetId,
+        fee_routing_bps: u16,
+        fee_routing_addr: Option<Address>,
+        context: &C,
+        working_set: &mut WorkingSet<C>,
+    ) -> anyhow::Result<CallResponse> {
+        if fee_routing_bps > MAX_BUILDER_BPS {
+            return Err(AttestationError::FeeRoutingExceedsCap {
+                bps: fee_routing_bps,
+                cap: MAX_BUILDER_BPS,
+            }
+            .into());
+        }
+        if (fee_routing_bps > 0) != fee_routing_addr.is_some() {
+            return Err(AttestationError::OrphanFeeRouting.into());
+        }
+        if self.attestor_sets.get(&attestor_set, working_set).is_none() {
+            return Err(AttestationError::UnknownAttestorSet.into());
+        }
+
+        let owner = sender_to_address::<C>(context.sender())?;
+        let id = Schema::derive_id(&owner, &name, version);
+
+        if self.schemas.get(&id, working_set).is_some() {
+            return Err(AttestationError::DuplicateSchema.into());
+        }
+
+        self.schemas.set(
+            &id,
+            &Schema { owner, name, version, attestor_set, fee_routing_bps, fee_routing_addr },
+            working_set,
+        );
+
+        Ok(CallResponse::default())
+    }
+
+    /// Handle [`CallMessage::SubmitAttestation`].
+    ///
+    /// Signature validation is **stubbed** in this revision (issue #20 owns
+    /// the real ed25519 verification + quorum enforcement). For now we just
+    /// require the schema and the signatures vector to be structurally
+    /// well-formed.
+    fn handle_submit_attestation(
+        &self,
+        schema_id: SchemaId,
+        payload_hash: Hash32,
+        signatures: Vec<AttestorSignature>,
+        context: &C,
+        working_set: &mut WorkingSet<C>,
+    ) -> anyhow::Result<CallResponse> {
+        if self.schemas.get(&schema_id, working_set).is_none() {
+            return Err(AttestationError::UnknownSchema.into());
+        }
+
+        let key = (schema_id, payload_hash);
+        if self.attestations.get(&key, working_set).is_some() {
+            return Err(AttestationError::DuplicateAttestation.into());
+        }
+
+        // TODO(#20): verify each `AttestorSignature` against the schema's
+        // `AttestorSet`, check quorum threshold, enforce no-duplicate-pubkeys.
+        // TODO(#22): charge `ATTESTATION_FEE` via bank and split per
+        // schema.fee_routing_bps / schema.fee_routing_addr.
+
+        let submitter = sender_to_address::<C>(context.sender())?;
+        // TODO: pull the real block timestamp once WorkingSet exposes it
+        // (slot/header access lives behind the rollup-blueprint layer and is
+        // wired in #13). For now, attestations carry `timestamp = 0`; the
+        // write-once key prevents replay either way.
+        let timestamp = 0u64;
+
+        self.attestations.set(
+            &key,
+            &Attestation { schema_id, payload_hash, submitter, timestamp, signatures },
+            working_set,
+        );
+
+        Ok(CallResponse::default())
+    }
+}
+
+/// Convert the runtime's `C::Address` to the protocol's fixed 32-byte
+/// [`Address`] shape.
+///
+/// Relies on `C::Address` implementing `AsRef<[u8]>` (standard for Sovereign
+/// SDK default contexts). Rejects anything that doesn't hand back exactly 32
+/// bytes, so the protocol's on-chain representation stays unambiguous even
+/// if a Context with a non-32-byte address is introduced later.
+fn sender_to_address<C: Context>(sender: &C::Address) -> anyhow::Result<Address> {
+    let bytes: &[u8] = sender.as_ref();
+    if bytes.len() != 32 {
+        return Err(AttestationError::BadSenderLength.into());
+    }
+    let mut out = [0u8; 32];
+    out.copy_from_slice(bytes);
+    Ok(out)
+}
 
 // ============================================================================
 // Tests
@@ -537,5 +812,241 @@ mod tests {
         // Documenting the invariant explicitly so a future refactor
         // doesn't silently raise the cap without thought.
         assert_eq!(MAX_BUILDER_BPS, 5000);
+    }
+}
+
+// ============================================================================
+// State-transition tests (end-to-end via module.call)
+// ============================================================================
+
+#[cfg(test)]
+mod state_transition_tests {
+    use sov_modules_api::default_context::DefaultContext;
+    use sov_modules_api::{Address as SovAddress, Module as _, WorkingSet};
+    use sov_prover_storage_manager::new_orphan_storage;
+
+    use super::*;
+
+    type TestModule = AttestationModule<DefaultContext>;
+
+    fn fresh() -> (TestModule, DefaultContext, WorkingSet<DefaultContext>, tempfile::TempDir) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
+        let sender = SovAddress::from([1u8; 32]);
+        let sequencer = SovAddress::from([9u8; 32]);
+        let context = DefaultContext::new(sender, sequencer, 1);
+        let module = TestModule::default();
+        (module, context, working_set, tmpdir)
+    }
+
+    fn sample_members() -> Vec<PubKey> {
+        vec![[1u8; 32], [2u8; 32], [3u8; 32]]
+    }
+
+    #[test]
+    fn register_attestor_set_happy_path() {
+        let (module, context, mut ws, _td) = fresh();
+
+        let res = module.call(
+            CallMessage::RegisterAttestorSet { members: sample_members(), threshold: 2 },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_ok(), "register should succeed: {res:?}");
+
+        // Verify it's in state
+        let id = AttestorSet::derive_id(&sample_members(), 2);
+        let stored = module.attestor_sets.get(&id, &mut ws);
+        assert!(stored.is_some(), "attestor set should be stored");
+        let stored = stored.unwrap();
+        assert_eq!(stored.threshold, 2);
+        assert_eq!(stored.members.len(), 3);
+    }
+
+    #[test]
+    fn register_attestor_set_rejects_threshold_over_members() {
+        let (module, context, mut ws, _td) = fresh();
+        let res = module.call(
+            CallMessage::RegisterAttestorSet { members: vec![[1u8; 32]], threshold: 2 },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn register_attestor_set_rejects_zero_threshold() {
+        let (module, context, mut ws, _td) = fresh();
+        let res = module.call(
+            CallMessage::RegisterAttestorSet { members: sample_members(), threshold: 0 },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn register_schema_requires_existing_attestor_set() {
+        let (module, context, mut ws, _td) = fresh();
+        let res = module.call(
+            CallMessage::RegisterSchema {
+                name: "foo".into(),
+                version: 1,
+                attestor_set: [0xAAu8; 32],
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected UnknownAttestorSet");
+    }
+
+    #[test]
+    fn register_schema_rejects_over_cap_fee_routing() {
+        let (module, context, mut ws, _td) = fresh();
+        // Seed the attestor set first so we isolate the fee-routing check
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: sample_members(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&sample_members(), 2);
+
+        let res = module.call(
+            CallMessage::RegisterSchema {
+                name: "foo".into(),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 6000, // > MAX_BUILDER_BPS (5000)
+                fee_routing_addr: Some([2u8; 32]),
+            },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected FeeRoutingExceedsCap");
+    }
+
+    #[test]
+    fn register_schema_rejects_orphan_routing() {
+        let (module, context, mut ws, _td) = fresh();
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: sample_members(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&sample_members(), 2);
+
+        // bps > 0 but no addr
+        let res = module.call(
+            CallMessage::RegisterSchema {
+                name: "foo".into(),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 1000,
+                fee_routing_addr: None,
+            },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err());
+
+        // addr set but bps == 0
+        let res = module.call(
+            CallMessage::RegisterSchema {
+                name: "foo".into(),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: Some([2u8; 32]),
+            },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn submit_attestation_requires_existing_schema() {
+        let (module, context, mut ws, _td) = fresh();
+        let res = module.call(
+            CallMessage::SubmitAttestation {
+                schema_id: [0xDEu8; 32],
+                payload_hash: [0xADu8; 32],
+                signatures: vec![],
+            },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected UnknownSchema");
+    }
+
+    #[test]
+    fn full_register_register_submit_flow() {
+        let (module, context, mut ws, _td) = fresh();
+
+        // 1. Register attestor set
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: sample_members(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .expect("register attestor set");
+        let attestor_set_id = AttestorSet::derive_id(&sample_members(), 2);
+
+        // 2. Register schema
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "themisra.proof-of-prompt".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                &context,
+                &mut ws,
+            )
+            .expect("register schema");
+        let owner = [1u8; 32]; // matches the sender in fresh()
+        let schema_id = Schema::derive_id(&owner, "themisra.proof-of-prompt", 1);
+
+        // 3. Submit attestation
+        let payload_hash = [0x42u8; 32];
+        module
+            .call(
+                CallMessage::SubmitAttestation {
+                    schema_id,
+                    payload_hash,
+                    signatures: vec![AttestorSignature {
+                        pubkey: [1u8; 32],
+                        sig: vec![0xAAu8; 64],
+                    }],
+                },
+                &context,
+                &mut ws,
+            )
+            .expect("submit attestation");
+
+        // 4. Verify state
+        let stored = module.attestations.get(&(schema_id, payload_hash), &mut ws);
+        assert!(stored.is_some(), "attestation should be stored");
+        let stored = stored.unwrap();
+        assert_eq!(stored.schema_id, schema_id);
+        assert_eq!(stored.payload_hash, payload_hash);
+        assert_eq!(stored.submitter, owner);
+
+        // 5. Write-once: resubmitting same (schema_id, payload_hash) must fail
+        let res = module.call(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures: vec![] },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "duplicate (schema_id, payload_hash) must be rejected");
     }
 }

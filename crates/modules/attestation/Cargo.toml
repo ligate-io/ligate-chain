@@ -15,9 +15,12 @@ anyhow.workspace = true
 borsh.workspace = true
 serde.workspace = true
 sha2.workspace = true
+thiserror.workspace = true
 
 sov-modules-api = { workspace = true, features = ["native"] }
 jsonrpsee       = { workspace = true }
 
 [dev-dependencies]
 serde_json.workspace = true
+sov-prover-storage-manager = { workspace = true, features = ["test-utils"] }
+tempfile.workspace = true
