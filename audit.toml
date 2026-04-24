@@ -1,0 +1,23 @@
+# cargo-audit config.
+#
+# Ignored advisories are tracked with clear rationale. Revisit every time we
+# upgrade the Sovereign SDK rev (all current entries come from transitive
+# deps pinned by the SDK at `13e4077c`).
+
+[advisories]
+ignore = [
+    # rustls-webpki 0.101.7, reachable panic when parsing a CRL's
+    # `onlySomeReasons` element. Only exploitable by apps that parse CRLs.
+    # Ligate's TLS usage (Celestia DA client, JSON-RPC) does not parse CRLs,
+    # so the panic is unreachable. Clears when SDK upgrades rustls.
+    "RUSTSEC-2026-0104",
+
+    # rustls-webpki 0.101.7, name constraints for URI names were ignored.
+    # Only exploitable given CA misissuance, which is out of scope for our
+    # threat model. Clears when SDK upgrades rustls.
+    "RUSTSEC-2026-0098",
+
+    # rustls-webpki 0.101.7, name constraints incorrectly accepted for
+    # wildcard certs. Same misissuance precondition as 0098. Out of scope.
+    "RUSTSEC-2026-0099",
+]
