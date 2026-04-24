@@ -17,11 +17,11 @@ publish = false
 rust-version = "1.93"
 
 [workspace.dependencies]
-# Sovereign SDK — pinned to nightly rev. Bump alongside module work.
-# Consumed via `{ workspace = true }` in member crates once module code lands (issue #4+).
-sov-rollup-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
-sov-modules-api      = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
-sov-state            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+# Sovereign SDK — pinned to the same rev that `sov-rollup-starter` uses.
+# v0.3-era (known-compiling baseline). Bump alongside SDK upgrades.
+sov-rollup-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-modules-api      = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-state            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
 
 # Shared workspace dependencies
 anyhow     = "1.0"
@@ -29,8 +29,13 @@ thiserror  = "1.0"
 serde      = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing    = "0.1"
-borsh      = { version = "1.5", features = ["bytes", "derive"] }
+# borsh pinned to 0.10 to match the SDK rev above.
+borsh      = { version = "0.10.3", features = ["rc", "bytes"] }
 sha2       = "0.10"
+# jsonrpsee — canonical RPC library for Sovereign SDK rollups. Used for
+# module RPC method derives (see starter's sov-accounts/sov-bank pattern),
+# node RPC server, and client-rs transport. Pin matches starter.
+jsonrpsee  = { version = "0.20.1", features = ["jsonrpsee-types", "macros", "server", "http-client"] }
 
 [profile.release]
 lto = "thin"
