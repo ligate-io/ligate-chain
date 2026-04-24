@@ -1,0 +1,22 @@
+[package]
+name = "themisra-pop"
+description = "Themisra Proof-of-Prompt schema, v1. Payload shape + helpers for Ligate's attestation protocol."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+attestation = { path = "../../modules/attestation" }
+
+borsh.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

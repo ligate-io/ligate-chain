@@ -2384,6 +2384,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "themisra-pop"
+version = "0.0.1"
+dependencies = [
+ "attestation",
+ "borsh",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"

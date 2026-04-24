@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/rollup",
     "crates/modules/attestation",
+    "crates/schemas/themisra-pop",
     "crates/client-rs",
 ]
 
