@@ -1,6 +1,6 @@
 [package]
-name = "ligate-modules"
-description = "Ligate Labs rollup modules (attestation, token, ...)"
+name = "attestation"
+description = "Ligate Themisra attestation module — Proof of Prompt receipts"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,3 +11,6 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+serde.workspace = true
