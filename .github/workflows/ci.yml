@@ -74,4 +74,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@cargo-audit
-      - run: cargo audit
+      # Ignores below are documented in audit.toml. Revisit on every
+      # Sovereign SDK rev bump; all entries come from transitive deps
+      # pinned by the SDK that we can't directly upgrade.
+      - run: |
+          cargo audit \
+            --ignore RUSTSEC-2026-0104 \
+            --ignore RUSTSEC-2026-0098 \
+            --ignore RUSTSEC-2026-0099 \
+            --ignore RUSTSEC-2025-0141 \
+            --ignore RUSTSEC-2025-0134
