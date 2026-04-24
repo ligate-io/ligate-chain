@@ -1,0 +1,74 @@
+{
+  "_comment": [
+    "Example genesis config for the attestation module. Operators copy this,",
+    "fill in real values, and pass it to the chain at devnet launch.",
+    "",
+    "Address and pubkey fields are 32-byte arrays. The format below is the",
+    "default serde representation; a future PR can add hex serialisation.",
+    "",
+    "treasury: address that receives the treasury share of every attestation",
+    "fee plus the full amount of registration fees.",
+    "",
+    "*_fee fields: $LGT amounts in micros (6 decimals). 1_000 micros = 0.001 $LGT.",
+    "Defaults:",
+    "  attestation_fee:           1_000          (0.001 $LGT)",
+    "  schema_registration_fee:   100_000_000    (100 $LGT)",
+    "  attestor_set_fee:          10_000_000     (10 $LGT)",
+    "",
+    "initial_attestor_sets: registered at genesis with the same rules as",
+    "RegisterAttestorSet. Stored members are sorted before hashing.",
+    "",
+    "initial_schemas: registered at genesis. Each schema's `attestor_set` must",
+    "reference an AttestorSetId derived from one of the initial_attestor_sets",
+    "above (operators precompute this with attestation::AttestorSet::derive_id).",
+    "fee_routing_addr must be Some iff fee_routing_bps > 0; cap is 5000 (50%)."
+  ],
+
+  "treasury": [
+    11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11,
+    11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11, 11
+  ],
+
+  "attestation_fee": 1000,
+  "schema_registration_fee": 100000000,
+  "attestor_set_fee": 10000000,
+
+  "initial_attestor_sets": [
+    {
+      "_comment": "Themisra's launch attestor set. 2-of-3 threshold over three Ligate-operated nodes; replace with real attestor pubkeys before launch.",
+      "members": [
+        [
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        ],
+        [
+          2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+          2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
+        ],
+        [
+          3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+          3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
+        ]
+      ],
+      "threshold": 2
+    }
+  ],
+
+  "initial_schemas": [
+    {
+      "_comment": "Themisra Proof-of-Prompt v1. attestor_set is the AttestorSetId derived from the set above; precompute with attestation::AttestorSet::derive_id(&members, threshold).",
+      "owner": [
+        42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+        42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42
+      ],
+      "name": "themisra.proof-of-prompt",
+      "version": 1,
+      "attestor_set": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ],
+      "fee_routing_bps": 0,
+      "fee_routing_addr": null
+    }
+  ]
+}

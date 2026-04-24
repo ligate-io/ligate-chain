@@ -32,7 +32,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sov_modules_api::{
-    prelude::*, CallResponse, Context, Error, Module, ModuleInfo, StateMap, WorkingSet,
+    prelude::*, CallResponse, Context, Error, Module, ModuleInfo, StateMap, StateValue, WorkingSet,
 };
 use thiserror::Error as ThisError;
 
@@ -302,6 +302,24 @@ pub struct AttestationModule<C: Context> {
     /// Attestation store: `(SchemaId, PayloadHash) → Attestation`.
     #[state]
     pub attestations: StateMap<AttestationKey, Attestation>,
+
+    /// Treasury address, receives the treasury share of every attestation
+    /// fee and the full amount of schema / attestor-set registration fees.
+    /// Set once at genesis, governance-adjustable later.
+    #[state]
+    pub treasury: StateValue<Address>,
+
+    /// Flat per-attestation fee in `$LGT` micros. Set at genesis.
+    #[state]
+    pub attestation_fee: StateValue<u64>,
+
+    /// Flat schema-registration fee in `$LGT` micros. Set at genesis.
+    #[state]
+    pub schema_registration_fee: StateValue<u64>,
+
+    /// Flat attestor-set registration fee in `$LGT` micros. Set at genesis.
+    #[state]
+    pub attestor_set_fee: StateValue<u64>,
 }
 
 // ----- Protocol constants -----------------------------------------------------
@@ -314,6 +332,94 @@ pub const MAX_BUILDER_BPS: u16 = 5000;
 /// Placeholder constant. Real fee sizing is a governance parameter set
 /// at launch. Documented here for reference against the spec.
 pub const DEFAULT_ATTESTATION_FEE_LGT_MICROS: u64 = 1_000; // 0.001 $LGT at 6 decimals
+
+/// Default schema-registration fee in `$LGT` micros. 100 $LGT at 6 decimals.
+pub const DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS: u64 = 100_000_000;
+
+/// Default attestor-set registration fee in `$LGT` micros. 10 $LGT at 6 decimals.
+pub const DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS: u64 = 10_000_000;
+
+// ============================================================================
+// Genesis configuration
+// ============================================================================
+
+/// An attestor set declared in the genesis config.
+///
+/// Validated with the same rules as [`CallMessage::RegisterAttestorSet`]:
+/// non-empty members, `1 <= threshold <= members.len()`, derived id must
+/// not collide with another attestor set already registered at genesis
+/// time.
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct InitialAttestorSet {
+    /// Attestor public keys.
+    pub members: Vec<PubKey>,
+    /// M-of-N threshold.
+    pub threshold: u8,
+}
+
+/// A schema declared in the genesis config.
+///
+/// Validated with the same rules as [`CallMessage::RegisterSchema`]: the
+/// referenced attestor set must be known (either declared in
+/// [`AttestationConfig::initial_attestor_sets`] or registered earlier in
+/// the genesis flow), `fee_routing_bps <= MAX_BUILDER_BPS`, and the
+/// address / bps orphan check. `owner` is supplied explicitly at genesis
+/// because there is no transaction sender at that point.
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct InitialSchema {
+    /// Owner address assigned on-chain.
+    pub owner: Address,
+    /// Schema name, e.g. `"themisra.proof-of-prompt"`.
+    pub name: String,
+    /// Monotonic version; bumping it creates a new schema.
+    pub version: u32,
+    /// [`AttestorSetId`] the schema binds to.
+    pub attestor_set: AttestorSetId,
+    /// Fee routing basis points (`0..=MAX_BUILDER_BPS`).
+    pub fee_routing_bps: u16,
+    /// Fee routing address; required iff `fee_routing_bps > 0`.
+    pub fee_routing_addr: Option<Address>,
+}
+
+/// Genesis configuration loaded once at chain launch.
+///
+/// Operators supply one of these, typically as a JSON blob, via the
+/// genesis ceremony. See `docs/development/devnet.md` for the operator
+/// flow and `crates/modules/attestation/examples/genesis.example.json`
+/// for a worked example.
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
+pub struct AttestationConfig {
+    /// Address that will receive treasury fee flows. Must be set
+    /// explicitly; the `Default` impl uses the zero address as a
+    /// placeholder that is almost certainly not what you want.
+    pub treasury: Address,
+    /// Flat per-attestation fee in `$LGT` micros (6 decimals).
+    pub attestation_fee: u64,
+    /// Flat schema-registration fee in `$LGT` micros.
+    pub schema_registration_fee: u64,
+    /// Flat attestor-set registration fee in `$LGT` micros.
+    pub attestor_set_fee: u64,
+    /// Attestor sets to register at genesis, in order.
+    pub initial_attestor_sets: Vec<InitialAttestorSet>,
+    /// Schemas to register at genesis, in order. Each schema's
+    /// `attestor_set` must be one registered earlier in the flow (either
+    /// in `initial_attestor_sets` above, or by a previous `InitialSchema`
+    /// bootstrap pass, though the latter is not supported today).
+    pub initial_schemas: Vec<InitialSchema>,
+}
+
+impl Default for AttestationConfig {
+    fn default() -> Self {
+        Self {
+            treasury: [0u8; 32],
+            attestation_fee: DEFAULT_ATTESTATION_FEE_LGT_MICROS,
+            schema_registration_fee: DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS,
+            attestor_set_fee: DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS,
+            initial_attestor_sets: vec![],
+            initial_schemas: vec![],
+        }
+    }
+}
 
 // ============================================================================
 // Errors
@@ -429,19 +535,12 @@ pub enum AttestationError {
 
 impl<C: Context> Module for AttestationModule<C> {
     type Context = C;
-    type Config = ();
+    type Config = AttestationConfig;
     type CallMessage = CallMessage;
     type Event = ();
 
-    fn genesis(
-        &self,
-        _config: &Self::Config,
-        _working_set: &mut WorkingSet<C>,
-    ) -> Result<(), Error> {
-        // v0: no pre-seeded state. Schemas and attestor sets are registered
-        // via tx after launch. Genesis-seeding (e.g. for the Themisra attestor
-        // set) lands with #8.
-        Ok(())
+    fn genesis(&self, config: &Self::Config, working_set: &mut WorkingSet<C>) -> Result<(), Error> {
+        Ok(self.seed_from_config(config, working_set)?)
     }
 
     fn call(
@@ -482,6 +581,87 @@ impl<C: Context> Module for AttestationModule<C> {
 }
 
 impl<C: Context> AttestationModule<C> {
+    /// Apply an [`AttestationConfig`] during [`Module::genesis`].
+    ///
+    /// Stores treasury and fee parameters in state, then registers each
+    /// configured attestor set and schema with the same validation rules
+    /// the `RegisterAttestorSet` and `RegisterSchema` handlers use at
+    /// runtime. Rejects duplicates and orphan / over-cap fee routing.
+    fn seed_from_config(
+        &self,
+        config: &AttestationConfig,
+        working_set: &mut WorkingSet<C>,
+    ) -> anyhow::Result<()> {
+        self.treasury.set(&config.treasury, working_set);
+        self.attestation_fee.set(&config.attestation_fee, working_set);
+        self.schema_registration_fee.set(&config.schema_registration_fee, working_set);
+        self.attestor_set_fee.set(&config.attestor_set_fee, working_set);
+
+        for initial in &config.initial_attestor_sets {
+            if initial.members.is_empty() {
+                return Err(AttestationError::EmptyAttestorSet.into());
+            }
+            if initial.threshold == 0 {
+                return Err(AttestationError::ZeroThreshold.into());
+            }
+            if usize::from(initial.threshold) > initial.members.len() {
+                return Err(AttestationError::ThresholdExceedsMembers {
+                    threshold: initial.threshold,
+                    count: initial.members.len(),
+                }
+                .into());
+            }
+
+            let mut sorted_members = initial.members.clone();
+            sorted_members.sort_unstable();
+
+            let id = AttestorSet::derive_id(&sorted_members, initial.threshold);
+            if self.attestor_sets.get(&id, working_set).is_some() {
+                return Err(AttestationError::DuplicateAttestorSet.into());
+            }
+            self.attestor_sets.set(
+                &id,
+                &AttestorSet { members: sorted_members, threshold: initial.threshold },
+                working_set,
+            );
+        }
+
+        for schema in &config.initial_schemas {
+            if schema.fee_routing_bps > MAX_BUILDER_BPS {
+                return Err(AttestationError::FeeRoutingExceedsCap {
+                    bps: schema.fee_routing_bps,
+                    cap: MAX_BUILDER_BPS,
+                }
+                .into());
+            }
+            if (schema.fee_routing_bps > 0) != schema.fee_routing_addr.is_some() {
+                return Err(AttestationError::OrphanFeeRouting.into());
+            }
+            if self.attestor_sets.get(&schema.attestor_set, working_set).is_none() {
+                return Err(AttestationError::UnknownAttestorSet.into());
+            }
+
+            let id = Schema::derive_id(&schema.owner, &schema.name, schema.version);
+            if self.schemas.get(&id, working_set).is_some() {
+                return Err(AttestationError::DuplicateSchema.into());
+            }
+            self.schemas.set(
+                &id,
+                &Schema {
+                    owner: schema.owner,
+                    name: schema.name.clone(),
+                    version: schema.version,
+                    attestor_set: schema.attestor_set,
+                    fee_routing_bps: schema.fee_routing_bps,
+                    fee_routing_addr: schema.fee_routing_addr,
+                },
+                working_set,
+            );
+        }
+
+        Ok(())
+    }
+
     /// Handle [`CallMessage::RegisterAttestorSet`].
     fn handle_register_attestor_set(
         &self,
@@ -1352,5 +1532,180 @@ mod state_transition_tests {
             &mut ws,
         );
         assert!(res.is_err(), "digest bound to submitter should reject mis-signed attestation");
+    }
+}
+
+// ============================================================================
+// Genesis tests
+// ============================================================================
+
+#[cfg(test)]
+mod genesis_tests {
+    use sov_modules_api::default_context::DefaultContext;
+    use sov_modules_api::{Module as _, WorkingSet};
+    use sov_prover_storage_manager::new_orphan_storage;
+
+    use super::*;
+
+    type TestModule = AttestationModule<DefaultContext>;
+
+    fn fresh() -> (TestModule, WorkingSet<DefaultContext>, tempfile::TempDir) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
+        let module = TestModule::default();
+        (module, working_set, tmpdir)
+    }
+
+    #[test]
+    fn genesis_with_default_config_seeds_treasury_and_fees() {
+        let (module, mut ws, _td) = fresh();
+        let cfg = AttestationConfig::default();
+        module.genesis(&cfg, &mut ws).expect("genesis should succeed");
+
+        assert_eq!(module.treasury.get(&mut ws), Some(cfg.treasury));
+        assert_eq!(module.attestation_fee.get(&mut ws), Some(cfg.attestation_fee));
+        assert_eq!(module.schema_registration_fee.get(&mut ws), Some(cfg.schema_registration_fee));
+        assert_eq!(module.attestor_set_fee.get(&mut ws), Some(cfg.attestor_set_fee));
+    }
+
+    #[test]
+    fn genesis_seeds_initial_attestor_sets_and_schemas() {
+        let (module, mut ws, _td) = fresh();
+        let members = vec![[1u8; 32], [2u8; 32], [3u8; 32]];
+        let attestor_set_id = AttestorSet::derive_id(&members, 2);
+        let owner = [42u8; 32];
+        let schema_name = "themisra.proof-of-prompt".to_string();
+        let schema_id = Schema::derive_id(&owner, &schema_name, 1);
+
+        let cfg = AttestationConfig {
+            initial_attestor_sets: vec![InitialAttestorSet {
+                members: members.clone(),
+                threshold: 2,
+            }],
+            initial_schemas: vec![InitialSchema {
+                owner,
+                name: schema_name,
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            }],
+            ..AttestationConfig::default()
+        };
+
+        module.genesis(&cfg, &mut ws).expect("genesis should succeed");
+
+        assert!(module.attestor_sets.get(&attestor_set_id, &mut ws).is_some());
+        assert!(module.schemas.get(&schema_id, &mut ws).is_some());
+    }
+
+    #[test]
+    fn genesis_rejects_zero_threshold_in_initial_set() {
+        let (module, mut ws, _td) = fresh();
+        let cfg = AttestationConfig {
+            initial_attestor_sets: vec![InitialAttestorSet {
+                members: vec![[1u8; 32], [2u8; 32]],
+                threshold: 0,
+            }],
+            ..AttestationConfig::default()
+        };
+        assert!(module.genesis(&cfg, &mut ws).is_err());
+    }
+
+    #[test]
+    fn genesis_rejects_threshold_over_members_in_initial_set() {
+        let (module, mut ws, _td) = fresh();
+        let cfg = AttestationConfig {
+            initial_attestor_sets: vec![InitialAttestorSet {
+                members: vec![[1u8; 32]],
+                threshold: 2,
+            }],
+            ..AttestationConfig::default()
+        };
+        assert!(module.genesis(&cfg, &mut ws).is_err());
+    }
+
+    #[test]
+    fn genesis_rejects_schema_with_unknown_attestor_set() {
+        let (module, mut ws, _td) = fresh();
+        let cfg = AttestationConfig {
+            initial_schemas: vec![InitialSchema {
+                owner: [1u8; 32],
+                name: "foo".into(),
+                version: 1,
+                attestor_set: [0xAAu8; 32], // not registered
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            }],
+            ..AttestationConfig::default()
+        };
+        assert!(module.genesis(&cfg, &mut ws).is_err());
+    }
+
+    #[test]
+    fn genesis_rejects_schema_with_over_cap_fee_routing() {
+        let (module, mut ws, _td) = fresh();
+        let members = vec![[1u8; 32], [2u8; 32]];
+        let attestor_set_id = AttestorSet::derive_id(&members, 2);
+        let cfg = AttestationConfig {
+            initial_attestor_sets: vec![InitialAttestorSet { members, threshold: 2 }],
+            initial_schemas: vec![InitialSchema {
+                owner: [1u8; 32],
+                name: "foo".into(),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 6000, // over MAX_BUILDER_BPS
+                fee_routing_addr: Some([2u8; 32]),
+            }],
+            ..AttestationConfig::default()
+        };
+        assert!(module.genesis(&cfg, &mut ws).is_err());
+    }
+
+    #[test]
+    fn genesis_rejects_orphan_fee_routing() {
+        let (module, mut ws, _td) = fresh();
+        let members = vec![[1u8; 32], [2u8; 32]];
+        let attestor_set_id = AttestorSet::derive_id(&members, 2);
+        let cfg = AttestationConfig {
+            initial_attestor_sets: vec![InitialAttestorSet { members, threshold: 2 }],
+            initial_schemas: vec![InitialSchema {
+                owner: [1u8; 32],
+                name: "foo".into(),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 1000,
+                fee_routing_addr: None, // orphan: bps > 0 with no addr
+            }],
+            ..AttestationConfig::default()
+        };
+        assert!(module.genesis(&cfg, &mut ws).is_err());
+    }
+
+    #[test]
+    fn config_round_trips_through_json() {
+        let cfg = AttestationConfig {
+            treasury: [9u8; 32],
+            attestation_fee: 1234,
+            schema_registration_fee: 5678,
+            attestor_set_fee: 91011,
+            initial_attestor_sets: vec![InitialAttestorSet {
+                members: vec![[1u8; 32], [2u8; 32]],
+                threshold: 2,
+            }],
+            initial_schemas: vec![InitialSchema {
+                owner: [3u8; 32],
+                name: "demo".into(),
+                version: 1,
+                attestor_set: [4u8; 32],
+                fee_routing_bps: 1000,
+                fee_routing_addr: Some([5u8; 32]),
+            }],
+        };
+        let json = serde_json::to_string(&cfg).unwrap();
+        let decoded: AttestationConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.treasury, cfg.treasury);
+        assert_eq!(decoded.initial_attestor_sets.len(), 1);
+        assert_eq!(decoded.initial_schemas.len(), 1);
     }
 }
