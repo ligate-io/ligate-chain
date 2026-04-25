@@ -16,6 +16,25 @@ Who this repo is for:
 
 The canonical specification is in [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md). Read it before opening a non-trivial PR against `crates/modules/attestation`.
 
+## What Ligate Chain is, and isn't
+
+Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The closer comparisons are Celestia, Hyperliquid, dYdX v4, or Cosmos app-chains: each chain has a narrow remit and is shaped around it. Our remit is on-chain attestation infrastructure for AI claims.
+
+**It is:**
+
+- A sovereign rollup on Celestia DA. Own state, own token ($LGT), own sequencer, own protocol logic.
+- A curated module set. Today: `attestation`. Planned: `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) in v1, `payments`, `agents`, `identity`, `disputes` later. Each module is a designed product surface, not a sandbox.
+- Permissionless at the **schema** level: anyone registers a schema on the attestation module and submits attestations under it. No gatekeeper.
+
+**It isn't:**
+
+- An EVM chain. There is no Solidity, no contract deployment, no ERC-20 deploy via tx. Tokens and NFTs come through the curated `tokens` and `nft` modules. We will not bolt on `sov-evm`.
+- An L1 in the Bitcoin / Ethereum sense. We use Celestia for data availability rather than building our own DA layer. We are sovereign in the rollup sense (no settlement to Ethereum, our own validator set), but DA is outsourced.
+- An L2 in the Optimism / Arbitrum sense. We do not settle to Ethereum.
+- A general DeFi platform. The chain is shaped for attestation primitives plus a few sister modules. Lending, AMMs, perps, and similar live on chains designed for them.
+
+If you want to build a generalised dApp, this is the wrong chain. If you want verifiable on-chain receipts for AI activity at scale, this is the chain we are building for that.
+
 ## Workspace layout
 
 Cargo workspace (resolver 2). Members:
