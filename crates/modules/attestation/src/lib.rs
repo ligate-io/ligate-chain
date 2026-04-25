@@ -333,19 +333,19 @@ pub struct AttestationModule<C: Context> {
     #[state]
     pub lgt_token_address: StateValue<Address>,
 
-    /// Flat per-attestation fee in `$LGT` micros. Set at genesis.
+    /// Flat per-attestation fee in `$LGT` nanos. Set at genesis.
     #[state]
     pub attestation_fee: StateValue<u64>,
 
-    /// Flat schema-registration fee in `$LGT` micros. Set at genesis.
+    /// Flat schema-registration fee in `$LGT` nanos. Set at genesis.
     #[state]
     pub schema_registration_fee: StateValue<u64>,
 
-    /// Flat attestor-set registration fee in `$LGT` micros. Set at genesis.
+    /// Flat attestor-set registration fee in `$LGT` nanos. Set at genesis.
     #[state]
     pub attestor_set_fee: StateValue<u64>,
 
-    /// Running counter of `$LGT` micros booked to the treasury.
+    /// Running counter of `$LGT` nanos booked to the treasury.
     ///
     /// Accumulates the treasury share of every successful
     /// `SubmitAttestation` plus the full registration fees from
@@ -355,7 +355,7 @@ pub struct AttestationModule<C: Context> {
     #[state]
     pub total_treasury_collected: StateValue<u64>,
 
-    /// Running counter of `$LGT` micros booked per builder address.
+    /// Running counter of `$LGT` nanos booked per builder address.
     ///
     /// Keyed by `Schema::fee_routing_addr`. Incremented on each
     /// `SubmitAttestation` under a schema with non-zero `fee_routing_bps`
@@ -374,13 +374,19 @@ pub const MAX_BUILDER_BPS: u16 = 5000;
 /// Default attestation fee in $LGT, in the chain's smallest unit.
 /// Placeholder constant. Real fee sizing is a governance parameter set
 /// at launch. Documented here for reference against the spec.
-pub const DEFAULT_ATTESTATION_FEE_LGT_MICROS: u64 = 1_000; // 0.001 $LGT at 6 decimals
+///
+/// `$LGT` uses **9 decimals** (Solana lamport convention). The smallest
+/// representable unit is `1 nano` = `0.000000001 $LGT`. The 9-decimal
+/// choice gives 18.4x headroom over a 1B-supply cap inside `u64` (the
+/// hard ceiling sov-bank imposes on amounts) while leaving 1000x more
+/// fee-pricing granularity than the 6-decimal alternative would.
+pub const DEFAULT_ATTESTATION_FEE_LGT_NANOS: u64 = 1_000_000; // 0.001 $LGT at 9 decimals
 
-/// Default schema-registration fee in `$LGT` micros. 100 $LGT at 6 decimals.
-pub const DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS: u64 = 100_000_000;
+/// Default schema-registration fee in `$LGT` nanos. 100 $LGT at 9 decimals.
+pub const DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_NANOS: u64 = 100_000_000_000;
 
-/// Default attestor-set registration fee in `$LGT` micros. 10 $LGT at 6 decimals.
-pub const DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS: u64 = 10_000_000;
+/// Default attestor-set registration fee in `$LGT` nanos. 10 $LGT at 9 decimals.
+pub const DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS: u64 = 10_000_000_000;
 
 // ============================================================================
 // Genesis configuration
@@ -446,11 +452,11 @@ pub struct AttestationConfig {
     /// address as a placeholder that is almost certainly not what you
     /// want; supply the real derived address in real configs.
     pub lgt_token_address: Address,
-    /// Flat per-attestation fee in `$LGT` micros (6 decimals).
+    /// Flat per-attestation fee in `$LGT` nanos (9 decimals).
     pub attestation_fee: u64,
-    /// Flat schema-registration fee in `$LGT` micros.
+    /// Flat schema-registration fee in `$LGT` nanos.
     pub schema_registration_fee: u64,
-    /// Flat attestor-set registration fee in `$LGT` micros.
+    /// Flat attestor-set registration fee in `$LGT` nanos.
     pub attestor_set_fee: u64,
     /// Attestor sets to register at genesis, in order.
     pub initial_attestor_sets: Vec<InitialAttestorSet>,
@@ -466,9 +472,9 @@ impl Default for AttestationConfig {
         Self {
             treasury: [0u8; 32],
             lgt_token_address: [0u8; 32],
-            attestation_fee: DEFAULT_ATTESTATION_FEE_LGT_MICROS,
-            schema_registration_fee: DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS,
-            attestor_set_fee: DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS,
+            attestation_fee: DEFAULT_ATTESTATION_FEE_LGT_NANOS,
+            schema_registration_fee: DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_NANOS,
+            attestor_set_fee: DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS,
             initial_attestor_sets: vec![],
             initial_schemas: vec![],
         }
@@ -763,7 +769,7 @@ impl<C: Context> AttestationModule<C> {
         // `$LGT`, the bank transfer returns `Err`, the working set
         // unwinds, and the tx fails atomically with no state changes.
         let fee =
-            self.attestor_set_fee.get(working_set).unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS);
+            self.attestor_set_fee.get(working_set).unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS);
         self.charge_to_treasury(context.sender(), fee, working_set)?;
 
         self.attestor_sets.set(
@@ -817,7 +823,7 @@ impl<C: Context> AttestationModule<C> {
         let fee = self
             .schema_registration_fee
             .get(working_set)
-            .unwrap_or(DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS);
+            .unwrap_or(DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_NANOS);
         self.charge_to_treasury(context.sender(), fee, working_set)?;
 
         self.schemas.set(
@@ -886,7 +892,7 @@ impl<C: Context> AttestationModule<C> {
         // treasury. Two transfers (treasury then builder) so a partial
         // failure unwinds both via the working set.
         let total_fee =
-            self.attestation_fee.get(working_set).unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_MICROS);
+            self.attestation_fee.get(working_set).unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_NANOS);
         let (builder_share, treasury_share) =
             split_attestation_fee(total_fee, schema.fee_routing_bps);
         self.charge_to_treasury(context.sender(), treasury_share, working_set)?;
@@ -905,7 +911,7 @@ impl<C: Context> AttestationModule<C> {
         Ok(CallResponse::default())
     }
 
-    /// Move `amount` `$LGT` micros from `submitter` to the treasury via
+    /// Move `amount` `$LGT` nanos from `submitter` to the treasury via
     /// `sov-bank`, then bump the cumulative
     /// [`AttestationModule::total_treasury_collected`] counter.
     ///
@@ -939,7 +945,7 @@ impl<C: Context> AttestationModule<C> {
         Ok(())
     }
 
-    /// Move `amount` `$LGT` micros from `submitter` to `builder_addr` via
+    /// Move `amount` `$LGT` nanos from `submitter` to `builder_addr` via
     /// `sov-bank`, then bump the cumulative
     /// [`AttestationModule::builder_fees_collected`] counter for that
     /// address. Same `amount == 0` short-circuit and same atomicity
@@ -1364,9 +1370,10 @@ mod state_transition_tests {
     /// Treasury address used by `fresh()`. Distinct from `TEST_SENDER` so
     /// bank balance assertions stay unambiguous.
     const TEST_TREASURY: Address = [2u8; 32];
-    /// Initial `$LGT` micros allocated to `TEST_SENDER` at genesis.
-    /// Generous enough that no validation-only test runs out.
-    const SENDER_INITIAL_LGT: u64 = 1_000_000_000;
+    /// Initial `$LGT` nanos allocated to `TEST_SENDER` at genesis.
+    /// Generous enough that no validation-only test runs out. Equivalent
+    /// to 1000 `$LGT` at 9 decimals.
+    const SENDER_INITIAL_LGT: u64 = 1_000_000_000_000;
 
     /// Convert a `SovAddress` to its 32-byte representation for storage in
     /// `Address`-typed (`[u8; 32]`) state values.
@@ -2011,10 +2018,10 @@ mod fee_tests {
     const TREASURY: Address = [11u8; 32];
     const BUILDER_PAYOUT: Address = [22u8; 32];
     /// Generous starting balance for `TEST_SENDER` so the existing
-    /// fee-volume tests (which charge up to a few thousand micros) don't
+    /// fee-volume tests (which charge up to a few thousand nanos) don't
     /// run out. The insufficient-balance test uses a different `fresh()`
-    /// variant below.
-    const SENDER_INITIAL_LGT: u64 = 1_000_000_000;
+    /// variant below. Equivalent to 1000 `$LGT` at 9 decimals.
+    const SENDER_INITIAL_LGT: u64 = 1_000_000_000_000;
 
     fn sov_addr_bytes(addr: &SovAddress) -> Address {
         let mut out = [0u8; 32];
@@ -2398,7 +2405,7 @@ mod fee_tests {
             )
             .unwrap();
 
-        // Full 1_000 micros moved to treasury, no builder share.
+        // Full 1_000 nanos moved to treasury, no builder share.
         assert_eq!(balance_of(&module, TEST_SENDER, &mut ws), sender_before - 1_000);
         assert_eq!(balance_of(&module, TREASURY, &mut ws), treasury_before + 1_000);
         assert_eq!(balance_of(&module, BUILDER_PAYOUT, &mut ws), 0);
@@ -2470,7 +2477,7 @@ mod fee_tests {
     fn submit_attestation_fails_with_insufficient_balance() {
         // Sender starts at 0 `$LGT`. The set + schema registrations are
         // free in this config, so the registration calls succeed, but
-        // the attestation submit charges 1_000 micros and must fail.
+        // the attestation submit charges 1_000 nanos and must fail.
         let (module, context, mut ws, _td) = fresh_with_balance(0);
         module.genesis(&config_with_fees(1_000, 0, 0), &mut ws).unwrap();
         let signers = signers();

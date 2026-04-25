@@ -188,6 +188,8 @@ Signatures do NOT cover the `signatures` field itself (that would be circular). 
 
 All amounts in $LGT.
 
+`$LGT` uses **9 decimals** on the wire. The smallest representable unit is `1 nano` = `0.000000001 $LGT`. Genesis configs and SDK call sites carry amounts as `u64` base units (nanos); user-facing UIs format as decimal `$LGT`. The 9-decimal choice mirrors Solana (lamport) and Cosmos micro-precision conventions while leaving 18.4x headroom over a 1B-supply cap inside `u64`, the amount type `sov-bank` enforces.
+
 | Event | Fee | Split |
 |---|---|---|
 | `RegisterAttestorSet` | `ATTESTOR_SET_FEE` (governance, default 10 $LGT) | 100% treasury |
