@@ -79,17 +79,25 @@ pub fn get_genesis_config<C: Context, Da: DaSpec>(
 
 /// Cross-module sanity checks applied after individual configs deserialise.
 ///
-/// Right now we enforce one invariant: the address `sequencer_registry`
-/// uses to lock sequencer collateral must be the genesis `$LGT` token
-/// address, otherwise a registered sequencer can never satisfy the
-/// lock requirement. The check rebuilds the deterministic token
-/// address from `bank.tokens[0]` (which by convention is `$LGT`,
-/// `salt = 0`) and compares against `sequencer_registry.coins_to_lock`.
+/// Two invariants enforced today:
 ///
-/// More invariants land here as the runtime grows. Examples we'll
-/// likely add: attestation's `lgt_token_address` must equal the same
-/// derived `$LGT` address; attestation's `treasury` must be a valid
-/// account with a bank entry. Out of scope for Phase A.1.
+/// 1. `sequencer_registry.coins_to_lock.token_address` matches the
+///    genesis `$LGT` token derived from `bank.tokens[0]`. Otherwise a
+///    registered sequencer can never satisfy the lock requirement.
+///
+/// 2. `attestation.lgt_token_address` matches that same derived
+///    address. Otherwise every fee transfer in the attestation
+///    handlers fails with "token not found" against `sov-bank` and
+///    no attestation tx ever lands. Catching this at genesis is much
+///    less painful than chasing it through tx failures at runtime.
+///
+/// Both checks rebuild the deterministic token address from
+/// `bank.tokens[0]` (the chain's gas token by convention, `$LGT`
+/// with `salt = 0` per #56) and compare each consumer against it.
+///
+/// More invariants land here as the runtime grows. Likely v0
+/// follow-ups: attestation's `treasury` must be a valid account
+/// with a bank entry. Out of scope for Phase A.1.
 pub(crate) fn validate_config<C: Context, Da: DaSpec>(
     genesis_config: <Runtime<C, Da> as RuntimeTrait<C, Da>>::GenesisConfig,
 ) -> Result<<Runtime<C, Da> as RuntimeTrait<C, Da>>::GenesisConfig, anyhow::Error> {
@@ -100,6 +108,8 @@ pub(crate) fn validate_config<C: Context, Da: DaSpec>(
         &genesis_config.bank.tokens[0].token_name,
         genesis_config.bank.tokens[0].salt,
     );
+
+    // Sequencer registry must lock the same token bank holds as $LGT.
     let coins_token_addr = &genesis_config.sequencer_registry.coins_to_lock.token_address;
     if coins_token_addr != &lgt_token_address {
         bail!(
@@ -109,6 +119,22 @@ pub(crate) fn validate_config<C: Context, Da: DaSpec>(
             coins_token_addr
         );
     }
+
+    // Attestation must charge fees in the same token bank holds as
+    // $LGT. The attestation config stores the address as 32 raw bytes
+    // (`Address = [u8; 32]`); bank's address is `C::Address`. Compare
+    // by raw bytes via `AsRef<[u8]>`, which the SDK guarantees on
+    // every `BasicAddress` impl.
+    let derived_bytes: &[u8] = lgt_token_address.as_ref();
+    if derived_bytes != genesis_config.attestation.lgt_token_address.as_slice() {
+        bail!(
+            "attestation.lgt_token_address mismatches the genesis $LGT token: \
+             expected bank-derived address, got an unrelated address. Set \
+             attestation.lgt_token_address to the bytes of \
+             sov_bank::get_genesis_token_address::<C>(\"LGT\", 0)."
+        );
+    }
+
     Ok(genesis_config)
 }
 

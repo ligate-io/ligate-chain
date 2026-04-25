@@ -1411,7 +1411,6 @@ dependencies = [
  "borsh",
  "jsonrpsee",
  "serde",
- "serde_json",
  "sov-accounts",
  "sov-bank",
  "sov-mock-da",

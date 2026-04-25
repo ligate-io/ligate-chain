@@ -33,5 +33,4 @@ sov-sequencer-registry = { workspace = true, features = ["native"] }
 attestation = { path = "../modules/attestation" }
 
 [dev-dependencies]
-serde_json.workspace = true
 sov-mock-da = { workspace = true, features = ["native"] }
