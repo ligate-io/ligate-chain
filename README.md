@@ -28,7 +28,7 @@ Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contrac
 
 **It isn't:**
 
-- An EVM chain. There is no Solidity, no contract deployment, no ERC-20 deploy via tx. Tokens and NFTs come through the curated `tokens` and `nft` modules. We will not bolt on `sov-evm`.
+- An EVM chain in v0 / v1 / v2 / v3. There is no Solidity, no contract deployment, no ERC-20 deploy via tx in any of those phases. Tokens and NFTs come through the curated `tokens` and `nft` modules. EVM compatibility is tracked as a long-horizon v4 option ([#52](https://github.com/ligate-io/ligate-chain/issues/52)) we will revisit only after the attestation focus has paid off in shipped, in-production users; until then we don't dilute the chain identity for it.
 - An L1 in the Bitcoin / Ethereum sense. We use Celestia for data availability rather than building our own DA layer. We are sovereign in the rollup sense (no settlement to Ethereum, our own validator set), but DA is outsourced.
 - An L2 in the Optimism / Arbitrum sense. We do not settle to Ethereum.
 - A general DeFi platform. The chain is shaped for attestation primitives plus a few sister modules. Lending, AMMs, perps, and similar live on chains designed for them.
