@@ -22,8 +22,20 @@ The protocol is intentionally narrow. It does **not** do identity, reputation, s
 
 **Flagship consumers** (using the protocol; not part of it):
 - **Themisra**, Proof of Prompt (schema: `themisra.proof-of-prompt/v1`)
+- **Iris**, attestation for AI agents (MCP server + relayer; multiple schemas; v0.5 product)
 - **Kleidon**, SaaS / gaming products (multiple schemas in v1+)
-- **Ligate MCP Server + Relayer**, attestation for AI agents (multiple schemas, v0.5 product)
+
+---
+
+## Positioning
+
+Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The protocol described here is the chain's core primitive, not the only thing the chain does, but it is the only thing **users program**.
+
+There is no Solidity, no Vyper, no CosmWasm, no contract deployment via tx. New chain capabilities arrive as new modules through coordinated upgrades, not as user-deployed code. Fungible tokens and NFTs, when they ship, come from curated modules (`tokens`, `nft`), not from arbitrary contract execution.
+
+Permissionless extension exists at exactly one layer: anyone can register a `Schema` plus an `AttestorSet` on the `attestation` module and submit attestations under their own rules. That is the entire user-facing surface for application logic.
+
+This is deliberate. The right comparisons are Celestia (specialised for DA), Hyperliquid (perps), dYdX v4 (derivatives), or Cosmos app-chains, not Ethereum or general L1s. The chain is shaped for attestation infrastructure plus a small set of sister modules; building a DEX or a lending protocol on top is not in scope and never will be.
 
 ---
 
