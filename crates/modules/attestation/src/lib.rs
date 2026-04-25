@@ -320,6 +320,25 @@ pub struct AttestationModule<C: Context> {
     /// Flat attestor-set registration fee in `$LGT` micros. Set at genesis.
     #[state]
     pub attestor_set_fee: StateValue<u64>,
+
+    /// Running counter of `$LGT` micros booked to the treasury.
+    ///
+    /// Accumulates the treasury share of every successful
+    /// `SubmitAttestation` plus the full registration fees from
+    /// `RegisterAttestorSet` and `RegisterSchema`. Today this is pure
+    /// accounting; actual `sov-bank` token transfers land in a follow-up
+    /// once the bank module is wired into the runtime.
+    #[state]
+    pub total_treasury_collected: StateValue<u64>,
+
+    /// Running counter of `$LGT` micros booked per builder address.
+    ///
+    /// Keyed by `Schema::fee_routing_addr`. Incremented on each
+    /// `SubmitAttestation` under a schema with non-zero `fee_routing_bps`
+    /// by `total_fee * fee_routing_bps / 10000`. Same accounting-only
+    /// caveat as [`AttestationModule::total_treasury_collected`].
+    #[state]
+    pub builder_fees_collected: StateMap<Address, u64>,
 }
 
 // ----- Protocol constants -----------------------------------------------------
@@ -698,6 +717,10 @@ impl<C: Context> AttestationModule<C> {
             working_set,
         );
 
+        let fee =
+            self.attestor_set_fee.get(working_set).unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS);
+        self.add_to_treasury(fee, working_set);
+
         Ok(CallResponse::default())
     }
 
@@ -739,6 +762,12 @@ impl<C: Context> AttestationModule<C> {
             &Schema { owner, name, version, attestor_set, fee_routing_bps, fee_routing_addr },
             working_set,
         );
+
+        let fee = self
+            .schema_registration_fee
+            .get(working_set)
+            .unwrap_or(DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS);
+        self.add_to_treasury(fee, working_set);
 
         Ok(CallResponse::default())
     }
@@ -791,17 +820,58 @@ impl<C: Context> AttestationModule<C> {
 
         validate_signatures(&signatures, &attestor_set, &digest)?;
 
-        // TODO(#22): charge `ATTESTATION_FEE` via bank and split per
-        // schema.fee_routing_bps / schema.fee_routing_addr.
-
         self.attestations.set(
             &key,
             &Attestation { schema_id, payload_hash, submitter, timestamp, signatures },
             working_set,
         );
 
+        // Charge the attestation fee. Split per schema.fee_routing_bps:
+        // builder share to schema.fee_routing_addr (if any), remainder to
+        // treasury. Today this is accounting-only against module state;
+        // real `sov-bank` token movement lands once the bank module is
+        // wired into the runtime.
+        let total_fee =
+            self.attestation_fee.get(working_set).unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_MICROS);
+        let (builder_share, treasury_share) =
+            split_attestation_fee(total_fee, schema.fee_routing_bps);
+        if let Some(addr) = schema.fee_routing_addr {
+            if builder_share > 0 {
+                self.add_to_builder(addr, builder_share, working_set);
+            }
+        }
+        self.add_to_treasury(treasury_share, working_set);
+
         Ok(CallResponse::default())
     }
+
+    /// Increment [`AttestationModule::total_treasury_collected`] by `amount`,
+    /// saturating at `u64::MAX`.
+    fn add_to_treasury(&self, amount: u64, working_set: &mut WorkingSet<C>) {
+        let current = self.total_treasury_collected.get(working_set).unwrap_or(0);
+        self.total_treasury_collected.set(&current.saturating_add(amount), working_set);
+    }
+
+    /// Increment [`AttestationModule::builder_fees_collected`] for `addr` by
+    /// `amount`, saturating at `u64::MAX`.
+    fn add_to_builder(&self, addr: Address, amount: u64, working_set: &mut WorkingSet<C>) {
+        let current = self.builder_fees_collected.get(&addr, working_set).unwrap_or(0);
+        self.builder_fees_collected.set(&addr, &current.saturating_add(amount), working_set);
+    }
+}
+
+/// Split an attestation fee into `(builder_share, treasury_share)` per
+/// `fee_routing_bps` (basis points, capped at [`MAX_BUILDER_BPS`]).
+///
+/// Uses a `u128` intermediate to avoid overflow on `bps * total`. With
+/// `bps <= 5000`, `total <= u64::MAX`, the intermediate fits comfortably
+/// in `u128` and the share casts back to `u64` losslessly.
+fn split_attestation_fee(total: u64, bps: u16) -> (u64, u64) {
+    let bps_u128 = u128::from(bps);
+    let total_u128 = u128::from(total);
+    let builder = (bps_u128 * total_u128 / 10_000) as u64;
+    let treasury = total.saturating_sub(builder);
+    (builder, treasury)
 }
 
 /// Convert the runtime's `C::Address` to the protocol's fixed 32-byte
@@ -1111,6 +1181,40 @@ mod tests {
         // Documenting the invariant explicitly so a future refactor
         // doesn't silently raise the cap without thought.
         assert_eq!(MAX_BUILDER_BPS, 5000);
+    }
+
+    // ------ Fee split math -----------------------------------------------
+
+    #[test]
+    fn split_zero_bps_routes_full_amount_to_treasury() {
+        let (builder, treasury) = split_attestation_fee(1_000, 0);
+        assert_eq!(builder, 0);
+        assert_eq!(treasury, 1_000);
+    }
+
+    #[test]
+    fn split_25pct_bps() {
+        let (builder, treasury) = split_attestation_fee(1_000, 2500);
+        assert_eq!(builder, 250);
+        assert_eq!(treasury, 750);
+    }
+
+    #[test]
+    fn split_at_protocol_cap_is_50_50() {
+        let (builder, treasury) = split_attestation_fee(1_000, MAX_BUILDER_BPS);
+        assert_eq!(builder, 500);
+        assert_eq!(treasury, 500);
+    }
+
+    #[test]
+    fn split_handles_max_total_without_overflow() {
+        // Without the u128 intermediate, 5000 * u64::MAX would wrap.
+        // We just need to confirm it does not panic and the parts sum
+        // back to total without underflow.
+        let total = u64::MAX;
+        let (builder, treasury) = split_attestation_fee(total, MAX_BUILDER_BPS);
+        assert!(builder <= total);
+        assert_eq!(builder.saturating_add(treasury), total);
     }
 }
 
@@ -1707,5 +1811,237 @@ mod genesis_tests {
         assert_eq!(decoded.treasury, cfg.treasury);
         assert_eq!(decoded.initial_attestor_sets.len(), 1);
         assert_eq!(decoded.initial_schemas.len(), 1);
+    }
+}
+
+// ============================================================================
+// Fee accounting tests (handler integration)
+// ============================================================================
+
+#[cfg(test)]
+mod fee_tests {
+    use ed25519_dalek::{Signer, SigningKey};
+    use sov_modules_api::default_context::DefaultContext;
+    use sov_modules_api::{Address as SovAddress, Module as _, WorkingSet};
+    use sov_prover_storage_manager::new_orphan_storage;
+
+    use super::*;
+
+    type TestModule = AttestationModule<DefaultContext>;
+
+    const TEST_SENDER: Address = [1u8; 32];
+    const TREASURY: Address = [11u8; 32];
+    const BUILDER_PAYOUT: Address = [22u8; 32];
+
+    fn fresh() -> (TestModule, DefaultContext, WorkingSet<DefaultContext>, tempfile::TempDir) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
+        let sender = SovAddress::from(TEST_SENDER);
+        let sequencer = SovAddress::from([9u8; 32]);
+        let context = DefaultContext::new(sender, sequencer, 1);
+        let module = TestModule::default();
+        (module, context, working_set, tmpdir)
+    }
+
+    fn signers() -> Vec<SigningKey> {
+        (1u8..=3).map(|i| SigningKey::from_bytes(&[i; 32])).collect()
+    }
+
+    fn members(sks: &[SigningKey]) -> Vec<PubKey> {
+        sks.iter().map(|sk| sk.verifying_key().to_bytes()).collect()
+    }
+
+    fn sign_with(sk: &SigningKey, digest: &Hash32) -> AttestorSignature {
+        AttestorSignature {
+            pubkey: sk.verifying_key().to_bytes(),
+            sig: sk.sign(digest).to_bytes().to_vec(),
+        }
+    }
+
+    fn config_with_fees(
+        attestation_fee: u64,
+        schema_fee: u64,
+        attestor_set_fee: u64,
+    ) -> AttestationConfig {
+        AttestationConfig {
+            treasury: TREASURY,
+            attestation_fee,
+            schema_registration_fee: schema_fee,
+            attestor_set_fee,
+            initial_attestor_sets: vec![],
+            initial_schemas: vec![],
+        }
+    }
+
+    #[test]
+    fn register_attestor_set_charges_treasury() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(0, 0, 7), &mut ws).unwrap();
+
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: members(&signers()), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        assert_eq!(module.total_treasury_collected.get(&mut ws), Some(7));
+    }
+
+    #[test]
+    fn register_schema_charges_treasury() {
+        let (module, context, mut ws, _td) = fresh();
+        // Set the schema fee to 100; attestor-set fee is 5 so we can also
+        // confirm both increments accumulate.
+        module.genesis(&config_with_fees(0, 100, 5), &mut ws).unwrap();
+
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "test.schema".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        // 5 (attestor set) + 100 (schema) = 105.
+        assert_eq!(module.total_treasury_collected.get(&mut ws), Some(105));
+    }
+
+    #[test]
+    fn submit_attestation_full_amount_to_treasury_when_no_routing() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(1_000, 0, 0), &mut ws).unwrap();
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "no-routing".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let schema_id = Schema::derive_id(&TEST_SENDER, "no-routing", 1);
+
+        // Treasury counter at this point: 0 + 0 + 0 = 0 (genesis fees were
+        // all set to 0 except attestation_fee which only kicks in on submit).
+        let baseline = module.total_treasury_collected.get(&mut ws).unwrap_or(0);
+
+        let payload_hash = [0xAAu8; 32];
+        let digest = SignedAttestationPayload {
+            schema_id,
+            payload_hash,
+            submitter: TEST_SENDER,
+            timestamp: 0,
+        }
+        .digest();
+        module
+            .call(
+                CallMessage::SubmitAttestation {
+                    schema_id,
+                    payload_hash,
+                    signatures: vec![
+                        sign_with(&signers[0], &digest),
+                        sign_with(&signers[1], &digest),
+                    ],
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        assert_eq!(module.total_treasury_collected.get(&mut ws), Some(baseline + 1_000));
+        // Builder counter for the un-set routing addr should be untouched.
+        assert!(module.builder_fees_collected.get(&BUILDER_PAYOUT, &mut ws).is_none());
+    }
+
+    #[test]
+    fn submit_attestation_splits_with_routing() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(1_000, 0, 0), &mut ws).unwrap();
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "routed".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 2500, // 25% to builder
+                    fee_routing_addr: Some(BUILDER_PAYOUT),
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let schema_id = Schema::derive_id(&TEST_SENDER, "routed", 1);
+
+        let baseline_treasury = module.total_treasury_collected.get(&mut ws).unwrap_or(0);
+
+        let payload_hash = [0xBBu8; 32];
+        let digest = SignedAttestationPayload {
+            schema_id,
+            payload_hash,
+            submitter: TEST_SENDER,
+            timestamp: 0,
+        }
+        .digest();
+        module
+            .call(
+                CallMessage::SubmitAttestation {
+                    schema_id,
+                    payload_hash,
+                    signatures: vec![
+                        sign_with(&signers[0], &digest),
+                        sign_with(&signers[1], &digest),
+                    ],
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        // 25% of 1000 = 250 to builder, remainder 750 to treasury.
+        assert_eq!(module.builder_fees_collected.get(&BUILDER_PAYOUT, &mut ws), Some(250));
+        assert_eq!(module.total_treasury_collected.get(&mut ws), Some(baseline_treasury + 750));
     }
 }
