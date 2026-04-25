@@ -19,6 +19,7 @@ sha2.workspace = true
 thiserror.workspace = true
 
 sov-modules-api = { workspace = true, features = ["native"] }
+sov-bank        = { workspace = true, features = ["native"] }
 jsonrpsee       = { workspace = true }
 
 [dev-dependencies]

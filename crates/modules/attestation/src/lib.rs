@@ -31,6 +31,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use sov_bank::{Bank, Coins};
 use sov_modules_api::{
     prelude::*, CallResponse, Context, Error, Module, ModuleInfo, StateMap, StateValue, WorkingSet,
 };
@@ -291,6 +292,13 @@ pub struct AttestationModule<C: Context> {
     #[address]
     pub address: C::Address,
 
+    /// Reference to the `sov-bank` module. Used to charge `$LGT` fees on
+    /// every successful `RegisterAttestorSet`, `RegisterSchema`, and
+    /// `SubmitAttestation` call. Bank transfers run before any state
+    /// mutation; on `Err` the working-set unwind aborts the whole tx.
+    #[module]
+    pub bank: Bank<C>,
+
     /// Schema registry: `SchemaId → Schema`.
     #[state]
     pub schemas: StateMap<SchemaId, Schema>,
@@ -308,6 +316,22 @@ pub struct AttestationModule<C: Context> {
     /// Set once at genesis, governance-adjustable later.
     #[state]
     pub treasury: StateValue<Address>,
+
+    /// `$LGT` token address used for all attestation-module fee charges.
+    ///
+    /// Set once at genesis from
+    /// [`AttestationConfig::lgt_token_address`]. Identifies the token
+    /// inside [`sov_bank::Bank`] that handlers transfer when charging
+    /// `attestation_fee`, `schema_registration_fee`, and
+    /// `attestor_set_fee`. Immutable after genesis; rotation requires a
+    /// chain upgrade.
+    ///
+    /// `$LGT` is genuinely chain-global; storing it on the attestation
+    /// module is pragmatic for v0 because attestation is the only fee
+    /// consumer. Extract to a chain-wide config primitive when the second
+    /// consumer (Iris relayer module v0.5, `tokens` module v1) lands.
+    #[state]
+    pub lgt_token_address: StateValue<Address>,
 
     /// Flat per-attestation fee in `$LGT` micros. Set at genesis.
     #[state]
@@ -412,6 +436,16 @@ pub struct AttestationConfig {
     /// explicitly; the `Default` impl uses the zero address as a
     /// placeholder that is almost certainly not what you want.
     pub treasury: Address,
+    /// `$LGT` token address inside `sov-bank` used for every fee charge.
+    ///
+    /// Derived deterministically at chain bringup via
+    /// [`sov_bank::get_genesis_token_address`] from
+    /// `(token_name = "LGT", salt = 0, deployer = [0; 32] sentinel)`. The
+    /// determinism lets SDKs and explorers hardcode the address across
+    /// devnet, testnet, and mainnet. The `Default` impl uses the zero
+    /// address as a placeholder that is almost certainly not what you
+    /// want; supply the real derived address in real configs.
+    pub lgt_token_address: Address,
     /// Flat per-attestation fee in `$LGT` micros (6 decimals).
     pub attestation_fee: u64,
     /// Flat schema-registration fee in `$LGT` micros.
@@ -431,6 +465,7 @@ impl Default for AttestationConfig {
     fn default() -> Self {
         Self {
             treasury: [0u8; 32],
+            lgt_token_address: [0u8; 32],
             attestation_fee: DEFAULT_ATTESTATION_FEE_LGT_MICROS,
             schema_registration_fee: DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS,
             attestor_set_fee: DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS,
@@ -546,6 +581,13 @@ pub enum AttestationError {
     /// surfaced as an explicit error to keep state-transition code honest.
     #[error("schema's attestor set is missing from state")]
     MissingAttestorSet,
+
+    /// `lgt_token_address` or `treasury` was not set at genesis. Indicates
+    /// a misconfigured chain. Should be unreachable for a chain that ran
+    /// `Module::genesis` cleanly, but surfaced as an error so handlers
+    /// fail honestly instead of panicking.
+    #[error("attestation module not initialised: missing $LGT token address or treasury")]
+    ChainNotConfigured,
 }
 
 // ============================================================================
@@ -570,7 +612,7 @@ impl<C: Context> Module for AttestationModule<C> {
     ) -> Result<CallResponse, Error> {
         match msg {
             CallMessage::RegisterAttestorSet { members, threshold } => {
-                Ok(self.handle_register_attestor_set(members, threshold, working_set)?)
+                Ok(self.handle_register_attestor_set(members, threshold, context, working_set)?)
             }
             CallMessage::RegisterSchema {
                 name,
@@ -612,6 +654,7 @@ impl<C: Context> AttestationModule<C> {
         working_set: &mut WorkingSet<C>,
     ) -> anyhow::Result<()> {
         self.treasury.set(&config.treasury, working_set);
+        self.lgt_token_address.set(&config.lgt_token_address, working_set);
         self.attestation_fee.set(&config.attestation_fee, working_set);
         self.schema_registration_fee.set(&config.schema_registration_fee, working_set);
         self.attestor_set_fee.set(&config.attestor_set_fee, working_set);
@@ -686,8 +729,12 @@ impl<C: Context> AttestationModule<C> {
         &self,
         members: Vec<PubKey>,
         threshold: u8,
+        context: &C,
         working_set: &mut WorkingSet<C>,
-    ) -> anyhow::Result<CallResponse> {
+    ) -> anyhow::Result<CallResponse>
+    where
+        C::Address: From<[u8; 32]>,
+    {
         if members.is_empty() {
             return Err(AttestationError::EmptyAttestorSet.into());
         }
@@ -711,15 +758,19 @@ impl<C: Context> AttestationModule<C> {
             return Err(AttestationError::DuplicateAttestorSet.into());
         }
 
+        // Charge the registration fee after validation and duplicate
+        // check, before state mutation. If the submitter has insufficient
+        // `$LGT`, the bank transfer returns `Err`, the working set
+        // unwinds, and the tx fails atomically with no state changes.
+        let fee =
+            self.attestor_set_fee.get(working_set).unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS);
+        self.charge_to_treasury(context.sender(), fee, working_set)?;
+
         self.attestor_sets.set(
             &id,
             &AttestorSet { members: sorted_members, threshold },
             working_set,
         );
-
-        let fee =
-            self.attestor_set_fee.get(working_set).unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_MICROS);
-        self.add_to_treasury(fee, working_set);
 
         Ok(CallResponse::default())
     }
@@ -735,7 +786,10 @@ impl<C: Context> AttestationModule<C> {
         fee_routing_addr: Option<Address>,
         context: &C,
         working_set: &mut WorkingSet<C>,
-    ) -> anyhow::Result<CallResponse> {
+    ) -> anyhow::Result<CallResponse>
+    where
+        C::Address: From<[u8; 32]>,
+    {
         if fee_routing_bps > MAX_BUILDER_BPS {
             return Err(AttestationError::FeeRoutingExceedsCap {
                 bps: fee_routing_bps,
@@ -757,17 +811,20 @@ impl<C: Context> AttestationModule<C> {
             return Err(AttestationError::DuplicateSchema.into());
         }
 
+        // Charge the registration fee after validation and duplicate
+        // check, before state mutation. Insufficient balance → `Err`,
+        // working set unwinds, no state changes.
+        let fee = self
+            .schema_registration_fee
+            .get(working_set)
+            .unwrap_or(DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS);
+        self.charge_to_treasury(context.sender(), fee, working_set)?;
+
         self.schemas.set(
             &id,
             &Schema { owner, name, version, attestor_set, fee_routing_bps, fee_routing_addr },
             working_set,
         );
-
-        let fee = self
-            .schema_registration_fee
-            .get(working_set)
-            .unwrap_or(DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_MICROS);
-        self.add_to_treasury(fee, working_set);
 
         Ok(CallResponse::default())
     }
@@ -792,7 +849,10 @@ impl<C: Context> AttestationModule<C> {
         signatures: Vec<AttestorSignature>,
         context: &C,
         working_set: &mut WorkingSet<C>,
-    ) -> anyhow::Result<CallResponse> {
+    ) -> anyhow::Result<CallResponse>
+    where
+        C::Address: From<[u8; 32]>,
+    {
         let schema =
             self.schemas.get(&schema_id, working_set).ok_or(AttestationError::UnknownSchema)?;
 
@@ -820,29 +880,93 @@ impl<C: Context> AttestationModule<C> {
 
         validate_signatures(&signatures, &attestor_set, &digest)?;
 
+        // Charge the attestation fee BEFORE writing the attestation.
+        // Split per `schema.fee_routing_bps`: builder share goes to
+        // `schema.fee_routing_addr` (if configured), remainder to the
+        // treasury. Two transfers (treasury then builder) so a partial
+        // failure unwinds both via the working set.
+        let total_fee =
+            self.attestation_fee.get(working_set).unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_MICROS);
+        let (builder_share, treasury_share) =
+            split_attestation_fee(total_fee, schema.fee_routing_bps);
+        self.charge_to_treasury(context.sender(), treasury_share, working_set)?;
+        if let Some(addr) = schema.fee_routing_addr {
+            if builder_share > 0 {
+                self.charge_to_builder(context.sender(), addr, builder_share, working_set)?;
+            }
+        }
+
         self.attestations.set(
             &key,
             &Attestation { schema_id, payload_hash, submitter, timestamp, signatures },
             working_set,
         );
 
-        // Charge the attestation fee. Split per schema.fee_routing_bps:
-        // builder share to schema.fee_routing_addr (if any), remainder to
-        // treasury. Today this is accounting-only against module state;
-        // real `sov-bank` token movement lands once the bank module is
-        // wired into the runtime.
-        let total_fee =
-            self.attestation_fee.get(working_set).unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_MICROS);
-        let (builder_share, treasury_share) =
-            split_attestation_fee(total_fee, schema.fee_routing_bps);
-        if let Some(addr) = schema.fee_routing_addr {
-            if builder_share > 0 {
-                self.add_to_builder(addr, builder_share, working_set);
-            }
-        }
-        self.add_to_treasury(treasury_share, working_set);
-
         Ok(CallResponse::default())
+    }
+
+    /// Move `amount` `$LGT` micros from `submitter` to the treasury via
+    /// `sov-bank`, then bump the cumulative
+    /// [`AttestationModule::total_treasury_collected`] counter.
+    ///
+    /// Returns `Ok(())` for `amount == 0` without touching the bank or
+    /// counter, so callers don't need to special-case zero-fee paths.
+    /// Bumps the counter only after a successful transfer; the
+    /// working-set unwind handles the failure case (no half-state).
+    fn charge_to_treasury(
+        &self,
+        submitter: &C::Address,
+        amount: u64,
+        working_set: &mut WorkingSet<C>,
+    ) -> anyhow::Result<()>
+    where
+        C::Address: From<[u8; 32]>,
+    {
+        if amount == 0 {
+            return Ok(());
+        }
+        let lgt_token_bytes =
+            self.lgt_token_address.get(working_set).ok_or(AttestationError::ChainNotConfigured)?;
+        let treasury_bytes =
+            self.treasury.get(working_set).ok_or(AttestationError::ChainNotConfigured)?;
+        self.bank.transfer_from(
+            submitter,
+            &C::Address::from(treasury_bytes),
+            Coins { amount, token_address: C::Address::from(lgt_token_bytes) },
+            working_set,
+        )?;
+        self.add_to_treasury(amount, working_set);
+        Ok(())
+    }
+
+    /// Move `amount` `$LGT` micros from `submitter` to `builder_addr` via
+    /// `sov-bank`, then bump the cumulative
+    /// [`AttestationModule::builder_fees_collected`] counter for that
+    /// address. Same `amount == 0` short-circuit and same atomicity
+    /// guarantees as [`Self::charge_to_treasury`].
+    fn charge_to_builder(
+        &self,
+        submitter: &C::Address,
+        builder_addr: Address,
+        amount: u64,
+        working_set: &mut WorkingSet<C>,
+    ) -> anyhow::Result<()>
+    where
+        C::Address: From<[u8; 32]>,
+    {
+        if amount == 0 {
+            return Ok(());
+        }
+        let lgt_token_bytes =
+            self.lgt_token_address.get(working_set).ok_or(AttestationError::ChainNotConfigured)?;
+        self.bank.transfer_from(
+            submitter,
+            &C::Address::from(builder_addr),
+            Coins { amount, token_address: C::Address::from(lgt_token_bytes) },
+            working_set,
+        )?;
+        self.add_to_builder(builder_addr, amount, working_set);
+        Ok(())
     }
 
     /// Increment [`AttestationModule::total_treasury_collected`] by `amount`,
@@ -1225,6 +1349,7 @@ mod tests {
 #[cfg(test)]
 mod state_transition_tests {
     use ed25519_dalek::{Signer, SigningKey};
+    use sov_bank::{get_genesis_token_address, BankConfig, TokenConfig};
     use sov_modules_api::default_context::DefaultContext;
     use sov_modules_api::{Address as SovAddress, Module as _, WorkingSet};
     use sov_prover_storage_manager::new_orphan_storage;
@@ -1236,14 +1361,65 @@ mod state_transition_tests {
     /// Address the `fresh()` context uses as `sender`; also the owner of
     /// any schema registered inside a test using that context.
     const TEST_SENDER: Address = [1u8; 32];
+    /// Treasury address used by `fresh()`. Distinct from `TEST_SENDER` so
+    /// bank balance assertions stay unambiguous.
+    const TEST_TREASURY: Address = [2u8; 32];
+    /// Initial `$LGT` micros allocated to `TEST_SENDER` at genesis.
+    /// Generous enough that no validation-only test runs out.
+    const SENDER_INITIAL_LGT: u64 = 1_000_000_000;
 
+    /// Convert a `SovAddress` to its 32-byte representation for storage in
+    /// `Address`-typed (`[u8; 32]`) state values.
+    fn sov_addr_bytes(addr: &SovAddress) -> Address {
+        let mut out = [0u8; 32];
+        out.copy_from_slice(addr.as_ref());
+        out
+    }
+
+    /// Set up a fresh module + context + working set, with `sov-bank`
+    /// seeded so handlers can charge fees. `TEST_SENDER` starts with
+    /// [`SENDER_INITIAL_LGT`] micros; `TEST_TREASURY` starts at zero
+    /// (the bank requires the address to appear in the initial-balances
+    /// list for the token entry to exist; zero is fine).
     fn fresh() -> (TestModule, DefaultContext, WorkingSet<DefaultContext>, tempfile::TempDir) {
         let tmpdir = tempfile::tempdir().unwrap();
-        let working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
+        let mut working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
         let sender = SovAddress::from(TEST_SENDER);
         let sequencer = SovAddress::from([9u8; 32]);
         let context = DefaultContext::new(sender, sequencer, 1);
         let module = TestModule::default();
+
+        // Seed the `$LGT` token in `sov-bank`. The address is
+        // deterministic from `(name = "LGT", salt = 0, deployer)`, the
+        // same recipe `sov_bank::get_genesis_token_address` uses.
+        let bank_cfg = BankConfig {
+            tokens: vec![TokenConfig {
+                token_name: "LGT".into(),
+                address_and_balances: vec![
+                    (SovAddress::from(TEST_SENDER), SENDER_INITIAL_LGT),
+                    (SovAddress::from(TEST_TREASURY), 0),
+                ],
+                authorized_minters: vec![],
+                salt: 0,
+            }],
+        };
+        module.bank.genesis(&bank_cfg, &mut working_set).expect("bank genesis");
+
+        // Seed the attestation module with a zero-fee config plus the
+        // derived `$LGT` token address. Tests that need real fees set
+        // them explicitly via a different config later (see `fee_tests`).
+        let lgt_token = get_genesis_token_address::<DefaultContext>("LGT", 0);
+        let cfg = AttestationConfig {
+            treasury: TEST_TREASURY,
+            lgt_token_address: sov_addr_bytes(&lgt_token),
+            attestation_fee: 0,
+            schema_registration_fee: 0,
+            attestor_set_fee: 0,
+            initial_attestor_sets: vec![],
+            initial_schemas: vec![],
+        };
+        module.genesis(&cfg, &mut working_set).expect("attestation genesis");
+
         (module, context, working_set, tmpdir)
     }
 
@@ -1790,6 +1966,7 @@ mod genesis_tests {
     fn config_round_trips_through_json() {
         let cfg = AttestationConfig {
             treasury: [9u8; 32],
+            lgt_token_address: [10u8; 32],
             attestation_fee: 1234,
             schema_registration_fee: 5678,
             attestor_set_fee: 91011,
@@ -1821,6 +1998,7 @@ mod genesis_tests {
 #[cfg(test)]
 mod fee_tests {
     use ed25519_dalek::{Signer, SigningKey};
+    use sov_bank::{get_genesis_token_address, BankConfig, TokenConfig};
     use sov_modules_api::default_context::DefaultContext;
     use sov_modules_api::{Address as SovAddress, Module as _, WorkingSet};
     use sov_prover_storage_manager::new_orphan_storage;
@@ -1832,15 +2010,61 @@ mod fee_tests {
     const TEST_SENDER: Address = [1u8; 32];
     const TREASURY: Address = [11u8; 32];
     const BUILDER_PAYOUT: Address = [22u8; 32];
+    /// Generous starting balance for `TEST_SENDER` so the existing
+    /// fee-volume tests (which charge up to a few thousand micros) don't
+    /// run out. The insufficient-balance test uses a different `fresh()`
+    /// variant below.
+    const SENDER_INITIAL_LGT: u64 = 1_000_000_000;
 
+    fn sov_addr_bytes(addr: &SovAddress) -> Address {
+        let mut out = [0u8; 32];
+        out.copy_from_slice(addr.as_ref());
+        out
+    }
+
+    /// Fresh module + context + working set, with `$LGT` seeded for
+    /// `TEST_SENDER`. The attestation module is NOT yet `genesis`'d;
+    /// each test calls `module.genesis` explicitly with its desired
+    /// fee config so the per-test fee values stay locally visible.
     fn fresh() -> (TestModule, DefaultContext, WorkingSet<DefaultContext>, tempfile::TempDir) {
+        fresh_with_balance(SENDER_INITIAL_LGT)
+    }
+
+    /// Variant of [`fresh`] that lets the caller pick the sender's
+    /// initial `$LGT` balance. Used by the insufficient-balance test
+    /// to start `TEST_SENDER` at zero.
+    fn fresh_with_balance(
+        sender_balance: u64,
+    ) -> (TestModule, DefaultContext, WorkingSet<DefaultContext>, tempfile::TempDir) {
         let tmpdir = tempfile::tempdir().unwrap();
-        let working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
+        let mut working_set = WorkingSet::new(new_orphan_storage(tmpdir.path()).unwrap());
         let sender = SovAddress::from(TEST_SENDER);
         let sequencer = SovAddress::from([9u8; 32]);
         let context = DefaultContext::new(sender, sequencer, 1);
         let module = TestModule::default();
+
+        let bank_cfg = BankConfig {
+            tokens: vec![TokenConfig {
+                token_name: "LGT".into(),
+                address_and_balances: vec![
+                    (SovAddress::from(TEST_SENDER), sender_balance),
+                    (SovAddress::from(TREASURY), 0),
+                    (SovAddress::from(BUILDER_PAYOUT), 0),
+                ],
+                authorized_minters: vec![],
+                salt: 0,
+            }],
+        };
+        module.bank.genesis(&bank_cfg, &mut working_set).expect("bank genesis");
+
         (module, context, working_set, tmpdir)
+    }
+
+    /// Looks up the deterministic `$LGT` token address derived at
+    /// genesis. Helper so tests can read submitter / treasury / builder
+    /// balances after fee charges.
+    fn lgt_token_address() -> SovAddress {
+        get_genesis_token_address::<DefaultContext>("LGT", 0)
     }
 
     fn signers() -> Vec<SigningKey> {
@@ -1865,6 +2089,7 @@ mod fee_tests {
     ) -> AttestationConfig {
         AttestationConfig {
             treasury: TREASURY,
+            lgt_token_address: sov_addr_bytes(&lgt_token_address()),
             attestation_fee,
             schema_registration_fee: schema_fee,
             attestor_set_fee,
@@ -2043,5 +2268,258 @@ mod fee_tests {
         // 25% of 1000 = 250 to builder, remainder 750 to treasury.
         assert_eq!(module.builder_fees_collected.get(&BUILDER_PAYOUT, &mut ws), Some(250));
         assert_eq!(module.total_treasury_collected.get(&mut ws), Some(baseline_treasury + 750));
+    }
+
+    // ----- Bank-balance integration tests -----------------------------------
+    //
+    // These assert real `$LGT` movement via `sov-bank`, complementing the
+    // counter-only assertions above. The counters and bank balances are
+    // expected to track identically pre-treasury-withdrawal (every
+    // counter increment corresponds to a bank transfer of the same
+    // amount). Once governance withdrawals ship (#41, v1) the bank
+    // balance and the cumulative counter diverge.
+
+    /// Helper for bank-balance reads in tests. Returns `0` when the user
+    /// has no entry for the token, matching the spirit of "balance is
+    /// missing means zero" rather than failing the test on `None`.
+    fn balance_of(module: &TestModule, addr: Address, ws: &mut WorkingSet<DefaultContext>) -> u64 {
+        module.bank.get_balance_of(SovAddress::from(addr), lgt_token_address(), ws).unwrap_or(0)
+    }
+
+    #[test]
+    fn register_attestor_set_charges_lgt_via_bank() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(0, 0, 7), &mut ws).unwrap();
+        let sender_before = balance_of(&module, TEST_SENDER, &mut ws);
+        let treasury_before = balance_of(&module, TREASURY, &mut ws);
+
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: members(&signers()), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        assert_eq!(balance_of(&module, TEST_SENDER, &mut ws), sender_before - 7);
+        assert_eq!(balance_of(&module, TREASURY, &mut ws), treasury_before + 7);
+    }
+
+    #[test]
+    fn register_schema_charges_lgt_via_bank() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(0, 100, 5), &mut ws).unwrap();
+
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+
+        let sender_before = balance_of(&module, TEST_SENDER, &mut ws);
+        let treasury_before = balance_of(&module, TREASURY, &mut ws);
+
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "test.schema".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        // Schema fee is 100 (the attestor-set fee was charged earlier).
+        assert_eq!(balance_of(&module, TEST_SENDER, &mut ws), sender_before - 100);
+        assert_eq!(balance_of(&module, TREASURY, &mut ws), treasury_before + 100);
+    }
+
+    #[test]
+    fn submit_attestation_moves_real_lgt_to_treasury() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(1_000, 0, 0), &mut ws).unwrap();
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "no-routing".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let schema_id = Schema::derive_id(&TEST_SENDER, "no-routing", 1);
+
+        let sender_before = balance_of(&module, TEST_SENDER, &mut ws);
+        let treasury_before = balance_of(&module, TREASURY, &mut ws);
+
+        let payload_hash = [0xAAu8; 32];
+        let digest = SignedAttestationPayload {
+            schema_id,
+            payload_hash,
+            submitter: TEST_SENDER,
+            timestamp: 0,
+        }
+        .digest();
+        module
+            .call(
+                CallMessage::SubmitAttestation {
+                    schema_id,
+                    payload_hash,
+                    signatures: vec![
+                        sign_with(&signers[0], &digest),
+                        sign_with(&signers[1], &digest),
+                    ],
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        // Full 1_000 micros moved to treasury, no builder share.
+        assert_eq!(balance_of(&module, TEST_SENDER, &mut ws), sender_before - 1_000);
+        assert_eq!(balance_of(&module, TREASURY, &mut ws), treasury_before + 1_000);
+        assert_eq!(balance_of(&module, BUILDER_PAYOUT, &mut ws), 0);
+    }
+
+    #[test]
+    fn submit_attestation_routes_builder_share_via_bank() {
+        let (module, context, mut ws, _td) = fresh();
+        module.genesis(&config_with_fees(1_000, 0, 0), &mut ws).unwrap();
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "routed".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 2500, // 25% to builder
+                    fee_routing_addr: Some(BUILDER_PAYOUT),
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let schema_id = Schema::derive_id(&TEST_SENDER, "routed", 1);
+
+        let sender_before = balance_of(&module, TEST_SENDER, &mut ws);
+        let treasury_before = balance_of(&module, TREASURY, &mut ws);
+        let builder_before = balance_of(&module, BUILDER_PAYOUT, &mut ws);
+
+        let payload_hash = [0xBBu8; 32];
+        let digest = SignedAttestationPayload {
+            schema_id,
+            payload_hash,
+            submitter: TEST_SENDER,
+            timestamp: 0,
+        }
+        .digest();
+        module
+            .call(
+                CallMessage::SubmitAttestation {
+                    schema_id,
+                    payload_hash,
+                    signatures: vec![
+                        sign_with(&signers[0], &digest),
+                        sign_with(&signers[1], &digest),
+                    ],
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+
+        // 25% of 1_000 = 250 to builder, remainder 750 to treasury.
+        assert_eq!(balance_of(&module, TEST_SENDER, &mut ws), sender_before - 1_000);
+        assert_eq!(balance_of(&module, TREASURY, &mut ws), treasury_before + 750);
+        assert_eq!(balance_of(&module, BUILDER_PAYOUT, &mut ws), builder_before + 250);
+    }
+
+    #[test]
+    fn submit_attestation_fails_with_insufficient_balance() {
+        // Sender starts at 0 `$LGT`. The set + schema registrations are
+        // free in this config, so the registration calls succeed, but
+        // the attestation submit charges 1_000 micros and must fail.
+        let (module, context, mut ws, _td) = fresh_with_balance(0);
+        module.genesis(&config_with_fees(1_000, 0, 0), &mut ws).unwrap();
+        let signers = signers();
+        let set_members = members(&signers);
+        module
+            .call(
+                CallMessage::RegisterAttestorSet { members: set_members.clone(), threshold: 2 },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let attestor_set_id = AttestorSet::derive_id(&set_members, 2);
+        module
+            .call(
+                CallMessage::RegisterSchema {
+                    name: "nofunds".into(),
+                    version: 1,
+                    attestor_set: attestor_set_id,
+                    fee_routing_bps: 0,
+                    fee_routing_addr: None,
+                },
+                &context,
+                &mut ws,
+            )
+            .unwrap();
+        let schema_id = Schema::derive_id(&TEST_SENDER, "nofunds", 1);
+
+        let payload_hash = [0xCCu8; 32];
+        let digest = SignedAttestationPayload {
+            schema_id,
+            payload_hash,
+            submitter: TEST_SENDER,
+            timestamp: 0,
+        }
+        .digest();
+        let res = module.call(
+            CallMessage::SubmitAttestation {
+                schema_id,
+                payload_hash,
+                signatures: vec![sign_with(&signers[0], &digest), sign_with(&signers[1], &digest)],
+            },
+            &context,
+            &mut ws,
+        );
+        assert!(res.is_err(), "expected insufficient-balance failure: {res:?}");
+
+        // No attestation was written, and the counter never advanced
+        // because the bank transfer failed before `add_to_treasury` ran.
+        assert!(module.attestations.get(&(schema_id, payload_hash), &mut ws).is_none());
+        assert_eq!(module.total_treasury_collected.get(&mut ws).unwrap_or(0), 0);
     }
 }

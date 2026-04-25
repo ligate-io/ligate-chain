@@ -113,6 +113,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sov-bank",
  "sov-modules-api",
  "sov-prover-storage-manager",
  "tempfile",
@@ -2174,6 +2175,23 @@ dependencies = [
  "log",
  "rand 0.8.6",
  "sha-1",
+]
+
+[[package]]
+name = "sov-bank"
+version = "0.3.0"
+source = "git+https://github.com/Sovereign-Labs/sovereign-sdk.git?rev=13e4077c329ff14954b32e3180d43a6d86fa3172#13e4077c329ff14954b32e3180d43a6d86fa3172"
+dependencies = [
+ "anyhow",
+ "borsh",
+ "clap",
+ "jsonrpsee",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sov-modules-api",
+ "sov-state",
+ "thiserror",
 ]
 
 [[package]]
