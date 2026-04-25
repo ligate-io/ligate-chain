@@ -1,0 +1,37 @@
+[package]
+name = "ligate-stf"
+description = "Ligate Chain state transition function: runtime, genesis, and tx hooks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+jsonrpsee.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+# Sovereign SDK glue
+sov-modules-api           = { workspace = true, features = ["native"] }
+sov-modules-stf-blueprint = { workspace = true, features = ["native"] }
+sov-rollup-interface      = { workspace = true, features = ["native"] }
+sov-state                 = { workspace = true, features = ["native"] }
+sov-stf-runner            = { workspace = true, features = ["native"] }
+
+# SDK modules required by every sov-rollup
+sov-bank               = { workspace = true, features = ["native"] }
+sov-accounts           = { workspace = true, features = ["native"] }
+sov-sequencer-registry = { workspace = true, features = ["native"] }
+
+# Ligate-native modules
+attestation = { path = "../modules/attestation" }
+
+[dev-dependencies]
+serde_json.workspace = true
+sov-mock-da = { workspace = true, features = ["native"] }
