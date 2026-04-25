@@ -31,7 +31,9 @@ The protocol is intentionally narrow. It does **not** do identity, reputation, s
 
 Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The protocol described here is the chain's core primitive, not the only thing the chain does, but it is the only thing **users program**.
 
-There is no Solidity, no Vyper, no CosmWasm, no contract deployment via tx. New chain capabilities arrive as new modules through coordinated upgrades, not as user-deployed code. Fungible tokens and NFTs, when they ship, come from curated modules (`tokens`, `nft`), not from arbitrary contract execution.
+There is no Solidity, no Vyper, no CosmWasm, no contract deployment via tx in v0 through v3. New chain capabilities arrive as new modules through coordinated upgrades, not as user-deployed code. Fungible tokens and NFTs, when they ship in v1, come from curated modules (`tokens`, `nft`), not from arbitrary contract execution.
+
+EVM compatibility is tracked as a long-horizon v4 option (chain issue #52). It is deliberately deferred until the attestation thesis has shipped and proven out. Pre-mainnet readers should treat this chain as non-EVM; treat any earlier opening of EVM compatibility as a strategic shift that requires its own announcement, not a feature add.
 
 Permissionless extension exists at exactly one layer: anyone can register a `Schema` plus an `AttestorSet` on the `attestation` module and submit attestations under their own rules. That is the entire user-facing surface for application logic.
 
