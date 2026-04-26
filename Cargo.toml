@@ -1,13 +1,11 @@
 [workspace]
 resolver = "2"
-# `crates/rollup` is out of the workspace until Phase A.2.2 of #13
-# fills it in (the rollup binary). It stays a 4-line stub for now.
 members = [
     "crates/modules/attestation",
     "crates/client-rs",
+    "crates/rollup",
     "crates/stf",
 ]
-exclude = ["crates/rollup"]
 
 [workspace.package]
 version = "0.0.1"
@@ -41,6 +39,10 @@ sov-prover-incentives      = { git = "https://github.com/Sovereign-Labs/sovereig
 sov-sequencer-registry     = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-uniqueness             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-mock-da                = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-mock-zkvm              = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-db                     = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-rollup-full-node-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-sequencer              = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-test-utils             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 
 # Shared workspace dependencies. Versions track the SDK's own
@@ -61,6 +63,12 @@ ed25519-dalek = { version = "=2.1.1", default-features = false }
 # upgrade. Keeping the v0.20.1 pin for now.
 jsonrpsee  = { version = "0.20.1", features = ["jsonrpsee-types", "macros", "server", "http-client"] }
 tempfile   = "3.8"
+# Async + CLI plumbing for the rollup binary. Versions track the SDK
+# workspace's own `Cargo.toml` to avoid feature-graph divergence.
+async-trait = "0.1"
+clap        = { version = "4", features = ["derive"] }
+tokio       = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+rustls      = { version = "0.23", default-features = false, features = ["ring"] }
 
 [profile.release]
 lto = "thin"

@@ -20,6 +20,7 @@
 #![allow(unused_doc_comments)]
 
 use sov_address::{EthereumAddress, FromVmAddress};
+use sov_modules_api::macros::RuntimeRestApi;
 use sov_modules_api::prelude::*;
 use sov_modules_api::{DispatchCall, Event, Genesis, Hooks, MessageCodec, Spec};
 
@@ -38,7 +39,7 @@ use sov_modules_api::{DispatchCall, Event, Genesis, Hooks, MessageCodec, Spec};
 /// include `sov-evm` in the Runtime; deploying Solidity contracts is
 /// not a v0 feature. Solana / `Base58Address` support is only needed
 /// when hyperlane modules are present, which we omit.
-#[derive(Default, Clone, Genesis, Hooks, DispatchCall, Event, MessageCodec)]
+#[derive(Default, Clone, Genesis, Hooks, DispatchCall, Event, MessageCodec, RuntimeRestApi)]
 pub struct Runtime<S: Spec>
 where
     S::Address: FromVmAddress<EthereumAddress>,
