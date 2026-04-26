@@ -29,15 +29,45 @@
 #![deny(missing_docs)]
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sov_bank::{Amount, Bank, Coins, TokenId};
-use sov_modules_api::prelude::UnwrapInfallible;
+use sov_modules_api::macros::{serialize, UniversalWallet};
 use sov_modules_api::{
-    Context, DaSpec, EventEmitter, GenesisState, Module, ModuleId, ModuleInfo, Spec, StateMap,
-    StateValue, TxState,
+    Context, DaSpec, GenesisState, Module, ModuleId, ModuleInfo, SafeString, SafeVec, Spec,
+    StateMap, StateValue, TxState,
 };
 use thiserror::Error as ThisError;
+
+// ----- Bound parameters on CallMessage payloads -------------------------------
+//
+// `UniversalWallet` (CLI / wallet codec integration) requires every
+// payload field to be a fixed-size or bounded type, so unbounded
+// `String` / `Vec<T>` collections aren't allowed in `CallMessage`. We
+// wrap each in `SafeString` / `SafeVec<T, MAX>` with caps generous
+// enough that no honest caller hits them. Bumping a cap is a wire-
+// format break (different `MAX` ⇒ different `BorshDeserialize` impl);
+// pick once at v0 and avoid changing.
+
+/// Hard cap on `RegisterAttestorSet.members` length.
+///
+/// Quorum sizes in practice are 3-7 attestors. 64 is far above any
+/// realistic operating point but keeps the wire-format envelope small.
+pub const MAX_ATTESTOR_SET_MEMBERS: usize = 64;
+
+/// Hard cap on `SubmitAttestation.signatures` length. Equal to
+/// [`MAX_ATTESTOR_SET_MEMBERS`] because every signature corresponds
+/// to one set member.
+pub const MAX_ATTESTATION_SIGNATURES: usize = MAX_ATTESTOR_SET_MEMBERS;
+
+/// Hard cap on `AttestorSignature.sig` length in bytes.
+///
+/// Covers ed25519 (64 bytes), BLS (48 bytes), and a margin for any
+/// future scheme we'd allow without a schema-level upgrade. v0 only
+/// accepts ed25519 (validated in `validate_signatures`); larger sig
+/// schemes ride on the same envelope.
+pub const MAX_ATTESTOR_SIGNATURE_BYTES: usize = 96;
 
 // ----- Primitive aliases ------------------------------------------------------
 
@@ -177,24 +207,18 @@ pub struct AttestorSet {
 /// different signature schemes (ed25519 = 64 bytes, BLS = 48, etc.) under
 /// the same type; exact validation is scheme-specific and lives in the
 /// state transition.
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    schemars::JsonSchema,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, JsonSchema, UniversalWallet)]
+#[serialize(Borsh, Serde)]
 pub struct AttestorSignature {
     /// Signer's public key. Must appear in the schema's
     /// [`AttestorSet::members`] for the signature to be accepted.
     pub pubkey: PubKey,
     /// Signature over the canonical Borsh encoding of
-    /// [`SignedAttestationPayload`].
-    pub sig: Vec<u8>,
+    /// [`SignedAttestationPayload`]. Bounded to
+    /// [`MAX_ATTESTOR_SIGNATURE_BYTES`] for wallet-codec compatibility;
+    /// ed25519 fills 64 of those, leaving headroom for BLS or other
+    /// schemes if v1+ accepts them.
+    pub sig: SafeVec<u8, MAX_ATTESTOR_SIGNATURE_BYTES>,
 }
 
 // ----- Schema -----------------------------------------------------------------
@@ -339,25 +363,15 @@ impl<S: Spec> SignedAttestationPayload<S> {
 /// Generic over `S: Spec` because [`CallMessage::RegisterSchema`]
 /// carries an optional `fee_routing_addr` of type `S::Address`.
 ///
-/// The SDK's `Module::CallMessage` super-trait requires `UniversalWallet`
-/// + `JsonSchema`. We propagate both via macros; the schemars `bound`
-/// pulls `S` into scope as a type parameter that itself needs
-/// `JsonSchema` (used by the derive's auto-name logic for the generic
-/// argument), even though our actual fields only reference `S::Address`.
-#[derive(
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    schemars::JsonSchema,
-    sov_modules_api::macros::UniversalWallet,
-)]
-#[serde(bound = "S::Address: Serialize + serde::de::DeserializeOwned")]
-#[schemars(bound = "S: schemars::JsonSchema, S::Address: schemars::JsonSchema")]
+/// Derived via the SDK's canonical pattern: `JsonSchema` +
+/// `UniversalWallet` + `#[serialize(Borsh, Serde)]`. The schemars
+/// `rename = "CallMessage"` keeps the schema name stable across
+/// generic instantiations, sidestepping the type-parameter-name
+/// resolution issue the auto-derive otherwise hits on `<S>`.
+#[derive(Debug, Clone, PartialEq, Eq, JsonSchema, UniversalWallet)]
+#[serialize(Borsh, Serde)]
+#[schemars(bound = "S::Address: ::schemars::JsonSchema", rename = "CallMessage")]
+#[serde(rename_all = "snake_case")]
 pub enum CallMessage<S: Spec> {
     /// Register a new [`AttestorSet`].
     ///
@@ -365,8 +379,9 @@ pub enum CallMessage<S: Spec> {
     /// Derivation: `SHA-256(borsh(members) ‖ threshold)`. Rejected if a
     /// set with the derived id already exists.
     RegisterAttestorSet {
-        /// See [`AttestorSet::members`].
-        members: Vec<PubKey>,
+        /// See [`AttestorSet::members`]. Bounded to
+        /// [`MAX_ATTESTOR_SET_MEMBERS`].
+        members: SafeVec<PubKey, MAX_ATTESTOR_SET_MEMBERS>,
         /// See [`AttestorSet::threshold`].
         threshold: u8,
     },
@@ -379,8 +394,9 @@ pub enum CallMessage<S: Spec> {
     /// ≤ `MAX_BUILDER_BPS` (5000 in v0). `fee_routing_addr` must be
     /// `Some` iff `fee_routing_bps > 0`.
     RegisterSchema {
-        /// See [`Schema::name`].
-        name: String,
+        /// See [`Schema::name`]. Bounded by [`SafeString`]'s default
+        /// max length.
+        name: SafeString,
         /// See [`Schema::version`].
         version: u32,
         /// See [`Schema::attestor_set`].
@@ -401,8 +417,9 @@ pub enum CallMessage<S: Spec> {
         schema_id: SchemaId,
         /// See [`Attestation::payload_hash`].
         payload_hash: PayloadHash,
-        /// See [`Attestation::signatures`].
-        signatures: Vec<AttestorSignature>,
+        /// See [`Attestation::signatures`]. Bounded to
+        /// [`MAX_ATTESTATION_SIGNATURES`].
+        signatures: SafeVec<AttestorSignature, MAX_ATTESTATION_SIGNATURES>,
     },
 }
 
@@ -760,8 +777,13 @@ impl<S: Spec> Module for AttestationModule<S> {
         context: &Context<Self::Spec>,
         state: &mut impl TxState<S>,
     ) -> Result<(), Self::Error> {
+        // Unwrap `SafeString` / `SafeVec` payloads at the dispatch
+        // boundary so the per-handler signatures stay in terms of
+        // unbounded `String` / `Vec<T>`. Borsh round-trips through
+        // SafeString/SafeVec preserve content losslessly.
         match msg {
             CallMessage::RegisterAttestorSet { members, threshold } => {
+                let members: Vec<PubKey> = members.into_iter().collect();
                 self.handle_register_attestor_set(members, threshold, context, state)
             }
             CallMessage::RegisterSchema {
@@ -771,7 +793,7 @@ impl<S: Spec> Module for AttestationModule<S> {
                 fee_routing_bps,
                 fee_routing_addr,
             } => self.handle_register_schema(
-                name,
+                name.to_string(),
                 version,
                 attestor_set,
                 fee_routing_bps,
@@ -783,7 +805,10 @@ impl<S: Spec> Module for AttestationModule<S> {
                 schema_id,
                 payload_hash,
                 signatures,
-            } => self.handle_submit_attestation(schema_id, payload_hash, signatures, context, state),
+            } => {
+                let signatures: Vec<AttestorSignature> = signatures.into_iter().collect();
+                self.handle_submit_attestation(schema_id, payload_hash, signatures, context, state)
+            }
         }
     }
 }
@@ -1198,9 +1223,7 @@ fn validate_signatures(
         let verifying_key = VerifyingKey::from_bytes(attested.pubkey.as_bytes())
             .map_err(|_| AttestationError::InvalidAttestorPubkey)?;
 
-        let sig_bytes: [u8; 64] = attested
-            .sig
-            .as_slice()
+        let sig_bytes: [u8; 64] = (&*attested.sig)
             .try_into()
             .map_err(|_| AttestationError::BadSignatureLength { actual: attested.sig.len() })?;
         let signature = Signature::from_bytes(&sig_bytes);
