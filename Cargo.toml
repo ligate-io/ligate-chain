@@ -73,3 +73,13 @@ rustls      = { version = "0.23", default-features = false, features = ["ring"] 
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# `ligate-node` pulls in the full SDK + tokio + hyper + rocksdb + ring
+# rlib graph. With full DWARF debug info, the link step OOMs on the
+# free-tier GitHub Actions runner (`collect2: ld terminated with
+# signal 7 [Bus error]`). `line-tables-only` keeps file/line
+# information for stack traces but drops type-DIE bloat — a few GB
+# off the link working set, no observable hit to debuggability for
+# panic backtraces.
+[profile.dev]
+debug = "line-tables-only"
