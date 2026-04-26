@@ -745,7 +745,17 @@ pub enum AttestationError {
 /// JsonSchema + Send + Sync + 'static + PartialEq + Debug`, and to leave
 /// space for typed events when the module grows them. Adding new
 /// variants here is non-breaking.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, schemars::JsonSchema)]
+#[derive(
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    BorshSerialize,
+    BorshDeserialize,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 pub enum AttestationEvent {
     /// Placeholder variant. Never emitted in v0; reserved so the enum
     /// is non-empty (Borsh derives require at least one variant on

@@ -1,15 +1,16 @@
 [workspace]
 resolver = "2"
-# `crates/stf` and `crates/rollup` are temporarily out of the
-# workspace during the SDK upgrade (#59). Both need full rewrites
-# against the new APIs and re-enter as part of this PR. The stf
-# crate is being deleted from the tree; rollup stays as a 4-line
-# stub for Phase A.2.
+# `crates/stf`, `crates/rollup`, and `crates/client-rs` are
+# temporarily out of the workspace during the SDK upgrade (#59).
+# - `stf` and `rollup` need full rewrites against the new APIs and
+#   re-enter as part of this PR (Day 7).
+# - `client-rs` references attestation types that just changed shape
+#   (`Address`, `AttestationKey`); migrate it once the lib settles.
+#   Should be ~30 minutes once we're at the day-4-or-later checkpoint.
 members = [
     "crates/modules/attestation",
-    "crates/client-rs",
 ]
-exclude = ["crates/stf", "crates/rollup"]
+exclude = ["crates/stf", "crates/rollup", "crates/client-rs"]
 
 [workspace.package]
 version = "0.0.1"
