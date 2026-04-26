@@ -329,3 +329,568 @@ fn submit_attestation_routes_treasury_share_via_bank() {
         }),
     });
 }
+
+// ============================================================================
+// Schema validation reject paths
+// ============================================================================
+
+#[test]
+fn register_schema_rejects_orphan_routing_bps_without_addr() {
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+
+    // bps > 0 with no addr → rejected.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("orphan-bps"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 1000,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn register_schema_rejects_orphan_routing_addr_without_bps() {
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let routing_addr = env.submitter.address();
+
+    // addr set but bps == 0 → rejected.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("orphan-addr"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: Some(routing_addr),
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn submit_attestation_requires_existing_schema() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+
+    // Reference a schema id that was never registered.
+    let bogus_schema = attestation::SchemaId::from([0xDEu8; 32]);
+    let bogus_payload = attestation::PayloadHash::from([0xADu8; 32]);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation {
+                schema_id: bogus_schema,
+                payload_hash: bogus_payload,
+                signatures: SafeVec::try_from(Vec::<AttestorSignature>::new()).unwrap(),
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+// ============================================================================
+// Full register-register-submit flow + write-once invariant
+// ============================================================================
+
+#[test]
+fn full_register_register_submit_flow() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let submitter_addr = env.submitter.address();
+
+    // 1. Register attestor set (threshold 2 of 3).
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members: safe_members(&signers), threshold: 2 },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let attestor_set_id = AttestorSet::derive_id(&pubkeys_of(&signers), 2);
+
+    // 2. Register schema.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("themisra.proof-of-prompt"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "themisra.proof-of-prompt", 1);
+
+    // 3. Submit attestation signed by 2 of 3 (meets threshold).
+    let payload_hash = attestation::PayloadHash::from([0x42u8; 32]);
+    let digest = attestation::SignedAttestationPayload::<S> {
+        schema_id,
+        payload_hash,
+        submitter: submitter_addr,
+        timestamp: 0,
+    }
+    .digest();
+    let sig_vec: Vec<AttestorSignature> = signers[..2]
+        .iter()
+        .map(|sk| AttestorSignature {
+            pubkey: PubKey::from(sk.verifying_key().to_bytes()),
+            sig: SafeVec::<u8, MAX_ATTESTOR_SIGNATURE_BYTES>::try_from(
+                sk.sign(&digest).to_bytes().to_vec(),
+            )
+            .unwrap(),
+        })
+        .collect();
+    let signatures =
+        SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(sig_vec.clone())
+            .unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(move |result, state| {
+            assert!(result.tx_receipt.is_successful());
+            // 4. Verify state.
+            let module = AttestationModule::<S>::default();
+            let key = attestation::AttestationId::from_pair(&schema_id, &payload_hash);
+            let stored = module
+                .attestations
+                .get(&key, state)
+                .unwrap_infallible()
+                .expect("attestation should be in state");
+            assert_eq!(stored.schema_id, schema_id);
+            assert_eq!(stored.payload_hash, payload_hash);
+            assert_eq!(stored.submitter, submitter_addr);
+        }),
+    });
+
+    // 5. Write-once: resubmitting same (schema_id, payload_hash) must fail.
+    let signatures_again =
+        SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(sig_vec).unwrap();
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation {
+                schema_id,
+                payload_hash,
+                signatures: signatures_again,
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+// ============================================================================
+// Signature validation reject paths
+// ============================================================================
+
+/// Sets up an env + registers attestor set + registers schema, returns
+/// the schema id and the digest the attestors must sign over.
+fn sig_test_setup(
+    env: &mut TestEnv,
+    signers: &[SigningKey; 3],
+    schema_name: &str,
+    payload_hash: attestation::PayloadHash,
+) -> (attestation::SchemaId, attestation::Hash32) {
+    let submitter_addr = env.submitter.address();
+    let members = safe_members(signers);
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members, threshold: 2 },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let attestor_set_id = AttestorSet::derive_id(&pubkeys_of(signers), 2);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name(schema_name),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, schema_name, 1);
+    let digest = attestation::SignedAttestationPayload::<S> {
+        schema_id,
+        payload_hash,
+        submitter: submitter_addr,
+        timestamp: 0,
+    }
+    .digest();
+    (schema_id, digest)
+}
+
+fn sig_for(sk: &SigningKey, digest: &attestation::Hash32) -> AttestorSignature {
+    AttestorSignature {
+        pubkey: PubKey::from(sk.verifying_key().to_bytes()),
+        sig: SafeVec::<u8, MAX_ATTESTOR_SIGNATURE_BYTES>::try_from(
+            sk.sign(digest).to_bytes().to_vec(),
+        )
+        .unwrap(),
+    }
+}
+
+#[test]
+fn submit_below_threshold_rejects() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let payload_hash = attestation::PayloadHash::from([0x01u8; 32]);
+    let (schema_id, digest) = sig_test_setup(&mut env, &signers, "below-threshold", payload_hash);
+
+    // Only 1 signature, threshold is 2.
+    let signatures = SafeVec::try_from(vec![sig_for(&signers[0], &digest)]).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn submit_with_unknown_pubkey_rejects() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let payload_hash = attestation::PayloadHash::from([0x02u8; 32]);
+    let (schema_id, digest) = sig_test_setup(&mut env, &signers, "unknown-pubkey", payload_hash);
+
+    // One legit sig + one signed by a stranger NOT in the attestor set.
+    let stranger = SigningKey::from_bytes(&[99u8; 32]);
+    let signatures =
+        SafeVec::try_from(vec![sig_for(&signers[0], &digest), sig_for(&stranger, &digest)])
+            .unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn submit_with_invalid_signature_rejects() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let payload_hash = attestation::PayloadHash::from([0x03u8; 32]);
+    let (schema_id, digest) = sig_test_setup(&mut env, &signers, "invalid-sig", payload_hash);
+
+    // Valid sig + one whose bytes are corrupted (flip a bit).
+    let mut corrupted_bytes = signers[0].sign(&digest).to_bytes().to_vec();
+    corrupted_bytes[0] ^= 0x01;
+    let corrupted = AttestorSignature {
+        pubkey: PubKey::from(signers[0].verifying_key().to_bytes()),
+        sig: SafeVec::try_from(corrupted_bytes).unwrap(),
+    };
+    let signatures = SafeVec::try_from(vec![sig_for(&signers[1], &digest), corrupted]).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn submit_with_duplicate_pubkey_rejects() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let payload_hash = attestation::PayloadHash::from([0x04u8; 32]);
+    let (schema_id, digest) = sig_test_setup(&mut env, &signers, "duplicate-pubkey", payload_hash);
+
+    // Same signer twice, both technically valid.
+    let s = sig_for(&signers[0], &digest);
+    let signatures = SafeVec::try_from(vec![s.clone(), s]).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn submit_with_bad_sig_length_rejects() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let payload_hash = attestation::PayloadHash::from([0x05u8; 32]);
+    let (schema_id, digest) = sig_test_setup(&mut env, &signers, "bad-len", payload_hash);
+
+    // Take a legit sig but truncate the raw bytes to 63 (ed25519 expects 64).
+    let mut truncated_bytes = signers[0].sign(&digest).to_bytes().to_vec();
+    truncated_bytes.truncate(63);
+    let truncated = AttestorSignature {
+        pubkey: PubKey::from(signers[0].verifying_key().to_bytes()),
+        sig: SafeVec::try_from(truncated_bytes).unwrap(),
+    };
+    let signatures = SafeVec::try_from(vec![sig_for(&signers[1], &digest), truncated]).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn submit_digest_is_bound_to_submitter() {
+    // Signing the wrong submitter produces signatures that don't verify
+    // against the module-computed digest. Locks in the invariant that
+    // submitter is part of what attestors sign, not a caller-controlled
+    // free variable.
+    use sov_modules_api::Address;
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let payload_hash = attestation::PayloadHash::from([0x06u8; 32]);
+    let submitter_addr = env.submitter.address();
+
+    let members = safe_members(&signers);
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members, threshold: 2 },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let attestor_set_id = AttestorSet::derive_id(&pubkeys_of(&signers), 2);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("digest-binding"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "digest-binding", 1);
+
+    // Sign over a digest that uses a DIFFERENT submitter address.
+    let wrong_submitter: <S as sov_modules_api::Spec>::Address = Address::from([0xFFu8; 28]);
+    let wrong_digest = attestation::SignedAttestationPayload::<S> {
+        schema_id,
+        payload_hash,
+        submitter: wrong_submitter,
+        timestamp: 0,
+    }
+    .digest();
+    let signatures = SafeVec::try_from(vec![
+        sig_for(&signers[0], &wrong_digest),
+        sig_for(&signers[1], &wrong_digest),
+    ])
+    .unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(
+                matches!(result.tx_receipt, TxEffect::Reverted(_)),
+                "wrong-submitter digest must not verify"
+            );
+        }),
+    });
+}
+
+// ============================================================================
+// Genesis happy path (rejection paths covered by handler tests above)
+// ============================================================================
+
+#[test]
+fn genesis_seeds_initial_attestor_set() {
+    // Pre-register an attestor set at genesis. The runtime should
+    // expose it without any RegisterAttestorSet tx.
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let submitter_addr = env.submitter.address();
+
+    // Try to register a schema referencing the genesis-seeded set.
+    // If genesis didn't seed it, this would fail with UnknownAttestorSet.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("genesis-set-test"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(move |result, state| {
+            assert!(result.tx_receipt.is_successful());
+            // Verify both the genesis-seeded set and the just-registered schema are in state.
+            let module = AttestationModule::<S>::default();
+            assert!(module
+                .attestor_sets
+                .get(&attestor_set_id, state)
+                .unwrap_infallible()
+                .is_some());
+            let schema_id = Schema::<S>::derive_id(&submitter_addr, "genesis-set-test", 1);
+            assert!(module.schemas.get(&schema_id, state).unwrap_infallible().is_some());
+        }),
+    });
+}
+
+// ============================================================================
+// Fee tests: builder routing + insufficient balance
+// ============================================================================
+
+#[test]
+fn submit_attestation_routes_builder_share_via_bank() {
+    // 25% routing → 250 builder + 750 treasury on a 1000-nano fee.
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::new(1_000), Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let submitter_addr = env.submitter.address();
+    let builder_addr = env.submitter.address(); // route to self for simplicity
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("builder-routing"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 2500,
+                fee_routing_addr: Some(builder_addr),
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "builder-routing", 1);
+
+    let payload_hash = attestation::PayloadHash::from([0xBBu8; 32]);
+    let digest = attestation::SignedAttestationPayload::<S> {
+        schema_id,
+        payload_hash,
+        submitter: submitter_addr,
+        timestamp: 0,
+    }
+    .digest();
+    let sigs: Vec<AttestorSignature> = signers[..2].iter().map(|sk| sig_for(sk, &digest)).collect();
+    let signatures = SafeVec::try_from(sigs).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(move |result, state| {
+            assert!(result.tx_receipt.is_successful());
+            let module = AttestationModule::<S>::default();
+
+            // Counter accumulators reflect the split.
+            assert_eq!(
+                module.total_treasury_collected.get(state).unwrap_infallible(),
+                Some(Amount::new(750))
+            );
+            assert_eq!(
+                module.builder_fees_collected.get(&builder_addr, state).unwrap_infallible(),
+                Some(Amount::new(250))
+            );
+        }),
+    });
+}
+
+#[test]
+fn submit_attestation_fails_with_insufficient_balance() {
+    // Set the attestation fee to absurdly higher than the submitter
+    // could ever hold from genesis. Bank's `transfer_from` will return
+    // Err and the tx reverts with no state changes.
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    // 10^30 nanos — guaranteed larger than any test user's balance.
+    let absurd_fee = Amount::new(1_000_000_000_000_000_000_000_000_000_000);
+    let mut env = setup_with_initial(absurd_fee, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let submitter_addr = env.submitter.address();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("insufficient"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "insufficient", 1);
+
+    let payload_hash = attestation::PayloadHash::from([0xCCu8; 32]);
+    let digest = attestation::SignedAttestationPayload::<S> {
+        schema_id,
+        payload_hash,
+        submitter: submitter_addr,
+        timestamp: 0,
+    }
+    .digest();
+    let sigs: Vec<AttestorSignature> = signers[..2].iter().map(|sk| sig_for(sk, &digest)).collect();
+    let signatures = SafeVec::try_from(sigs).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(move |result, state| {
+            assert!(
+                matches!(result.tx_receipt, TxEffect::Reverted(_)),
+                "insufficient balance should revert: {:?}",
+                result.tx_receipt
+            );
+            // Attestation must not have been written.
+            let module = AttestationModule::<S>::default();
+            let key = attestation::AttestationId::from_pair(&schema_id, &payload_hash);
+            assert!(module.attestations.get(&key, state).unwrap_infallible().is_none());
+        }),
+    });
+}
