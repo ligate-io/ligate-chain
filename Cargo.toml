@@ -1,11 +1,16 @@
 [workspace]
 resolver = "2"
+# `crates/stf`, `crates/rollup`, and `crates/client-rs` are
+# temporarily out of the workspace during the SDK upgrade (#59).
+# - `stf` and `rollup` need full rewrites against the new APIs and
+#   re-enter as part of this PR (Day 7).
+# - `client-rs` references attestation types that just changed shape
+#   (`Address`, `AttestationKey`); migrate it once the lib settles.
+#   Should be ~30 minutes once we're at the day-4-or-later checkpoint.
 members = [
-    "crates/rollup",
-    "crates/stf",
     "crates/modules/attestation",
-    "crates/client-rs",
 ]
+exclude = ["crates/stf", "crates/rollup", "crates/client-rs"]
 
 [workspace.package]
 version = "0.0.1"
@@ -20,31 +25,34 @@ rust-version = "1.93"
 [workspace.dependencies]
 # Sovereign SDK — pinned to the same rev that `sov-rollup-starter` uses.
 # v0.3-era (known-compiling baseline). Bump alongside SDK upgrades.
-sov-rollup-interface       = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-modules-api            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-state                  = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-prover-storage-manager = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-bank                   = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-accounts               = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-sequencer-registry     = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-modules-stf-blueprint  = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-stf-runner             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
-sov-mock-da                = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "13e4077c329ff14954b32e3180d43a6d86fa3172" }
+sov-rollup-interface       = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-modules-api            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-modules-stf-blueprint  = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-modules-rollup-blueprint = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-state                  = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-stf-runner             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-bank                   = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-accounts               = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-sequencer-registry     = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-mock-da                = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-test-utils             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 
-# Shared workspace dependencies
-anyhow     = "1.0"
-thiserror  = "1.0"
-serde      = { version = "1.0", features = ["derive"] }
+# Shared workspace dependencies. Versions track the SDK's own
+# `Cargo.toml` to avoid feature-graph divergence.
+anyhow     = "1.0.95"
+thiserror  = "2"
+serde      = { version = "1.0.208", default-features = false, features = ["derive", "alloc", "rc"] }
 serde_json = "1.0"
 tracing    = "0.1"
-# borsh pinned to 0.10 to match the SDK rev above.
-borsh      = { version = "0.10.3", features = ["rc", "bytes"] }
-sha2       = "0.10"
-# ed25519-dalek 2.x is no-deps by default; gives us VerifyingKey + Signature.
-ed25519-dalek = "=2.0.0"  # pinned to match Sovereign SDK's exact version
-# jsonrpsee — canonical RPC library for Sovereign SDK rollups. Used for
-# module RPC method derives (see starter's sov-accounts/sov-bank pattern),
-# node RPC server, and client-rs transport. Pin matches starter.
+# borsh 1.x; the SDK upgraded from 0.10.x in #59. Our types using
+# `try_to_vec`/`try_from_slice` migrate to `borsh::to_vec`/`borsh::from_slice`.
+borsh      = { version = "1", features = ["derive"] }
+schemars   = { version = "0.8.21", features = ["derive"] }
+sha2       = { version = "=0.10.9", default-features = false }
+strum      = { version = "0.26.3", features = ["derive"] }
+ed25519-dalek = { version = "=2.1.1", default-features = false }
+# jsonrpsee version may need bumping; we'll find out during the
+# upgrade. Keeping the v0.20.1 pin for now.
 jsonrpsee  = { version = "0.20.1", features = ["jsonrpsee-types", "macros", "server", "http-client"] }
 tempfile   = "3.8"
 

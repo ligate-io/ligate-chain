@@ -1,0 +1,234 @@
+# Ligate Chain compile-time constants.
+#
+# Sourced by `sov_modules_macros::config_value_private!` via the
+# `CONSTANTS_MANIFEST_PATH` build-script env var. The macro walks up
+# from `OUT_DIR` until it finds this file, so any crate in the
+# workspace that compiles with the SDK macros picks these values up.
+#
+# Test-mode loads `constants.testing.toml` instead (when env
+# `SOV_TEST_MODE_CONST_MANIFEST` is set or under `cfg(test)`).
+# We don't currently override anything in tests; if we ever need to,
+# add a sibling `constants.testing.toml`.
+#
+# Tuning these is governance territory once mainnet is live.
+# Pre-mainnet, edits land via PR.
+
+[gas.Bank]
+create_token = [4, 4]
+transfer     = [5, 5]
+burn         = [2, 2]
+mint         = [2, 2]
+freeze       = [1, 1]
+
+
+[constants]
+# Numeric chain id used for tx signing domain separation. Mainnet
+# value finalised at TGE; devnet uses 4242 (distinct from the SDK
+# demo's 4321 so a misconfigured client failing back to demo defaults
+# is obvious in logs). Per #54, the user-facing string identifier is
+# `ligate-devnet-1` / `ligate-1` and lives in the rollup config TOML,
+# not here.
+CHAIN_ID = 4242
+CHAIN_NAME = "Ligate"
+
+# Chain hash overrides for upgrade transitions (see SDK docs). Empty
+# at launch; populated when we make a schema-changing upgrade.
+CHAIN_HASH_OVERRIDES = []
+
+# Celestia namespaces used by the rollup for its DA blobs. 10 bytes
+# each per Celestia's namespace spec. Mirroring the SDK demo's
+# `sov-test-b` / `sov-test-p` shape with Ligate prefixes.
+BATCH_NAMESPACE = { byte_string = "lig-dvn-tb" }
+PROOF_NAMESPACE = { byte_string = "lig-dvn-tp" }
+
+# Hard cap on a single tx in bytes (1 MiB).
+MAX_TX_SIZE = 1_048_576
+
+# EVM module constants. Carried even though we don't ship EVM in
+# v0/v1/v2/v3 (see #52, #53), because the SDK's EVM module is in the
+# crate graph and references these. Values mirror the demo.
+EVM_BLOCK_PRUNING_THRESHOLD = 10000
+EVM_GAS_METERING_MODE = "Rollup"
+EVM_MAX_FEE_CHECK_HEIGHT = 0
+EVM_RECEIPT_ACTUAL_FEE_HEIGHT = 0
+
+# Setup mode lets the rollup boot without charging gas while we
+# bridge in the gas token. Disabled by default; turn on by setting
+# this to a non-zero block height when bringing up a fresh devnet.
+SETUP_MODE_TERMINATION_HEIGHT = 0
+
+# Block height after which the timestamp oracle starts pulling time
+# from sequencing metadata. 0 = always-on.
+ENABLE_TIMESTAMP_ORACLE_AT = 0
+
+# Soft-confirmations parameters.
+DEFERRED_SLOTS_COUNT = 120
+MAX_VISIBLE_HEIGHT_INCREASE_PER_SLOT = 10
+STATE_ROOT_DELAY_BLOCKS = 5
+
+# Anti-spam knob: blobs from unregistered sequencers per slot.
+UNREGISTERED_BLOBS_PER_SLOT = 5
+
+# Replay-protection / uniqueness storage parameters.
+PAST_TRANSACTION_GENERATIONS = 5_000
+MAX_STORED_TX_HASHES_PER_CREDENTIAL = 1700
+
+# Blob storage caps.
+MAX_ALLOWED_DATA_SIZE_RETURNED_BY_BLOB_STORAGE = 50331648 # 48 MiB
+
+# Gas dimensions: 2-D meter (compute + storage). Matches SDK default.
+GAS_DIMENSIONS = { const = 2 }
+
+# Forced sequencer registration cost. Higher than regular
+# registration so this path doesn't get gamed.
+GAS_FORCED_SEQUENCER_REGISTRATION_COST = [100000, 100000]
+
+# The native gas token's TokenId. PLACEHOLDER value mirrored from the
+# SDK demo for now; we own this and replace with the real
+# Ligate-derived `$LGT` TokenId before any external devnet tag.
+# Tracking: file a follow-up issue once the SDK upgrade lands.
+GAS_TOKEN_ID = { bech32 = "token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2xxx3vs0y07u7", type = "TokenId" }
+
+# **The Ligate HRP.** This is the whole reason we did the SDK upgrade
+# (#59). Every account address minted on this chain is bech32-encoded
+# with this prefix. Per #46, the Ligate-side identifier ladder is:
+#   lig1   - account addresses (THIS CONSTANT)
+#   lpk1   - public keys (separate, encoded by client-rs)
+#   lsc1   - schema ids (computed by attestation module, encoded by client-rs)
+#   las1   - attestor-set ids
+#   lat1   - attestation ids
+#   ltx1   - tx hashes
+#   lph1   - payload hashes
+#   lcc1   - NFT collection ids (when `nft` module ships in v1)
+#   ltk1   - fungible token denominations (when `tokens` module ships in v1)
+ADDRESS_PREFIX = { const = "lig" }
+
+# Gas costs for state access. Mirrored from SDK demo defaults; revisit
+# when we have real benchmark data.
+GAS_TO_CHARGE_FOR_CREDENTIAL_CALCULATION = [0, 0]
+GAS_TO_CHARGE_PER_STORAGE_ACCESS = [1, 1]
+GAS_TO_CHARGE_PER_READ = [1, 1]
+GAS_TO_CHARGE_PER_BYTE_READ = [1, 1]
+GAS_TO_CHARGE_PER_BYTE_STORAGE_UPDATE = [1, 1]
+BIAS_STORAGE_UPDATE = [1, 1]
+
+EXAMPLE_CUSTOM_GAS_PRICE = [1, 1]
+
+# Hash + signature verification gas.
+GAS_TO_CHARGE_HASH_UPDATE = [30, 30]
+GAS_TO_CHARGE_PER_BYTE_HASH_UPDATE = [10, 10]
+DEFAULT_GAS_TO_CHARGE_PER_BYTE_SIGNATURE_VERIFICATION = [1, 1]
+DEFAULT_FIXED_GAS_TO_CHARGE_PER_SIGNATURE_VERIFICATION = [100, 100]
+
+# EVM execution gas mapping. Unused by us in v0-v3 but referenced in
+# the SDK graph.
+DEFAULT_GAS_TO_CHARGE_PER_EVM_GAS = [1, 0]
+
+# Per-tx execution gas budgets.
+MAX_SEQUENCER_EXEC_GAS_PER_TX = [1_000_000_000, 1_000_000_000]
+MAX_UNREGISTERED_SEQUENCER_EXEC_GAS_PER_TX = [500_000, 500_000]
+PROCESS_TX_PRE_EXEC_GAS = [1, 1]
+PROCESS_TX_PRE_EXEC_GAS_PER_TX_BYTE = [1, 1]
+
+# Borsh / JSON deserialization costs.
+DEFAULT_GAS_TO_CHARGE_PER_BYTE_BORSH_DESERIALIZATION = [1, 1]
+BIAS_BORSH_DESERIALIZATION = [1, 1]
+TX_GAS_TO_CHARGE_PER_BYTE_BORSH_DESERIALIZATION = [1, 1]
+TX_BIAS_BORSH_DESERIALIZATION = [1, 1]
+TX_GAS_TO_CHARGE_PER_BYTE_JSON_DESERIALIZATION = [1, 1]
+TX_BIAS_JSON_DESERIALIZATION = [1, 1]
+PROOF_GAS_TO_CHARGE_PER_BYTE_BORSH_DESERIALIZATION = [1, 1]
+PROOF_BIAS_BORSH_DESERIALIZATION = [1, 1]
+STRING_GAS_TO_CHARGE_PER_BYTE_BORSH_DESERIALIZATION = [1, 1]
+STRING_BIAS_BORSH_DESERIALIZATION = [1, 1]
+
+# Base-fee burn percentage. EIP-1559-style fee economics: 10% of base
+# fee is burned, the remainder goes to provers/attesters.
+PERCENT_BASE_FEE_TO_BURN = 10
+
+# ZK-proof gas accounting.
+GAS_TO_CHARGE_PER_PROOF_BYTE = [1, 1]
+FIXED_GAS_TO_CHARGE_PER_PROOF = [100, 100]
+
+# Gas limit + base-fee curve. EIP-1559 parameters.
+INITIAL_GAS_LIMIT = [100_000_000_000, 100_000_000_000]
+UPDATED_GAS_LIMIT = [100_000_000_000, 100_000_000_000]
+CHANGE_GAS_LIMIT_AFTER_HEIGHT = 9223372036854775807
+INITIAL_BASE_FEE_PER_GAS = [10, 10]
+BASE_FEE_MAX_CHANGE_DENOMINATOR = 8
+ELASTICITY_MULTIPLIER = 2
+
+# Hyperlane bridge constants. Ligate uses Hyperlane for cross-chain
+# messaging in later phases. Domain id placeholder; finalised before
+# any bridge live deployment.
+HYPERLANE_BRIDGE_DOMAIN = 5555
+HYPERLANE_METER_DELIVERY_COUNTER_AFTER_HEIGHT = 0
+
+# Module discriminants. Each module gets a stable numeric id; this
+# table is the canonical assignment. Values 0-20 mirror SDK defaults
+# so we don't conflict with shared modules. Ligate-native modules
+# start at 21. **Never reassign once a module ships to a public
+# network.**
+BANK_DISCRIMINANT = 0
+ACCOUNTS_DISCRIMINANT = 1
+CHAIN_STATE_DISCRIMINANT = 2
+OPERATOR_INCENTIVES_DISCRIMINANT = 3
+BLOB_STORAGE_DISCRIMINANT = 4
+PROVER_INCENTIVES_DISCRIMINANT = 5
+SEQUENCER_REGISTRY_DISCRIMINANT = 6
+UNIQUENESS_DISCRIMINANT = 7
+HYPERLANE_DISCRIMINANT = 8
+ATTESTER_INCENTIVES_DISCRIMINANT = 9
+BLOB_SELECTOR_DISCRIMINANT = 10
+EVM_DISCRIMINANT = 11
+MAILBOX_DISCRIMINANT = 12
+INTERCHAIN_GAS_PAYMASTER_DISCRIMINANT = 13
+MERKLE_TREE_HOOK_DISCRIMINANT = 14
+WARP_DISCRIMINANT = 15
+PAYMASTER_DISCRIMINANT = 16
+REVENUE_SHARE_DISCRIMINANT = 17
+SOLANA_REGISTRATION_DISCRIMINANT = 18
+SESSION_REGISTRY_DISCRIMINANT = 19
+BLACKLIST_DISCRIMINANT = 20
+
+# Ligate-native module discriminants (start at 21, increment per
+# module). Ordering established here is the canonical wire-level
+# stable ordering. Names are snake_case of the struct type that
+# carries the `#[id]`-marked field; the SDK derives the lookup key
+# from the type name. Our struct is `AttestationModule`, hence
+# `ATTESTATION_MODULE_DISCRIMINANT`.
+ATTESTATION_MODULE_DISCRIMINANT = 21
+
+# SDK test-module discriminants. Carried verbatim because the SDK's
+# own crate graph includes these modules behind feature flags and
+# they panic at compile time if the discriminant is missing. None
+# ship to production.
+EVENT_EMITTER_MODULE_DISCRIMINANT = 227
+TEST_DEX_DISCRIMINANT = 228
+SEQUENCING_DATA_TESTER_DISCRIMINANT = 229
+PINNED_CACHE_TESTER_DISCRIMINANT = 230
+STATE_CONSISTENCY_DISCRIMINANT = 231
+MODULE_WITH_VERSIONED_STATE_ACCESS_IN_SLOT_HOOK_DISCRIMINANT = 232
+GAS_TESTER_DISCRIMINANT = 233
+INCORRECT_HOOKS_OVERRIDE_DISCRIMINANT = 234
+CORRECT_HOOKS_OVERRIDE_DISCRIMINANT = 235
+QUERY_MODULE_DISCRIMINANT = 236
+TEST_STRUCT_DISCRIMINANT = 237
+TEST_VISIBLE_HASH_MODULE_DISCRIMINANT = 238
+MODULE_2_DISCRIMINANT = 239
+MODULE_1_DISCRIMINANT = 240
+THIRD_TEST_STRUCT_DISCRIMINANT = 241
+TEST_HELPER_DISCRIMINANT = 242
+SECOND_TEST_STRUCT_DISCRIMINANT = 243
+FIRST_TEST_STRUCT_DISCRIMINANT = 244
+TEST_ACCESSORY_MODULE_DISCRIMINANT = 245
+MY_MODULE_DISCRIMINANT = 246
+TEST_MODULE_DISCRIMINANT = 247
+ROUTING_RECIPIENT_DISCRIMINANT = 248
+EXAMPLE_MODULE_DISCRIMINANT = 249
+SYNTHETIC_LOAD_DISCRIMINANT = 250
+TEST_RECIPIENT_DISCRIMINANT = 251
+ACCESS_PATTERN_DISCRIMINANT = 252
+HOOKS_COUNT_DISCRIMINANT = 253
+CACHE_AND_REVERT_TESTER_DISCRIMINANT = 254
+VALUE_SETTER_DISCRIMINANT = 255

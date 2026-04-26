@@ -51,6 +51,20 @@ Protocol docs:
 
 Rust toolchain is pinned via [`rust-toolchain.toml`](rust-toolchain.toml) to 1.93.0. Any modern `rustup` will install it automatically when you enter the repo.
 
+### System dependencies
+
+The SDK pulls in `librocksdb-sys`, which needs `libclang` at build time:
+
+- **Ubuntu / Debian**: `sudo apt install libclang-dev clang`
+- **macOS**: ships with the Command Line Tools (`xcode-select --install`); you also need to set the dyld path so the `librocksdb-sys` build script can find the dylib at link time. Add to `~/.zshrc` or `~/.bashrc`:
+  ```bash
+  export DYLD_FALLBACK_LIBRARY_PATH=/Library/Developer/CommandLineTools/usr/lib
+  export LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib
+  ```
+  Or set them per-invocation: `DYLD_FALLBACK_LIBRARY_PATH=/Library/Developer/CommandLineTools/usr/lib LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib cargo test ...`.
+
+### CI gates
+
 ```bash
 # Compile check across the workspace
 cargo check --workspace
