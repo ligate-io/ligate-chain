@@ -24,6 +24,7 @@ sov-bank        = { workspace = true }
 
 [dev-dependencies]
 attestation     = { path = ".", features = ["native"] }
+serde_json.workspace = true
 sov-modules-api = { workspace = true, features = ["native"] }
 sov-bank        = { workspace = true, features = ["native"] }
 sov-state       = { workspace = true, features = ["native"] }
