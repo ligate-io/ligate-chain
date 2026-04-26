@@ -3066,6 +3066,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ligate-client"
+version = "0.0.1"
+dependencies = [
+ "attestation",
+ "borsh",
+ "ed25519-dalek",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sov-bank",
+ "sov-modules-api",
+ "sov-test-utils",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
