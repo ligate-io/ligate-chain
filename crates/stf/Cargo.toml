@@ -1,0 +1,68 @@
+[package]
+name = "ligate-stf"
+description = "Ligate Chain state transition function: runtime composition + genesis loaders"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+schemars.workspace = true
+serde.workspace = true
+strum.workspace = true
+tracing.workspace = true
+
+# SDK glue
+sov-modules-api           = { workspace = true }
+sov-modules-stf-blueprint = { workspace = true }
+sov-rollup-interface      = { workspace = true }
+sov-state                 = { workspace = true }
+sov-address               = { workspace = true, features = ["evm"] }
+
+# Required runtime modules (sov-mandatory + economic + chain)
+sov-accounts            = { workspace = true }
+sov-attester-incentives = { workspace = true }
+sov-bank                = { workspace = true }
+sov-blob-storage        = { workspace = true }
+sov-capabilities        = { workspace = true }
+sov-chain-state         = { workspace = true }
+sov-kernels             = { workspace = true }
+sov-operator-incentives = { workspace = true }
+sov-prover-incentives   = { workspace = true }
+sov-sequencer-registry  = { workspace = true }
+sov-uniqueness          = { workspace = true }
+
+# Ligate-native modules
+attestation = { path = "../modules/attestation" }
+
+[dev-dependencies]
+sov-test-utils = { workspace = true }
+sov-mock-da    = { workspace = true, features = ["native"] }
+
+[features]
+default = []
+native = [
+    "sov-accounts/native",
+    "sov-address/native",
+    "sov-attester-incentives/native",
+    "sov-bank/native",
+    "sov-blob-storage/native",
+    "sov-capabilities/native",
+    "sov-chain-state/native",
+    "sov-kernels/native",
+    "sov-modules-api/native",
+    "sov-modules-stf-blueprint/native",
+    "sov-operator-incentives/native",
+    "sov-prover-incentives/native",
+    "sov-rollup-interface/native",
+    "sov-sequencer-registry/native",
+    "sov-state/native",
+    "sov-uniqueness/native",
+    "attestation/native",
+]

@@ -3082,6 +3082,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "ligate-stf"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "attestation",
+ "borsh",
+ "schemars 0.8.22",
+ "serde",
+ "sov-accounts",
+ "sov-address",
+ "sov-attester-incentives",
+ "sov-bank",
+ "sov-blob-storage",
+ "sov-capabilities",
+ "sov-chain-state",
+ "sov-kernels",
+ "sov-mock-da",
+ "sov-modules-api",
+ "sov-modules-stf-blueprint",
+ "sov-operator-incentives",
+ "sov-prover-incentives",
+ "sov-rollup-interface",
+ "sov-sequencer-registry",
+ "sov-state",
+ "sov-test-utils",
+ "sov-uniqueness",
+ "strum",
+ "tracing",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
