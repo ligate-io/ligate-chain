@@ -11,7 +11,10 @@ publish.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-attestation = { path = "../modules/attestation" }
+attestation     = { path = "../modules/attestation" }
+sov-modules-api = { workspace = true }
+sov-bank        = { workspace = true }
+
 borsh.workspace = true
 ed25519-dalek.workspace = true
 serde.workspace = true
@@ -20,3 +23,4 @@ thiserror.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
+sov-test-utils  = { workspace = true }
