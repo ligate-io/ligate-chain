@@ -2,7 +2,7 @@
 #
 # Ignored advisories are tracked with clear rationale. Revisit every time we
 # upgrade the Sovereign SDK rev (all current entries come from transitive
-# deps pinned by the SDK at `13e4077c`).
+# deps pinned by the SDK at `f89964c6`).
 
 [advisories]
 ignore = [
@@ -30,4 +30,20 @@ ignore = [
     # Pulled transitively by jsonrpsee-http-client -> hyper-rustls.
     # Not a vulnerability; clears on SDK + jsonrpsee upgrade.
     "RUSTSEC-2025-0134",
+
+    # astral-tokio-tar 0.5.6, low-severity (CVSS 1.7) directory traversal
+    # via crafted entry names. Pulled by `testcontainers` (a test-only
+    # dep of sov-test-utils). We do not extract user-supplied tar archives
+    # in any production path; the only consumer is the SDK's docker-based
+    # integration tests. Clears when sov-test-utils' testcontainers
+    # transitively bumps astral-tokio-tar to >= 0.6.0.
+    "RUSTSEC-2026-0066",
+
+    # rsa 0.9.x Marvin attack (CVSS 5.9). Pulled by sqlx-mysql, which is
+    # a transitive build-time dep of sov-db's optional sqlx integration.
+    # No production code path uses MySQL or RSA decryption; the Marvin
+    # attack requires a decryption oracle that we don't expose. No fixed
+    # upgrade available upstream; clears when rsa crate is patched or
+    # when SDK drops the sqlx-mysql dep.
+    "RUSTSEC-2023-0071",
 ]

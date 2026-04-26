@@ -1041,13 +1041,9 @@ impl<S: Spec> AttestationModule<S> {
         // Canonical digest attestors sign over. Must be computed after
         // we know `submitter` and `timestamp`; those are part of what's
         // signed.
-        let digest = SignedAttestationPayload::<S> {
-            schema_id,
-            payload_hash,
-            submitter,
-            timestamp,
-        }
-        .digest();
+        let digest =
+            SignedAttestationPayload::<S> { schema_id, payload_hash, submitter, timestamp }
+                .digest();
 
         validate_signatures(&signatures, &attestor_set, &digest)?;
 
