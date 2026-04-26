@@ -15,7 +15,9 @@ anyhow.workspace = true
 borsh.workspace = true
 schemars.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 strum.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 
 # SDK glue
@@ -44,6 +46,7 @@ attestation = { path = "../modules/attestation" }
 [dev-dependencies]
 sov-test-utils = { workspace = true }
 sov-mock-da    = { workspace = true, features = ["native"] }
+tempfile       = { workspace = true }
 
 [features]
 default = []
