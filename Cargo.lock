@@ -3090,6 +3090,7 @@ dependencies = [
  "borsh",
  "schemars 0.8.22",
  "serde",
+ "serde_json",
  "sov-accounts",
  "sov-address",
  "sov-attester-incentives",
@@ -3109,6 +3110,8 @@ dependencies = [
  "sov-test-utils",
  "sov-uniqueness",
  "strum",
+ "tempfile",
+ "thiserror 2.0.18",
  "tracing",
 ]
 
