@@ -15,8 +15,8 @@
 
 use attestation::{
     AttestationConfig, AttestationModule, AttestorSet, AttestorSignature, CallMessage,
-    InitialAttestorSet, MAX_ATTESTOR_SET_MEMBERS, MAX_ATTESTATION_SIGNATURES,
-    MAX_ATTESTOR_SIGNATURE_BYTES, PubKey, Schema, SchemaId,
+    InitialAttestorSet, PubKey, Schema, MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS,
+    MAX_ATTESTOR_SIGNATURE_BYTES,
 };
 use ed25519_dalek::{Signer, SigningKey};
 use sov_bank::{config_gas_token_id, Amount, Bank, TokenId};
@@ -67,8 +67,8 @@ fn setup_with_initial(
     initial_attestor_sets: Vec<InitialAttestorSet>,
 ) -> TestEnv {
     // Two extra accounts: index 0 = submitter, index 1 = treasury.
-    let genesis_config = HighLevelOptimisticGenesisConfig::generate()
-        .add_accounts_with_default_balance(2);
+    let genesis_config =
+        HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(2);
 
     let submitter = genesis_config.additional_accounts()[0].clone();
     let treasury_user = genesis_config.additional_accounts()[1].clone();
@@ -86,8 +86,7 @@ fn setup_with_initial(
         initial_schemas: vec![],
     };
 
-    let genesis =
-        GenesisConfig::from_minimal_config(genesis_config.into(), attestation_config);
+    let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), attestation_config);
 
     let runner = TestRunner::new_with_genesis(genesis.into_genesis_params(), RT::default());
 
@@ -172,8 +171,8 @@ fn register_attestor_set_rejects_threshold_above_members() {
 
     // 1 member, threshold 2 → invalid.
     let lone_signer = SigningKey::from_bytes(&[42u8; 32]);
-    let members = SafeVec::try_from(vec![PubKey::from(lone_signer.verifying_key().to_bytes())])
-        .unwrap();
+    let members =
+        SafeVec::try_from(vec![PubKey::from(lone_signer.verifying_key().to_bytes())]).unwrap();
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
@@ -259,12 +258,7 @@ fn submit_attestation_routes_treasury_share_via_bank() {
     let signers = sample_signers();
     let pubs = pubkeys_of(&signers);
     let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
-    let mut env = setup_with_initial(
-        Amount::new(1_000),
-        Amount::ZERO,
-        Amount::ZERO,
-        initial,
-    );
+    let mut env = setup_with_initial(Amount::new(1_000), Amount::ZERO, Amount::ZERO, initial);
     let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
     let submitter_addr = env.submitter.address();
 
@@ -312,11 +306,7 @@ fn submit_attestation_routes_treasury_share_via_bank() {
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
-            CallMessage::SubmitAttestation {
-                schema_id,
-                payload_hash,
-                signatures,
-            },
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(move |result, state| {
             assert!(result.tx_receipt.is_successful());

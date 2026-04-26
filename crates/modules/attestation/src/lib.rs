@@ -164,10 +164,7 @@ impl core::str::FromStr for AttestationId {
         let (sid, ph) = s
             .split_once(':')
             .ok_or_else(|| anyhow::anyhow!("expected `<schema_id>:<payload_hash>`"))?;
-        Ok(Self {
-            schema_id: SchemaId::from_str(sid)?,
-            payload_hash: PayloadHash::from_str(ph)?,
-        })
+        Ok(Self { schema_id: SchemaId::from_str(sid)?, payload_hash: PayloadHash::from_str(ph)? })
     }
 }
 
@@ -811,11 +808,7 @@ impl<S: Spec> Module for AttestationModule<S> {
                 context,
                 state,
             ),
-            CallMessage::SubmitAttestation {
-                schema_id,
-                payload_hash,
-                signatures,
-            } => {
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures } => {
                 let signatures: Vec<AttestorSignature> = signatures.into_iter().collect();
                 self.handle_submit_attestation(schema_id, payload_hash, signatures, context, state)
             }
@@ -896,12 +889,12 @@ impl<S: Spec> AttestationModule<S> {
             self.schemas.set(
                 &id,
                 &Schema {
-                    owner: schema.owner.clone(),
+                    owner: schema.owner,
                     name: schema.name.clone(),
                     version: schema.version,
                     attestor_set: schema.attestor_set,
                     fee_routing_bps: schema.fee_routing_bps,
-                    fee_routing_addr: schema.fee_routing_addr.clone(),
+                    fee_routing_addr: schema.fee_routing_addr,
                 },
                 state,
             )?;
@@ -948,11 +941,7 @@ impl<S: Spec> AttestationModule<S> {
         let fee = self.attestor_set_fee.get(state)?.unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS);
         self.charge_to_treasury(context.sender(), fee, state)?;
 
-        self.attestor_sets.set(
-            &id,
-            &AttestorSet { members: sorted_members, threshold },
-            state,
-        )?;
+        self.attestor_sets.set(&id, &AttestorSet { members: sorted_members, threshold }, state)?;
 
         Ok(())
     }
@@ -983,7 +972,7 @@ impl<S: Spec> AttestationModule<S> {
             return Err(AttestationError::UnknownAttestorSet.into());
         }
 
-        let owner: S::Address = context.sender().clone();
+        let owner: S::Address = *context.sender();
         let id = Schema::<S>::derive_id(&owner, &name, version);
 
         if self.schemas.get(&id, state)?.is_some() {
@@ -1031,10 +1020,7 @@ impl<S: Spec> AttestationModule<S> {
         context: &Context<S>,
         state: &mut impl TxState<S>,
     ) -> anyhow::Result<()> {
-        let schema = self
-            .schemas
-            .get(&schema_id, state)?
-            .ok_or(AttestationError::UnknownSchema)?;
+        let schema = self.schemas.get(&schema_id, state)?.ok_or(AttestationError::UnknownSchema)?;
 
         let attestation_id = AttestationId::from_pair(&schema_id, &payload_hash);
         if self.attestations.get(&attestation_id, state)?.is_some() {
@@ -1046,7 +1032,7 @@ impl<S: Spec> AttestationModule<S> {
             .get(&schema.attestor_set, state)?
             .ok_or(AttestationError::MissingAttestorSet)?;
 
-        let submitter: S::Address = context.sender().clone();
+        let submitter: S::Address = *context.sender();
         // TODO: pull the real block timestamp once the runtime exposes
         // a slot/header view to handlers. For now, attestations carry
         // `timestamp = 0`; the write-once key prevents replay either way.
@@ -1058,7 +1044,7 @@ impl<S: Spec> AttestationModule<S> {
         let digest = SignedAttestationPayload::<S> {
             schema_id,
             payload_hash,
-            submitter: submitter.clone(),
+            submitter,
             timestamp,
         }
         .digest();
@@ -1070,10 +1056,8 @@ impl<S: Spec> AttestationModule<S> {
         // `schema.fee_routing_addr` (if configured), remainder to the
         // treasury. Two transfers (treasury then builder) so a partial
         // failure unwinds both via the SDK's TxState.
-        let total_fee = self
-            .attestation_fee
-            .get(state)?
-            .unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_NANOS);
+        let total_fee =
+            self.attestation_fee.get(state)?.unwrap_or(DEFAULT_ATTESTATION_FEE_LGT_NANOS);
         let (builder_share, treasury_share) =
             split_attestation_fee(total_fee, schema.fee_routing_bps);
         self.charge_to_treasury(context.sender(), treasury_share, state)?;
@@ -1111,8 +1095,7 @@ impl<S: Spec> AttestationModule<S> {
         }
         let lgt_token_id =
             self.lgt_token_id.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
-        let treasury =
-            self.treasury.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
+        let treasury = self.treasury.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
         self.bank.transfer_from(
             submitter,
             &treasury,
@@ -1170,10 +1153,8 @@ impl<S: Spec> AttestationModule<S> {
         amount: Amount,
         state: &mut impl TxState<S>,
     ) -> anyhow::Result<()> {
-        let current =
-            self.builder_fees_collected.get(addr, state)?.unwrap_or(Amount::new(0));
-        self.builder_fees_collected
-            .set(addr, &current.saturating_add(amount), state)?;
+        let current = self.builder_fees_collected.get(addr, state)?.unwrap_or(Amount::new(0));
+        self.builder_fees_collected.set(addr, &current.saturating_add(amount), state)?;
         Ok(())
     }
 }
@@ -1260,4 +1241,3 @@ fn validate_signatures(
 // ============================================================================
 // Tests
 // ============================================================================
-
