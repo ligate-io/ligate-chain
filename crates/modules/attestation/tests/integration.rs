@@ -894,3 +894,155 @@ fn submit_attestation_fails_with_insufficient_balance() {
         }),
     });
 }
+
+// ============================================================================
+// Idempotency / duplicate-prevention reject paths
+// ============================================================================
+
+#[test]
+fn register_attestor_set_rejects_duplicate() {
+    // Same `(members, threshold)` derives the same `AttestorSetId`.
+    // Re-registering must be rejected even if all the validation
+    // invariants pass; the storage layer is write-once per id.
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+
+    // First registration succeeds.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members: safe_members(&signers), threshold: 2 },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+
+    // Second registration with the same members + threshold reverts.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members: safe_members(&signers), threshold: 2 },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(
+                matches!(result.tx_receipt, TxEffect::Reverted(_)),
+                "duplicate attestor set must revert: {:?}",
+                result.tx_receipt
+            );
+        }),
+    });
+}
+
+#[test]
+fn register_schema_rejects_duplicate() {
+    // Same `(owner, name, version)` derives the same `SchemaId`. The
+    // `owner` is the tx sender; we use the same submitter for both
+    // calls so the derived id collides on the second attempt.
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+
+    // First registration succeeds.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("dup-schema"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+
+    // Second registration with the same name + version + (implicit
+    // same owner from the same submitter) reverts.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("dup-schema"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(
+                matches!(result.tx_receipt, TxEffect::Reverted(_)),
+                "duplicate schema must revert: {:?}",
+                result.tx_receipt
+            );
+        }),
+    });
+}
+
+#[test]
+fn register_attestor_set_rejects_empty_members() {
+    // Distinct from "threshold > members.len()" with 1 member.
+    // Empty members is its own validation branch (`EmptyAttestorSet`)
+    // because a zero-member set with threshold 0 would otherwise sneak
+    // past the threshold check.
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+
+    let empty: SafeVec<PubKey, MAX_ATTESTOR_SET_MEMBERS> =
+        SafeVec::try_from(Vec::<PubKey>::new()).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members: empty, threshold: 1 },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(
+                matches!(result.tx_receipt, TxEffect::Reverted(_)),
+                "empty members must revert: {:?}",
+                result.tx_receipt
+            );
+        }),
+    });
+}
+
+#[test]
+fn submit_attestation_rejects_empty_signatures() {
+    // Zero signatures hits `BelowThreshold` rather than any of the
+    // signature-validation errors. Confirms the validator handles the
+    // "no signatures at all" edge cleanly without panicking on an
+    // empty iterator.
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let submitter_addr = env.submitter.address();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("empty-sigs"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "empty-sigs", 1);
+
+    let payload_hash = attestation::PayloadHash::from([0xEEu8; 32]);
+    let empty_sigs: SafeVec<AttestorSignature, MAX_ATTESTATION_SIGNATURES> =
+        SafeVec::try_from(Vec::<AttestorSignature>::new()).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures: empty_sigs },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(
+                matches!(result.tx_receipt, TxEffect::Reverted(_)),
+                "empty signatures must revert: {:?}",
+                result.tx_receipt
+            );
+        }),
+    });
+}
