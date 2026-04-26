@@ -193,8 +193,11 @@ BLACKLIST_DISCRIMINANT = 20
 
 # Ligate-native module discriminants (start at 21, increment per
 # module). Ordering established here is the canonical wire-level
-# stable ordering.
-ATTESTATION_DISCRIMINANT = 21
+# stable ordering. Names are snake_case of the struct type that
+# carries the `#[id]`-marked field; the SDK derives the lookup key
+# from the type name. Our struct is `AttestationModule`, hence
+# `ATTESTATION_MODULE_DISCRIMINANT`.
+ATTESTATION_MODULE_DISCRIMINANT = 21
 
 # SDK test-module discriminants. Carried verbatim because the SDK's
 # own crate graph includes these modules behind feature flags and

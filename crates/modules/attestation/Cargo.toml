@@ -14,7 +14,7 @@ rust-version.workspace = true
 anyhow.workspace = true
 borsh.workspace = true
 ed25519-dalek.workspace = true
-schemars = { workspace = true, optional = true }
+schemars.workspace = true
 serde.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
@@ -36,5 +36,4 @@ default = []
 native = [
     "sov-modules-api/native",
     "sov-bank/native",
-    "dep:schemars",
 ]
