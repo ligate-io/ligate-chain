@@ -2,7 +2,7 @@
   "minimum_attester_bond": [1000, 1000],
   "minimum_challenger_bond": [1000, 1000],
   "initial_attesters": [
-    ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", "1000000000000"]
+    ["lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt", "1000000000000"]
   ],
   "rollup_finality_period": 5,
   "maximum_attested_height": 0,

@@ -3,12 +3,12 @@
     "token_name": "$LGT",
     "token_decimals": 9,
     "address_and_balances": [
-      ["0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", "100000000000000000"],
-      ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8", "10000000000000000"],
-      ["0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", "10000000000000000"]
+      ["lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt", "100000000000000000"],
+      ["lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7", "10000000000000000"],
+      ["lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx", "10000000000000000"]
     ],
     "admins": [
-      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
     ]
   },
   "tokens": []

@@ -17,6 +17,23 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Skip the heavy risc0 guest compilation in CI. The guest takes
+  # ~10 minutes to build on a clean checkout and requires the
+  # `risczero` toolchain installed; neither is worth it for the
+  # check / clippy / test gates. Real guest builds happen in a
+  # separate workflow (see `.github/workflows/prove.yml`, follow-
+  # up). Without this, `ligate-prover-risc0`'s build script tries
+  # to invoke `risc0-build` and fails on a missing toolchain.
+  SKIP_GUEST_BUILD: "1"
+  # Note: we deliberately do NOT set RISC0_SKIP_BUILD_KERNELS here.
+  # That env var skips compiling risc0's CPU/GPU kernels, but the
+  # Rust crates still reference the kernel symbols at link time —
+  # so skipping them produces unresolved-symbol errors in `cargo
+  # test`. Linux CI builds the CPU kernels cleanly without any
+  # extra toolchain. Local macOS dev (where we're sometimes
+  # missing the Metal SDK from a non-Xcode setup) is the case
+  # where engineers set RISC0_SKIP_BUILD_KERNELS=1 in their
+  # shell — it's a per-machine workaround, not a CI-wide one.
 
 jobs:
   fmt:
@@ -112,4 +129,5 @@ jobs:
             --ignore RUSTSEC-2025-0141 \
             --ignore RUSTSEC-2025-0134 \
             --ignore RUSTSEC-2026-0066 \
-            --ignore RUSTSEC-2023-0071
+            --ignore RUSTSEC-2023-0071 \
+            --ignore RUSTSEC-2025-0055

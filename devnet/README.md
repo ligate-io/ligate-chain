@@ -52,22 +52,40 @@ secrets never need to land in the repo.
 
 ## Bootstrap actor
 
-A single Anvil dev account does everything at genesis to keep the
-boot story narrow:
+A single chain-native account does everything at genesis to keep
+the boot story narrow:
 
 | Role | Address | Notes |
 |---|---|---|
-| Treasury / bank admin | `0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266` | Anvil #0. Receives attestation fees. |
+| Treasury / bank admin | `lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt` | Receives attestation fees. |
 | Initial sequencer (rollup) | same | Locks 5 000 LGT collateral |
-| Initial sequencer (DA) | `0x0000…0000` | 32-byte mock-DA address |
+| Initial sequencer (DA) | `0000…0000` (32 bytes hex) | DA-layer address (Celestia / MockDa). Unrelated to Ligate accounts; lives in a different cryptographic namespace. |
 | Initial attester | same | Bonds 1 000 LGT |
 | Initial prover | same | Bonds 1 000 LGT |
 | Operator reward addr | same | |
 | Prover reward addr | same | |
 
-The two other accounts seeded with `$LGT` are Anvil #1
-(`0x70997970…`) and #2 (`0x3C44Cd…`). Useful for end-to-end
-transfer testing without minting more.
+The two other accounts seeded with `$LGT`:
+
+- `lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7` — dev wallet 1
+- `lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx` — dev wallet 2
+
+These let you exercise transfers without minting more.
+
+**Address derivation.** All three are deterministic:
+`SHA256("ligate-devnet-{bootstrap,dev-1,dev-2}")[..28]`, encoded
+Bech32m with the `lig` HRP from `constants.toml`. The
+`crates/stf/tests/devnet_addresses.rs` test re-derives them and
+fails if the genesis files drift.
+
+**Why not `0x…` Ethereum addresses.** The chain's tx authentication
+path uses ed25519 (via `RollupAuthenticator`); MetaMask /
+secp256k1 wallets cannot natively sign for it today. Funding `0x…`
+addresses creates accounts that can receive but never spend — they
+were misleading dev fixtures and we removed them. EVM-shaped
+authentication is tracked separately in
+[#72](https://github.com/ligate-io/ligate-chain/issues/72) and
+lands before any retail wallet UX.
 
 ## $LGT layout
 
@@ -91,14 +109,48 @@ A misconfigured node and the canonical chain can't disagree
 silently — the namespaces are compiled into the binary via
 `config_value!()`.
 
+## ZK proving (Celestia flavour only)
+
+The Celestia blueprint ships with a real Risc0 inner zkVM wired
+through to a guest binary in
+[`crates/rollup/provers/risc0/`](../crates/rollup/provers/risc0/).
+The Mock-DA flavour stays on MockZkvm.
+
+To actually generate proofs locally:
+
+1. Install the risczero toolchain:
+   ```sh
+   curl -L https://risczero.com/install | bash
+   rzup install
+   ```
+2. Build the rollup with the guest enabled (drops the
+   `SKIP_GUEST_BUILD=1` default CI uses):
+   ```sh
+   cargo build --bin ligate-node
+   ```
+   First build takes ~10 minutes; subsequent rebuilds are cached.
+3. Update `genesis/chain_state.json`'s `inner_code_commitment`
+   to the real image ID. Read it from
+   `target/debug/build/ligate-prover-risc0-*/out/methods.rs`
+   after the build, then commit the change. The placeholder
+   `[0; 8]` works only with `SOV_PROVER_MODE` unset (proving
+   disabled).
+4. Set `SOV_PROVER_MODE=Prove` and run as usual.
+
+CI keeps `SKIP_GUEST_BUILD=1` and `RISC0_SKIP_BUILD_KERNELS=1`
+set; everyday iteration doesn't pay the toolchain tax. A
+dedicated proving workflow runs the full guest build on a
+schedule (follow-up).
+
 ## What's _not_ here
 
 - **Real attestor sets / schemas.** `initial_attestor_sets` and
   `initial_schemas` in `attestation.json` are intentionally empty.
   Schema registration via tx after boot is the same code path —
   better to exercise it than to bake test fixtures into genesis.
-- **Real proving.** Both DA flavours run against MockZkvm. Phase
-  A.4 swaps in Risc0 (or SP1); the diff is contained to the
-  `Spec` alias + `create_prover_service` body in each blueprint.
+- **Real `inner_code_commitment` in `chain_state.json`.** Still
+  `[0; 8]` placeholder. Updates when somebody runs the full
+  guest build and commits the result; tracked by the prove-on-CI
+  follow-up workflow.
 - **Mainnet namespaces.** The `lig-dvn-*` namespaces are devnet-
   scoped; mainnet picks fresh ones to avoid devnet replay risk.

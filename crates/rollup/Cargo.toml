@@ -33,6 +33,8 @@ sov-kernels                    = { workspace = true, features = ["native"] }
 sov-celestia-adapter           = { workspace = true, features = ["native"] }
 sov-mock-da                    = { workspace = true, features = ["native"] }
 sov-mock-zkvm                  = { workspace = true, features = ["native"] }
+sov-risc0-adapter              = { workspace = true, default-features = false, features = ["native"] }
+ligate-prover-risc0            = { path = "provers/risc0" }
 sov-modules-api                = { workspace = true, features = ["native"] }
 sov-modules-rollup-blueprint   = { workspace = true, features = ["native"] }
 sov-modules-stf-blueprint      = { workspace = true, features = ["native"] }
