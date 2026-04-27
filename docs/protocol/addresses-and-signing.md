@@ -167,8 +167,8 @@ on the v1 roadmap" is honest.
 
 ## Common confusions, addressed
 
-**"Can I import my MetaMask seed phrase into Lig Wallet?"**
-Not directly. MetaMask seeds are BIP39 → secp256k1. Lig Wallet's
+**"Can I import my MetaMask seed phrase into Mneme?"**
+Not directly. MetaMask seeds are BIP39 → secp256k1. Mneme's
 keys are BIP39 → ed25519. The seed phrase format is the same, but
 the derivation path lands at a different keypair. After #72, your
 secp256k1 key still works for the `0x…` Lane, but the `lig1…` lane
@@ -178,7 +178,7 @@ needs an independently generated ed25519 key.
 Yes, after #72. The same human can hold balance under their
 `lig1…` (ed25519-derived) account and under their `0x…`
 (secp256k1-derived) account, and they're cryptographically
-distinct. Lig Wallet can manage both, but they don't unify into one
+distinct. Mneme can manage both, but they don't unify into one
 balance. Unifying would require account abstraction, which is its
 own design problem (not on the roadmap).
 
@@ -202,6 +202,6 @@ when only one curve is wired today.
 - [Attestation protocol v0](attestation-v0.md) — what gets signed and submitted.
 - Issues:
   [#52](https://github.com/ligate-io/ligate-chain/issues/52) (sov-evm),
-  [#55](https://github.com/ligate-io/ligate-chain/issues/55) (Lig Wallet),
+  [#55](https://github.com/ligate-io/ligate-chain/issues/55) (Mneme),
   [#72](https://github.com/ligate-io/ligate-chain/issues/72) (EVM auth),
   [#73](https://github.com/ligate-io/ligate-chain/issues/73) (Hyperlane bridges).
