@@ -68,7 +68,17 @@ jobs:
       - name: Install libclang (librocksdb-sys build dep)
         run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --all-targets
+      # Lib unit tests + integration tests. We deliberately skip
+      # `--bins` / `--examples` / `--benches` because the
+      # `ligate-node` binary has no `#[test]` items — building it
+      # as a test executable just forces a full debug-profile link
+      # pass that OOMs the free-tier runner (`collect2: ld
+      # terminated with signal 7`). `cargo check` and `cargo
+      # clippy` still cover the binary's typecheck.
+      - run: cargo test --workspace --lib --tests
+      # Doc tests have to run on their own — `cargo test` rejects
+      # `--doc` mixed with target selectors.
+      - run: cargo test --workspace --doc
 
   doc:
     name: cargo doc
