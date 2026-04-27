@@ -1,0 +1,9 @@
+{
+  "minimum_bond": "1000000000000",
+  "sequencer_config": {
+    "seq_rollup_address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "seq_da_address": "0000000000000000000000000000000000000000000000000000000000000000",
+    "seq_bond": "5000000000000",
+    "is_preferred_sequencer": true
+  }
+}
