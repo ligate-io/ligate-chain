@@ -46,6 +46,7 @@ Cargo workspace (resolver 2). Members:
 Protocol docs:
 
 - [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md): attestation protocol specification v0.
+- [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md): how Ligate addresses (`lig1…`) work, why MetaMask doesn't sign for the chain today, and what changes when EVM auth ([#72](https://github.com/ligate-io/ligate-chain/issues/72)) lands.
 
 ## Build and test
 

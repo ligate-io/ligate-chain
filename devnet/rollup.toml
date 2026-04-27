@@ -67,7 +67,7 @@ tokio_runtime_metrics_interval_millis = 500
 aggregated_proof_block_jump = 1
 # Same Anvil dev address as the bootstrap actor. It receives
 # proving rewards in zk mode (chosen via `chain_state.json`).
-prover_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+prover_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 max_number_of_transitions_in_db = 100
 max_number_of_transitions_in_memory = 30
 
@@ -79,7 +79,7 @@ max_allowed_node_distance_behind = 10
 # The devnet sequencer is the same Anvil dev actor that owns the
 # treasury / attester / prover roles. Single-actor genesis simplifies
 # the boot story.
-rollup_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 
 [sequencer.preferred]
 # TODO: drop once Sovereign-Labs/sovereign-sdk-wip#2814 lands.

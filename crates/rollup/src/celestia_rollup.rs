@@ -1,21 +1,17 @@
 //! `RollupBlueprint` + `FullNodeBlueprint` impls for the Celestia
 //! flavour of Ligate Chain.
 //!
-//! Mirrors the SDK demo's `celestia_rollup.rs` with two intentional
-//! deviations:
+//! Mirrors the SDK demo's `celestia_rollup.rs` with one intentional
+//! deviation: no EVM RPC, no Solana router. The demo's
+//! `sequencer_additional_apis` wires both; we inherit
+//! `FullNodeBlueprint`'s default impl (empty endpoints). Standard
+//! sov RPCs (sequencer, ledger, runtime modules) still register
+//! via `create_endpoints`.
 //!
-//! 1. **`MockZkvm` for both inner and outer.** The SDK demo uses
-//!    Risc0 as its inner zkVM. We don't yet — Phase A.4 swaps in a
-//!    real prover. Until then the chain runs against MockZkvm even
-//!    on Celestia: real DA finality, mock proving.
-//! 2. **No EVM RPC, no Solana router.** The demo's
-//!    `sequencer_additional_apis` wires both. We inherit
-//!    `FullNodeBlueprint`'s default impl (empty endpoints). Standard
-//!    sov RPCs (sequencer, ledger, runtime modules) still register
-//!    via `create_endpoints`.
-//!
-//! When Phase A.4 lands, the diff to switch to Risc0 will be
-//! contained to the `Spec` alias + `create_prover_service` body.
+//! Inner zkVM is `Risc0`; outer stays `MockZkvm` (matches the SDK
+//! demo's pattern — outer aggregation can stay mock until cross-
+//! chain proof aggregation matters). The Risc0 guest binary lives
+//! in [`ligate_prover_risc0`] and is consumed via `ROLLUP_ELF`.
 
 use std::sync::Arc;
 
@@ -26,7 +22,7 @@ use sov_celestia_adapter::verifier::{CelestiaSpec, CelestiaVerifier, RollupParam
 use sov_celestia_adapter::CelestiaService;
 use sov_db::ledger_db::LedgerDb;
 use sov_db::storage_manager::NomtStorageManager;
-use sov_mock_zkvm::{MockCodeCommitment, MockZkvm, MockZkvmCryptoSpec, MockZkvmHost};
+use sov_mock_zkvm::{MockCodeCommitment, MockZkvm, MockZkvmHost};
 use sov_modules_api::configurable_spec::ConfigurableSpec;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::macros::config_value;
@@ -34,6 +30,8 @@ use sov_modules_api::{CryptoSpec, NodeEndpoints, Spec, ZkVerifier};
 use sov_modules_rollup_blueprint::pluggable_traits::PluggableSpec;
 use sov_modules_rollup_blueprint::proof_sender::SovApiProofSender;
 use sov_modules_rollup_blueprint::{FullNodeBlueprint, RollupBlueprint, SequencerCreationReceipt};
+use sov_risc0_adapter::host::Risc0Host;
+use sov_risc0_adapter::{Risc0, Risc0CryptoSpec};
 use sov_rollup_full_node_interface::StateUpdateReceiver;
 use sov_rollup_interface::da::{DaSpec, DaVerifier};
 use sov_rollup_interface::node::SyncStatus;
@@ -51,22 +49,28 @@ pub struct CelestiaLigateRollup<M> {
     phantom: std::marker::PhantomData<M>,
 }
 
-type Hasher = <MockZkvmCryptoSpec as CryptoSpec>::Hasher;
+type Hasher = <Risc0CryptoSpec as CryptoSpec>::Hasher;
 type NativeStorage =
     NomtProverStorage<DefaultStorageSpec<Hasher>, <CelestiaSpec as DaSpec>::SlotHash>;
 
 /// Concrete [`Spec`] used by [`CelestiaLigateRollup`].
 ///
 /// Identical address shape to [`crate::MockRollupSpec`]
-/// (`MultiAddressEvm` → 28-byte standard + 20-byte Ethereum). Only
-/// the DA layer differs.
+/// (`MultiAddressEvm` → 28-byte standard + 20-byte Ethereum). Two
+/// things differ from the mock-DA spec:
+///
+/// 1. DA layer: `CelestiaSpec` instead of `MockDaSpec`.
+/// 2. Inner zkVM: `Risc0` instead of `MockZkvm`. The host pins this
+///    to [`ligate_prover_risc0::ROLLUP_ELF`] in
+///    `create_prover_service` below; the guest binary at that
+///    constant runs the same STF blueprint inside the zkVM.
 pub type CelestiaRollupSpec<M> = ConfigurableSpec<
     CelestiaSpec,
-    MockZkvm,
+    Risc0,
     MockZkvm,
     MultiAddressEvm,
     M,
-    MockZkvmCryptoSpec,
+    Risc0CryptoSpec,
     NativeStorage,
 >;
 
@@ -158,10 +162,16 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
         _da_service: &Self::DaService,
     ) -> Self::ProverService {
-        // MockZkvm host on both legs. The Celestia DA verifier is
-        // real — proofs are mock, but DA inclusion proofs are
-        // canonically verified.
-        let inner_vm = MockZkvmHost::new_non_blocking();
+        // Real Risc0 inner host pinned to our guest ELF; outer
+        // stays Mock (matches the SDK demo's pattern — outer
+        // aggregation can stay mock until cross-chain proof
+        // aggregation matters). DA verification is fully real.
+        //
+        // Under `SKIP_GUEST_BUILD=1` the ELF is empty and the
+        // prover host won't be able to generate real proofs —
+        // fine for `cargo check` / CI, but a node started this
+        // way must have `RollupProverConfig::Disabled`.
+        let inner_vm = Risc0Host::new(ligate_prover_risc0::ROLLUP_ELF);
         let outer_vm = MockZkvmHost::new_non_blocking();
         let da_verifier = CelestiaVerifier::new(RollupParams {
             rollup_batch_namespace: ROLLUP_BATCH_NAMESPACE,

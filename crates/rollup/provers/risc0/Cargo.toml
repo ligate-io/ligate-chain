@@ -1,0 +1,48 @@
+[package]
+name = "ligate-prover-risc0"
+description = "Risc0 prover artifacts for the Ligate Chain rollup binary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# Why this exists as its own crate:
+#
+# The risc0 host needs `ROLLUP_ELF` (the guest binary) and
+# `ROLLUP_ID` (the image hash) as compile-time constants. The
+# guest itself lives in a sibling sub-crate (`guest-celestia/`)
+# with its own `[workspace]` so it can use risc0-flavoured
+# patches for `sha2`, `ed25519-dalek`, `crypto-bigint` without
+# leaking those into the rest of our workspace.
+#
+# `build.rs` calls `risc0-build` to compile the guest into an
+# ELF + image ID, then writes `methods.rs` into `OUT_DIR`. Our
+# `src/lib.rs` `include!`s that file so consumers see
+# `ligate_prover_risc0::ROLLUP_ELF` etc. as ordinary constants.
+#
+# `SKIP_GUEST_BUILD=1` shortcuts the heavy guest compilation
+# during day-to-day iteration — the ELF becomes empty bytes and
+# the ID becomes all zeros. CI uses this; the actual proving
+# pipeline runs in a separate workflow that builds the guest for
+# real.
+
+# `risc0-build` reads this to find the guest sub-crate(s) to
+# compile. Each entry is a directory under this crate.
+[package.metadata.risc0]
+methods = ["guest-celestia"]
+
+[build-dependencies]
+anyhow         = { workspace = true }
+risc0-build    = { workspace = true }
+sov-zkvm-utils = { workspace = true }
+
+[features]
+# Forward guest features through `risc0-build`. `bench` and
+# `bincode` mirror the SDK demo's flags — keep the surface
+# identical so future SDK upgrades don't require renaming.
+bench   = []
+bincode = []

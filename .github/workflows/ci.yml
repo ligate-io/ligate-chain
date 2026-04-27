@@ -17,6 +17,18 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Skip the heavy risc0 guest compilation in CI. The guest takes
+  # ~10 minutes to build on a clean checkout and requires the
+  # `risczero` toolchain installed; neither is worth it for the
+  # check / clippy / test gates. Real guest builds happen in a
+  # separate workflow (see `.github/workflows/prove.yml`, follow-
+  # up). Without this, `ligate-prover-risc0`'s build script tries
+  # to invoke `risc0-build` and fails on a missing toolchain.
+  SKIP_GUEST_BUILD: "1"
+  # Risc0's build-time host crates compile GPU kernels (CUDA on
+  # Linux, Metal on macOS) for proving acceleration. We don't run
+  # the prover in CI, so skip them.
+  RISC0_SKIP_BUILD_KERNELS: "1"
 
 jobs:
   fmt:

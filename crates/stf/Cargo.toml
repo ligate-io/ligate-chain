@@ -60,6 +60,7 @@ sov-address     = { workspace = true, features = ["evm", "native"] }
 ligate-stf-declaration = { path = "../stf-declaration", features = ["native"] }
 
 [dev-dependencies]
+sha2           = { workspace = true }
 sov-test-utils = { workspace = true }
 sov-mock-da    = { workspace = true, features = ["native"] }
 tempfile       = { workspace = true }

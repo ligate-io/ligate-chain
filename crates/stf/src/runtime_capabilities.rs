@@ -1,4 +1,4 @@
-//! `Runtime` trait wiring for the rollup binary.
+//! `Runtime` trait wiring for the rollup binary and the zk guest.
 //!
 //! [`crate::runtime::Runtime`] is the runtime newtype around the
 //! declaration crate's [`RuntimeInner`]. This module implements the
@@ -8,6 +8,11 @@
 //! - [`sov_modules_api::Runtime`]: top-level wiring — `CHAIN_HASH`,
 //!   `Auth`, `GenesisConfig`, `endpoints`. Glues the per-module
 //!   derives together into a node-runnable surface.
+//!   The trait has two definitions in the SDK: the `native` variant
+//!   carries `endpoints` / `genesis_config` / `GenesisInput`, the
+//!   non-native (zk-guest) variant is a strict subset. We feature-
+//!   gate the native-only items so this single impl satisfies
+//!   either trait.
 //! - [`HasCapabilities`]: surfaces the bundle of modules the
 //!   STF/sequencer use during slot processing (bank for fees,
 //!   sequencer-registry for blob auth, accounts for nonces, etc.).
@@ -37,12 +42,19 @@ use sov_kernels::soft_confirmations::SoftConfirmationsKernel;
 use sov_modules_api::capabilities::{
     Guard, HasCapabilities, HasKernel, KernelWithSlotMapping, RollupAuthenticator,
 };
+#[cfg(feature = "native")]
 use sov_modules_api::rest::{ApiState, HasRestApi};
+#[cfg(feature = "native")]
 use sov_modules_api::sov_universal_wallet::schema::Schema;
-use sov_modules_api::{NodeEndpoints, OperatingMode, Spec};
+#[cfg(feature = "native")]
+use sov_modules_api::NodeEndpoints;
+use sov_modules_api::{OperatingMode, Spec};
+#[cfg(feature = "native")]
 use sov_rollup_apis::endpoints::dedup::{DeDupEndpoint, SovereignDeDupEndpoint};
+#[cfg(feature = "native")]
 use sov_rollup_apis::endpoints::schema::{SchemaEndpoint, StandardSchemaEndpoint};
 
+#[cfg(feature = "native")]
 use crate::genesis_config::{create_genesis_config, GenesisPaths};
 use crate::runtime::{GenesisConfig, Runtime};
 
@@ -61,10 +73,13 @@ where
     const CHAIN_HASH: [u8; 32] = __generated::CHAIN_HASH;
 
     type GenesisConfig = GenesisConfig<S>;
+    #[cfg(feature = "native")]
     type GenesisInput = GenesisPaths;
+    #[cfg(feature = "native")]
     type ModuleExecutionConfig = ();
     type Auth = RollupAuthenticator<S, Self>;
 
+    #[cfg(feature = "native")]
     fn endpoints(api_state: ApiState<S>) -> NodeEndpoints {
         // Three layers compose into the rollup's HTTP surface:
         //
@@ -97,6 +112,7 @@ where
         NodeEndpoints { axum_router, ..Default::default() }
     }
 
+    #[cfg(feature = "native")]
     fn genesis_config(input: &Self::GenesisInput) -> anyhow::Result<Self::GenesisConfig> {
         // Promote the typed `GenesisError` (used by ligate-stf
         // internals) to `anyhow::Error` for the SDK's blueprint API,
@@ -157,6 +173,7 @@ where
         })
     }
 
+    #[cfg(feature = "native")]
     fn kernel_with_slot_mapping(&self) -> Arc<dyn KernelWithSlotMapping<S>> {
         Arc::new(self.0.chain_state.clone())
     }

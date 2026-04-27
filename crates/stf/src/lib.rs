@@ -12,7 +12,6 @@
 
 pub mod genesis_config;
 pub mod runtime;
-#[cfg(feature = "native")]
 mod runtime_capabilities;
 
 #[cfg(test)]

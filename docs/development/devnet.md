@@ -15,7 +15,11 @@ first.
 Ligate Chain v0 devnet is a **federated attestation testnet**:
 
 - 3 to 5 attestor organisations, each running one attestor node, each holding
-  an independently generated ed25519 keypair.
+  an independently generated ed25519 keypair. (Ligate Chain accepts only
+  ed25519 signatures today — see
+  [`docs/protocol/addresses-and-signing.md`](../protocol/addresses-and-signing.md)
+  for the full picture, including why MetaMask doesn't work yet and what
+  changes when [#72](https://github.com/ligate-io/ligate-chain/issues/72) lands.)
 - One sequencer, operated by Ligate Labs.
 - Celestia `mocha` testnet for data availability during the devnet phase.
   Mainnet Celestia comes later.
