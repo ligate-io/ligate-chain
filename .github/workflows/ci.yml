@@ -25,10 +25,15 @@ env:
   # up). Without this, `ligate-prover-risc0`'s build script tries
   # to invoke `risc0-build` and fails on a missing toolchain.
   SKIP_GUEST_BUILD: "1"
-  # Risc0's build-time host crates compile GPU kernels (CUDA on
-  # Linux, Metal on macOS) for proving acceleration. We don't run
-  # the prover in CI, so skip them.
-  RISC0_SKIP_BUILD_KERNELS: "1"
+  # Note: we deliberately do NOT set RISC0_SKIP_BUILD_KERNELS here.
+  # That env var skips compiling risc0's CPU/GPU kernels, but the
+  # Rust crates still reference the kernel symbols at link time —
+  # so skipping them produces unresolved-symbol errors in `cargo
+  # test`. Linux CI builds the CPU kernels cleanly without any
+  # extra toolchain. Local macOS dev (where we're sometimes
+  # missing the Metal SDK from a non-Xcode setup) is the case
+  # where engineers set RISC0_SKIP_BUILD_KERNELS=1 in their
+  # shell — it's a per-machine workaround, not a CI-wide one.
 
 jobs:
   fmt:

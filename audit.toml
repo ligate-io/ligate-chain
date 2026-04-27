@@ -46,4 +46,15 @@ ignore = [
     # upgrade available upstream; clears when rsa crate is patched or
     # when SDK drops the sqlx-mysql dep.
     "RUSTSEC-2023-0071",
+
+    # tracing-subscriber 0.2.25 ANSI-escape injection (log injection
+    # class). Pulled deep transitively from Phase A.4's risc0
+    # dependency: ark-relations -> ark-snark -> ark-crypto-primitives
+    # -> ark-groth16 -> risc0-groth16 -> risc0-zkvm. Risc0 still
+    # pins the old `tracing-subscriber` line because newer ark-* APIs
+    # haven't been migrated to. We don't expose attacker-controlled
+    # input to tracing subscribers in any code path, so the
+    # log-injection vector isn't reachable. Clears when Risc0
+    # upgrades the ark-* graph.
+    "RUSTSEC-2025-0055",
 ]
