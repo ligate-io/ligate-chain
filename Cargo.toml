@@ -74,12 +74,20 @@ rustls      = { version = "0.23", default-features = false, features = ["ring"] 
 lto = "thin"
 codegen-units = 1
 
-# `ligate-node` pulls in the full SDK + tokio + hyper + rocksdb + ring
-# rlib graph. With full DWARF debug info, the link step OOMs on the
-# free-tier GitHub Actions runner (`collect2: ld terminated with
-# signal 7 [Bus error]`). `line-tables-only` keeps file/line
-# information for stack traces but drops type-DIE bloat — a few GB
-# off the link working set, no observable hit to debuggability for
-# panic backtraces.
+# Drop debug info on the dev profile.
+#
+# Why: linking any of our test binaries (`ligate-stf`,
+# `ligate-client`, `ligate-rollup`) pulls in the full SDK + tokio +
+# hyper + rocksdb + ring rlib graph. Each rlib carries its own
+# DWARF tree; the cumulative working set blows past what the
+# free-tier GitHub Actions runner can mmap, and the linker SIGBUSes
+# (`collect2: ld terminated with signal 7 [Bus error]`) when a
+# truncated read on a mmap'd .o slips through.
+#
+# `debug = 0` strips debug info entirely — no line numbers in
+# panics, no source-level debugging — but cuts CI link memory
+# dramatically. Worth it: pre-launch we tail logs in CI, and a
+# local override (`CARGO_PROFILE_DEV_DEBUG=2 cargo test`) restores
+# debugging when needed.
 [profile.dev]
-debug = "line-tables-only"
+debug = 0
