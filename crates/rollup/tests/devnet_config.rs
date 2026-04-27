@@ -16,6 +16,7 @@ use ligate_rollup::MockRollupSpec;
 use ligate_stf::genesis_config::GenesisPaths;
 use ligate_stf::Runtime;
 use sov_address::MultiAddressEvm;
+use sov_celestia_adapter::CelestiaService;
 use sov_mock_da::storable::StorableMockDaService;
 use sov_modules_api::execution_mode::Native;
 use sov_stf_runner::{from_toml_path, RollupConfig};
@@ -40,6 +41,21 @@ fn rollup_toml_parses_against_mock_blueprint_types() {
     let _config: RollupConfig<MultiAddressEvm, StorableMockDaService> = from_toml_path(&path)
         .unwrap_or_else(|e| {
             panic!("devnet/rollup.toml failed to parse: {e:?}");
+        });
+}
+
+#[test]
+fn celestia_toml_parses_against_celestia_blueprint_types() {
+    // Same drift guard, but for the Celestia DA flavour. The
+    // `[da]` section's TOML schema differs entirely between
+    // mock-DA and Celestia (different fields, different validation),
+    // so the two configs need independent parse coverage. The
+    // checked-in `signer_private_key` is a placeholder — operators
+    // override via `SOV_CELESTIA_SIGNER_KEY` at runtime.
+    let path = devnet_dir().join("celestia.toml");
+    let _config: RollupConfig<MultiAddressEvm, CelestiaService> = from_toml_path(&path)
+        .unwrap_or_else(|e| {
+            panic!("devnet/celestia.toml failed to parse: {e:?}");
         });
 }
 

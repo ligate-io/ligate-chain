@@ -1,3 +1,8 @@
 # Runtime data — RocksDB instances, ledger db, mock DA SQLite.
 # Regenerated on every boot from the genesis JSONs.
+#
+# `data/` is the mock-DA flavour, `data-celestia/` is the Celestia
+# flavour. Each TOML pins its own path so the two can co-exist
+# without stomping on each other.
 data/
+data-celestia/

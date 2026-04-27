@@ -1,0 +1,116 @@
+# Ligate Chain Celestia rollup config.
+#
+# Boots a single-sequencer node against a real Celestia data
+# availability layer (Mocha testnet, or a local light/bridge node
+# if you're running one). Mock zkVM still — proving lands in Phase
+# A.4 (#xx).
+#
+# Run with:
+#   cargo run --bin ligate-node -- \
+#     --da-layer celestia \
+#     --rollup-config-path devnet/celestia.toml
+#
+# Genesis directory defaults to `devnet/genesis` — same set as the
+# mock-DA flavour (only the DA layer changes between configs, not
+# the rollup state).
+
+[da]
+# Celestia RPC endpoint for reading blobs + headers.
+#
+# - **Mocha public RPC**: e.g. `wss://celestia-mocha.public-rpc.com`
+#   or your provider's URL (QuickNode, Lava, etc.).
+# - **Local node**: `ws://127.0.0.1:26658`.
+#
+# Operators almost always set this via `SOV_CELESTIA_RPC_URL`
+# instead of committing it here, so the value below is just a
+# placeholder pointing at a local node. Override at runtime.
+rpc_url = "ws://127.0.0.1:26658"
+
+# Optional. JWT token for the RPC endpoint (Mocha provider tokens
+# typically come on a per-account basis). Prefer
+# `SOV_CELESTIA_RPC_AUTH_TOKEN` so the secret never lives in the
+# repo.
+#rpc_auth_token = "MY.SECRET.TOKEN"
+
+# gRPC endpoint for submitting blobs (sequencer-only path; nodes
+# that just sync don't strictly need it).
+grpc_url = "http://127.0.0.1:9090"
+
+# Celestia signer private key (hex). The wallet must hold enough TIA
+# to cover blob inclusion fees. Operators inject via
+# `SOV_CELESTIA_SIGNER_KEY`. The value below is a placeholder; do
+# NOT use it for anything other than `cargo check`.
+signer_private_key = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Conservative retry tuning. Default exponential backoff (60
+# attempts, 12s cap) leans towards never giving up; for a devnet we
+# fail faster so misconfigurations surface quickly.
+backoff_min_delay_ms = 200
+backoff_max_delay_ms = 6_000
+backoff_max_times    = 10
+
+[da.block_producing.periodic]
+# `block_producing` is unused by the Celestia adapter (Celestia
+# produces blocks itself). The TOML schema still requires the
+# section, so a placeholder is left here.
+block_time_ms = 1000
+
+[storage]
+# State / ledger DB lives here. DA blobs are not stored locally —
+# they live on Celestia.
+path = "devnet/data-celestia"
+state_cache_size = 4294967296
+user_commit_concurrency = 4
+# Smaller hashtable than the mock-DA config: Celestia block times
+# (~12s) mean rollup state grows much slower in practice, and a
+# 1M-bucket table is big enough to stay performant for the duration
+# of a devnet.
+user_hashtable_buckets = 1_000_000
+user_preallocate_ht = false
+kernel_commit_concurrency = 2
+pruner_block_interval = 100
+pruner_versions_to_keep = 20
+
+[runner]
+# Celestia produces ~12s blocks; polling 6× per block keeps inclusion
+# latency low without spamming the RPC.
+da_polling_interval_ms = 2_000
+
+[runner.http_config]
+bind_host = "127.0.0.1"
+bind_port = 12346
+
+[monitoring]
+telegraf_address = "udp://127.0.0.1:8094"
+tokio_runtime_metrics_interval_millis = 500
+
+[proof_manager]
+# Group 10 DA blocks per aggregated proof — matches the SDK demo's
+# Celestia config.
+aggregated_proof_block_jump = 10
+prover_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+max_number_of_transitions_in_db = 100
+max_number_of_transitions_in_memory = 30
+
+[sequencer]
+# Celestia block times mean blob inclusion can take ~minutes if
+# the network is busy. 600s gives the sequencer headroom before it
+# times out on a submitted batch.
+blob_processing_timeout_secs = 600
+max_batch_size_bytes = 1048576
+max_concurrent_blobs = 128
+max_allowed_node_distance_behind = 10
+rollup_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+
+[sequencer.preferred]
+# TODO: drop once Sovereign-Labs/sovereign-sdk-wip#2814 lands.
+disable_state_root_consistency_checks = true
+recovery_strategy = "TryToSave"
+# 12s — one Celestia block of in-batch work.
+batch_execution_time_limit_millis = 12000
+num_cache_warmup_workers = 0
+
+[sequencer.extension]
+# Required by the SDK schema even though we don't override
+# `sequencer_additional_apis`. Match the demo's value.
+max_log_limit = 20000

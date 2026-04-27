@@ -30,6 +30,7 @@ sov-address                    = { workspace = true, features = ["evm", "native"
 sov-bank                       = { workspace = true, features = ["native"] }
 sov-db                         = { workspace = true }
 sov-kernels                    = { workspace = true, features = ["native"] }
+sov-celestia-adapter           = { workspace = true, features = ["native"] }
 sov-mock-da                    = { workspace = true, features = ["native"] }
 sov-mock-zkvm                  = { workspace = true, features = ["native"] }
 sov-modules-api                = { workspace = true, features = ["native"] }
@@ -51,3 +52,5 @@ attestation    = { path = "../modules/attestation" }
 serde_json     = { workspace = true }
 sov-test-utils = { workspace = true }
 tempfile       = { workspace = true }
+# `sov-celestia-adapter` already lives in `[dependencies]`, so the
+# integration tests can use it directly.
