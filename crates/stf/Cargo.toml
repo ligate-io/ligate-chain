@@ -1,6 +1,6 @@
 [package]
 name = "ligate-stf"
-description = "Ligate Chain state transition function: runtime composition + genesis loaders"
+description = "Ligate Chain state transition function: runtime trait wiring + genesis loaders"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -20,28 +20,44 @@ strum.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
-# SDK glue
+# The runtime composition struct lives in the sibling
+# `ligate-stf-declaration` crate so this crate's `build.rs` can
+# import it (Cargo forbids a build script from depending on its own
+# crate).
+ligate-stf-declaration = { path = "../stf-declaration" }
+
+# SDK glue for the trait impls + genesis loader.
 sov-modules-api           = { workspace = true }
 sov-modules-stf-blueprint = { workspace = true }
 sov-rollup-interface      = { workspace = true }
 sov-state                 = { workspace = true }
 sov-address               = { workspace = true, features = ["evm"] }
 
-# Required runtime modules (sov-mandatory + economic + chain)
-sov-accounts            = { workspace = true }
-sov-attester-incentives = { workspace = true }
-sov-bank                = { workspace = true }
-sov-blob-storage        = { workspace = true }
-sov-capabilities        = { workspace = true }
-sov-chain-state         = { workspace = true }
-sov-kernels             = { workspace = true }
-sov-operator-incentives = { workspace = true }
-sov-prover-incentives   = { workspace = true }
-sov-sequencer-registry  = { workspace = true }
-sov-uniqueness          = { workspace = true }
+# Modules whose types appear in trait impls or the genesis loader.
+sov-bank         = { workspace = true }
+sov-capabilities = { workspace = true }
+sov-kernels      = { workspace = true }
 
-# Ligate-native modules
+# Endpoints surfaced by `Runtime::endpoints` — only needed under
+# the `native` feature (the wrapper itself ships in ZK guest builds
+# without HTTP).
+sov-rollup-apis = { workspace = true, optional = true }
+
+# Ligate-native modules referenced by the genesis loader (cross-
+# module invariant checks against `attestation::AttestationConfig`).
 attestation = { path = "../modules/attestation" }
+
+[build-dependencies]
+# `native` features are required because `sov_build` exercises
+# host-side trait impls (signature verification, ZkVM hosts) that
+# are gated on the same feature flag.
+anyhow.workspace = true
+sov-build       = { workspace = true }
+sov-modules-api = { workspace = true, features = ["native"] }
+sov-mock-da     = { workspace = true, features = ["native"] }
+sov-mock-zkvm   = { workspace = true, features = ["native"] }
+sov-address     = { workspace = true, features = ["evm", "native"] }
+ligate-stf-declaration = { path = "../stf-declaration", features = ["native"] }
 
 [dev-dependencies]
 sov-test-utils = { workspace = true }
@@ -51,21 +67,15 @@ tempfile       = { workspace = true }
 [features]
 default = []
 native = [
-    "sov-accounts/native",
+    "dep:sov-rollup-apis",
+    "ligate-stf-declaration/native",
     "sov-address/native",
-    "sov-attester-incentives/native",
     "sov-bank/native",
-    "sov-blob-storage/native",
     "sov-capabilities/native",
-    "sov-chain-state/native",
     "sov-kernels/native",
     "sov-modules-api/native",
     "sov-modules-stf-blueprint/native",
-    "sov-operator-incentives/native",
-    "sov-prover-incentives/native",
     "sov-rollup-interface/native",
-    "sov-sequencer-registry/native",
     "sov-state/native",
-    "sov-uniqueness/native",
     "attestation/native",
 ]

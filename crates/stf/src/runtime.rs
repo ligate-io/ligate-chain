@@ -1,92 +1,222 @@
-//! The Ligate Chain runtime.
+//! Newtype wrapper around [`ligate_stf_declaration::Runtime`].
 //!
-//! Mirrors the SDK's `demo-stf-declaration` shape (derive-driven
-//! Runtime composition with the standard kernel-side modules) but
-//! omits the modules listed in [`crate`]'s top-level docs.
+//! The wrapper exists for one practical reason: the SDK's
+//! [`sov_modules_api::Runtime`] trait, [`HasCapabilities`], and
+//! [`HasKernel`] impls go on a type local to **this** crate. The
+//! orphan rule blocks impl'ing them on
+//! `ligate_stf_declaration::Runtime` directly.
 //!
-//! # Lifecycle
+//! Field access stays ergonomic via [`Deref`](std::ops::Deref) /
+//! [`DerefMut`](std::ops::DerefMut) — `runtime.bank` still works the
+//! same way it would on the inner type. The forwarding `impl`
+//! blocks in this file are pure delegation: they exist so the
+//! wrapper satisfies the bounds the SDK super-trait `Runtime<S>`
+//! requires (`DispatchCall`, `Genesis`, `BlockHooks`, `TxHooks`,
+//! `FinalizeHook`, `RuntimeEventProcessor`, `HasRestApi`,
+//! `EncodeCall<sov_bank::Bank<S>>`).
 //!
-//! 1. **Genesis.** The `Genesis` derive macro generates a per-module
-//!    config aggregator (`GenesisConfig<S>`) and a `Runtime::genesis`
-//!    method. Modules initialise in declaration order; we declare
-//!    `bank` first so other modules that read its state at genesis
-//!    (sequencer-registry, attestation) see populated balances.
-//! 2. **Tx dispatch.** The `MessageCodec` + `DispatchCall` derives
-//!    deserialise an incoming `RuntimeCall<S>` and route it to the
-//!    matching module's `Module::call`. Hooks (declared via the
-//!    `Hooks` derive plus our manual `hooks_impl`) run at the
-//!    appropriate points in the slot loop.
+//! [`HasCapabilities`]: sov_modules_api::capabilities::HasCapabilities
+//! [`HasKernel`]: sov_modules_api::capabilities::HasKernel
 
-#![allow(unused_doc_comments)]
-
+use ligate_stf_declaration::Runtime as RuntimeInner;
 use sov_address::{EthereumAddress, FromVmAddress};
-use sov_modules_api::macros::RuntimeRestApi;
 use sov_modules_api::prelude::*;
-use sov_modules_api::{DispatchCall, Event, Genesis, Hooks, MessageCodec, Spec};
+use sov_modules_api::{
+    AuthenticatedTransactionData, BlockHooks, Context, DispatchCall, EncodeCall, Genesis,
+    GenesisState, ModuleError, ModuleId, ModuleInfo, NestedEnumUtils, RuntimeEventProcessor, Spec,
+    StateCheckpoint, StateProvider, Storage, TxHooks, TxState, TypeErasedEvent, WorkingSet,
+};
+use sov_rollup_interface::da::DaSpec;
 
-/// Composed Ligate runtime.
+pub use ligate_stf_declaration::{GenesisConfig, RuntimeCall, RuntimeEvent};
+
+/// The Ligate Chain runtime.
 ///
-/// Field order is significant for genesis: each module's
-/// `Module::genesis` runs in declaration order. Modules that read
-/// another module's state at genesis (e.g. `sequencer_registry`
-/// reading `bank` to lock collateral, `attestation` reading `bank`
-/// for the `$LGT` token id) must come after their dependencies.
-///
-/// The address bound `S::Address: FromVmAddress<EthereumAddress>`
-/// comes from the SDK's standard module interfaces (bank/accounts
-/// internally surface EVM-shaped addresses for the wallet/UI). It's
-/// an encoding constraint, not an EVM-execution claim. We do not
-/// include `sov-evm` in the Runtime; deploying Solidity contracts is
-/// not a v0 feature. Solana / `Base58Address` support is only needed
-/// when hyperlane modules are present, which we omit.
-#[derive(Default, Clone, Genesis, Hooks, DispatchCall, Event, MessageCodec, RuntimeRestApi)]
-pub struct Runtime<S: Spec>
+/// Newtype wrapping [`ligate_stf_declaration::Runtime`] so this crate
+/// can host the trait impls that depend on local types (the
+/// `runtime_capabilities` module). Use it exactly like the inner
+/// runtime — `Deref` makes per-module field access transparent.
+#[derive(Default, Clone)]
+pub struct Runtime<S: Spec>(pub(crate) RuntimeInner<S>)
+where
+    S::Address: FromVmAddress<EthereumAddress>;
+
+impl<S: Spec> std::ops::Deref for Runtime<S>
 where
     S::Address: FromVmAddress<EthereumAddress>,
 {
-    /// Bank module: holds `$LGT` and any other fungible tokens.
-    /// Genesis-first because every module that charges fees or locks
-    /// collateral reads bank state at genesis time.
-    pub bank: sov_bank::Bank<S>,
+    type Target = RuntimeInner<S>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
-    /// Accounts module: per-address nonces and pubkey bindings.
-    /// Required by the blueprint for tx authentication.
-    pub accounts: sov_accounts::Accounts<S>,
+impl<S: Spec> std::ops::DerefMut for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
-    /// Sequencer registry: gates DA-layer addresses allowed to
-    /// submit blobs. Locks `$LGT` collateral from each registered
-    /// sequencer.
-    pub sequencer_registry: sov_sequencer_registry::SequencerRegistry<S>,
+// ---------------------------------------------------------------------------
+// Trait forwarding.
+//
+// All of these are pure delegation to the inner runtime's
+// derive-generated impls. Each block exists so the bound
+// `sov_modules_api::Runtime<S>` (in `runtime_capabilities`)
+// resolves against the wrapper. New impls only land here when the
+// SDK super-trait grows a new bound.
+// ---------------------------------------------------------------------------
 
-    /// Operator incentives: rewards for non-prover, non-attester
-    /// operators (i.e. sequencers / fullnodes).
-    pub operator_incentives: sov_operator_incentives::OperatorIncentives<S>,
+impl<S: Spec> Genesis for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    type Spec = S;
+    type Config = GenesisConfig<S>;
 
-    /// Attester incentives: bonded stake + slashing for attesters.
-    /// Distinct from Ligate's `attestation` module, which is the
-    /// product-level attestation registry; this one is the SDK's
-    /// validity-attester economic layer for the optimistic kernel.
-    pub attester_incentives: sov_attester_incentives::AttesterIncentives<S>,
+    fn genesis(
+        &mut self,
+        genesis_rollup_header: &<<Self::Spec as Spec>::Da as DaSpec>::BlockHeader,
+        config: &Self::Config,
+        state: &mut impl GenesisState<Self::Spec>,
+    ) -> Result<(), ModuleError> {
+        self.0.genesis(genesis_rollup_header, config, state)
+    }
+}
 
-    /// Prover incentives: bonded stake + slashing for ZK provers.
-    pub prover_incentives: sov_prover_incentives::ProverIncentives<S>,
+impl<S: Spec> DispatchCall for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    type Spec = S;
+    type Decodable = RuntimeCall<S>;
 
-    /// Uniqueness: replay-protection bookkeeping (per-account nonces
-    /// + a sliding window of recent tx hashes).
-    pub uniqueness: sov_uniqueness::Uniqueness<S>,
+    fn encode(decodable: &Self::Decodable) -> Vec<u8> {
+        RuntimeInner::<S>::encode(decodable)
+    }
 
-    /// Chain state: slot / block-header bookkeeping. Provides the
-    /// timestamp the attestation module will eventually read for
-    /// `Attestation::timestamp` (currently stubbed to 0; lands in
-    /// follow-up).
-    pub chain_state: sov_chain_state::ChainState<S>,
+    fn dispatch_call<I: StateProvider<Self::Spec>>(
+        &mut self,
+        message: Self::Decodable,
+        state: &mut WorkingSet<Self::Spec, I>,
+        context: &Context<Self::Spec>,
+    ) -> Result<(), ModuleError> {
+        self.0.dispatch_call(message, state, context)
+    }
 
-    /// Blob storage: DA-blob staging area used by the kernel between
-    /// blob arrival and STF execution.
-    pub blob_storage: sov_blob_storage::BlobStorage<S>,
+    fn module_id(&self, message: &Self::Decodable) -> &ModuleId {
+        self.0.module_id(message)
+    }
 
-    /// Ligate attestation module: schemas, attestor sets,
-    /// attestations, fee charging via `bank`. The chain's product
-    /// surface.
-    pub attestation: attestation::AttestationModule<S>,
+    fn module_info(
+        &self,
+        discriminant: <Self::Decodable as NestedEnumUtils>::Discriminants,
+    ) -> &dyn ModuleInfo<Spec = Self::Spec> {
+        self.0.module_info(discriminant)
+    }
+}
+
+impl<S: Spec> EncodeCall<sov_bank::Bank<S>> for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    fn encode_call(data: <sov_bank::Bank<S> as sov_modules_api::Module>::CallMessage) -> Vec<u8> {
+        <RuntimeInner<S> as EncodeCall<sov_bank::Bank<S>>>::encode_call(data)
+    }
+
+    fn to_decodable(
+        data: <sov_bank::Bank<S> as sov_modules_api::Module>::CallMessage,
+    ) -> Self::Decodable {
+        <RuntimeInner<S> as EncodeCall<sov_bank::Bank<S>>>::to_decodable(data)
+    }
+}
+
+impl<S: Spec> BlockHooks for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    type Spec = S;
+
+    fn begin_rollup_block_hook(
+        &mut self,
+        visible_hash: &<<Self::Spec as Spec>::Storage as Storage>::Root,
+        state: &mut StateCheckpoint<Self::Spec>,
+    ) {
+        self.0.begin_rollup_block_hook(visible_hash, state);
+    }
+
+    fn end_rollup_block_hook(&mut self, state: &mut StateCheckpoint<Self::Spec>) {
+        self.0.end_rollup_block_hook(state);
+    }
+}
+
+impl<S: Spec> TxHooks for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    type Spec = S;
+
+    fn pre_dispatch_tx_hook<T: TxState<Self::Spec>>(
+        &mut self,
+        tx: &AuthenticatedTransactionData<Self::Spec>,
+        state: &mut T,
+    ) -> anyhow::Result<()> {
+        self.0.pre_dispatch_tx_hook(tx, state)
+    }
+
+    fn post_dispatch_tx_hook<T: TxState<Self::Spec>>(
+        &mut self,
+        tx: &AuthenticatedTransactionData<Self::Spec>,
+        ctx: &Context<Self::Spec>,
+        state: &mut T,
+    ) -> anyhow::Result<()> {
+        self.0.post_dispatch_tx_hook(tx, ctx, state)
+    }
+}
+
+#[cfg(feature = "native")]
+impl<S: Spec> sov_modules_api::FinalizeHook for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    type Spec = S;
+
+    fn finalize_hook(
+        &mut self,
+        root_hash: &<<Self::Spec as Spec>::Storage as Storage>::Root,
+        state: &mut impl sov_modules_api::AccessoryStateReaderAndWriter,
+    ) {
+        self.0.finalize_hook(root_hash, state);
+    }
+}
+
+impl<S: Spec> RuntimeEventProcessor for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    type RuntimeEvent = RuntimeEvent<S>;
+
+    fn convert_to_runtime_event(event: TypeErasedEvent) -> Option<Self::RuntimeEvent> {
+        RuntimeInner::<S>::convert_to_runtime_event(event)
+    }
+}
+
+#[cfg(feature = "native")]
+impl<S: Spec> sov_modules_api::rest::HasRestApi<S> for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    fn rest_api(
+        &self,
+        state: sov_modules_api::rest::ApiState<S>,
+    ) -> sov_modules_api::prelude::axum::Router<()> {
+        self.0.rest_api(state)
+    }
+
+    fn openapi_spec(&self) -> Option<sov_modules_api::prelude::utoipa::openapi::OpenApi> {
+        self.0.openapi_spec()
+    }
 }

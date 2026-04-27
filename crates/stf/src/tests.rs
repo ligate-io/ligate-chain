@@ -47,6 +47,20 @@ fn derive_generated_types_are_reachable() {
     _typecheck(None, None);
 }
 
+#[cfg(feature = "native")]
+#[test]
+fn chain_hash_is_schema_derived_not_placeholder() {
+    // Sanity: the build-script-generated `CHAIN_HASH` must never be
+    // all zeros. An all-zero value is the placeholder we used
+    // before #69 wired `sov-build`; if it shows up again, somebody
+    // accidentally bypassed the build script and clients on a
+    // different runtime composition could replay our transactions
+    // without the chain noticing.
+    use sov_modules_api::Runtime as _;
+    type Rt = Runtime<TestSpec>;
+    assert_ne!(Rt::CHAIN_HASH, [0u8; 32], "CHAIN_HASH is the placeholder; build.rs must run");
+}
+
 mod genesis_loader {
     use std::fs;
 
