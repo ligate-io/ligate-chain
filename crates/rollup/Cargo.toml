@@ -1,6 +1,6 @@
 [package]
 name = "ligate-rollup"
-description = "Ligate Labs Sovereign SDK rollup node binary"
+description = "Ligate Chain rollup binary: full node + sequencer for the ligate-stf runtime"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,3 +16,38 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+borsh.workspace = true
+clap.workspace = true
+rustls.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+# SDK glue. All `native`-flavoured because this is a node binary,
+# never a guest.
+sov-address                    = { workspace = true, features = ["evm", "native"] }
+sov-bank                       = { workspace = true, features = ["native"] }
+sov-db                         = { workspace = true }
+sov-kernels                    = { workspace = true, features = ["native"] }
+sov-mock-da                    = { workspace = true, features = ["native"] }
+sov-mock-zkvm                  = { workspace = true, features = ["native"] }
+sov-modules-api                = { workspace = true, features = ["native"] }
+sov-modules-rollup-blueprint   = { workspace = true, features = ["native"] }
+sov-modules-stf-blueprint      = { workspace = true, features = ["native"] }
+sov-rollup-full-node-interface = { workspace = true }
+sov-rollup-interface           = { workspace = true, features = ["native"] }
+sov-sequencer                  = { workspace = true }
+sov-state                      = { workspace = true, features = ["native"] }
+sov-stf-runner                 = { workspace = true }
+
+# The Ligate Chain runtime — pulled in with `native` so the
+# `runtime_capabilities` module (Runtime/HasCapabilities/HasKernel
+# trait impls) is available to the blueprint.
+ligate-stf = { path = "../stf", features = ["native"] }
+
+[dev-dependencies]
+attestation    = { path = "../modules/attestation" }
+serde_json     = { workspace = true }
+sov-test-utils = { workspace = true }
+tempfile       = { workspace = true }

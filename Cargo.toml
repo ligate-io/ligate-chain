@@ -1,13 +1,11 @@
 [workspace]
 resolver = "2"
-# `crates/rollup` is out of the workspace until Phase A.2.2 of #13
-# fills it in (the rollup binary). It stays a 4-line stub for now.
 members = [
     "crates/modules/attestation",
     "crates/client-rs",
+    "crates/rollup",
     "crates/stf",
 ]
-exclude = ["crates/rollup"]
 
 [workspace.package]
 version = "0.0.1"
@@ -41,6 +39,10 @@ sov-prover-incentives      = { git = "https://github.com/Sovereign-Labs/sovereig
 sov-sequencer-registry     = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-uniqueness             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-mock-da                = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-mock-zkvm              = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-db                     = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-rollup-full-node-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-sequencer              = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-test-utils             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 
 # Shared workspace dependencies. Versions track the SDK's own
@@ -61,7 +63,31 @@ ed25519-dalek = { version = "=2.1.1", default-features = false }
 # upgrade. Keeping the v0.20.1 pin for now.
 jsonrpsee  = { version = "0.20.1", features = ["jsonrpsee-types", "macros", "server", "http-client"] }
 tempfile   = "3.8"
+# Async + CLI plumbing for the rollup binary. Versions track the SDK
+# workspace's own `Cargo.toml` to avoid feature-graph divergence.
+async-trait = "0.1"
+clap        = { version = "4", features = ["derive"] }
+tokio       = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
+rustls      = { version = "0.23", default-features = false, features = ["ring"] }
 
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# Drop debug info on the dev profile.
+#
+# Why: linking any of our test binaries (`ligate-stf`,
+# `ligate-client`, `ligate-rollup`) pulls in the full SDK + tokio +
+# hyper + rocksdb + ring rlib graph. Each rlib carries its own
+# DWARF tree; the cumulative working set blows past what the
+# free-tier GitHub Actions runner can mmap, and the linker SIGBUSes
+# (`collect2: ld terminated with signal 7 [Bus error]`) when a
+# truncated read on a mmap'd .o slips through.
+#
+# `debug = 0` strips debug info entirely — no line numbers in
+# panics, no source-level debugging — but cuts CI link memory
+# dramatically. Worth it: pre-launch we tail logs in CI, and a
+# local override (`CARGO_PROFILE_DEV_DEBUG=2 cargo test`) restores
+# debugging when needed.
+[profile.dev]
+debug = 0
