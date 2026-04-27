@@ -1,0 +1,62 @@
+[package]
+name = "ligate-stf-declaration"
+description = "Ligate Chain runtime declaration: just the per-module composition struct + derives, no trait impls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+# Why this exists as its own crate:
+#
+# `sov_build::Options::apply_defaults::<S, Runtime<S>>()` runs in
+# `ligate-stf`'s build script. Cargo forbids a `build.rs` from
+# depending on its own crate, so the runtime struct has to live
+# upstream from the build script. This crate is that upstream.
+#
+# Mirrors the SDK's own `demo-stf-declaration` / `demo-stf` split —
+# pure declaration here, trait wiring in `ligate-stf`.
+
+[dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+schemars.workspace = true
+serde.workspace = true
+strum.workspace = true
+
+sov-modules-api = { workspace = true }
+sov-address     = { workspace = true, features = ["evm"] }
+
+# Runtime modules.
+sov-accounts            = { workspace = true }
+sov-attester-incentives = { workspace = true }
+sov-bank                = { workspace = true }
+sov-blob-storage        = { workspace = true }
+sov-chain-state         = { workspace = true }
+sov-operator-incentives = { workspace = true }
+sov-prover-incentives   = { workspace = true }
+sov-sequencer-registry  = { workspace = true }
+sov-uniqueness          = { workspace = true }
+
+# Ligate-native modules.
+attestation = { path = "../modules/attestation" }
+
+[features]
+default = []
+native = [
+    "sov-accounts/native",
+    "sov-address/native",
+    "sov-attester-incentives/native",
+    "sov-bank/native",
+    "sov-blob-storage/native",
+    "sov-chain-state/native",
+    "sov-modules-api/native",
+    "sov-operator-incentives/native",
+    "sov-prover-incentives/native",
+    "sov-sequencer-registry/native",
+    "sov-uniqueness/native",
+    "attestation/native",
+]
