@@ -39,9 +39,14 @@ If you want to build a generalised dApp, this is the wrong chain. If you want ve
 
 Cargo workspace (resolver 2). Members:
 
-- [`crates/modules/attestation`](crates/modules/attestation): the attestation protocol module. Data shapes, state layout, call handlers, and signature validation. This is the only crate with real protocol code today.
-- [`crates/rollup`](crates/rollup): the node binary (`ligate-node`). Scaffold only. Full Sovereign SDK wiring (runtime, DA layer adapter, genesis config, RPC server) is in progress.
-- [`crates/client-rs`](crates/client-rs): the Rust client SDK for applications talking to the chain. Scaffold only. Surface lands alongside the node.
+- [`crates/modules/attestation`](crates/modules/attestation): the attestation protocol module. Data shapes, state layout, call handlers, signature validation, and fee routing through `sov-bank`.
+- [`crates/stf`](crates/stf): the runtime crate that composes the chain's modules (`bank`, `accounts`, `sequencer_registry`, `attester_incentives`, `prover_incentives`, `operator_incentives`, `attestation`) into a state-transition function. `CHAIN_HASH` is derived from the runtime schema at build time so genesis can't drift from code.
+- [`crates/stf-declaration`](crates/stf-declaration): the runtime declaration consumed by the SDK macros.
+- [`crates/rollup`](crates/rollup): the node binary (`ligate-node`). Wires the STF to the Celestia DA adapter and exposes the RPC surface.
+- [`crates/rollup/provers/risc0`](crates/rollup/provers/risc0): the Risc0 inner zkVM prover, including the Celestia guest binary that runs the full STF inside the zkVM.
+- [`crates/client-rs`](crates/client-rs): the Rust client SDK for applications talking to the chain. Typed builders and ed25519 helpers on the new SDK.
+
+Devnet config (genesis files, Celestia and rollup TOMLs) lives in [`devnet/`](devnet) and is checked in so anyone can boot a local devnet against Celestia mocha-testnet.
 
 Protocol docs:
 
@@ -106,9 +111,17 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 
 ## Development status
 
-**Pre-devnet.** No public chain is running yet. The attestation module has its data types, state layout, call handlers, and signature validation wired up and under test (see `crates/modules/attestation/src/lib.rs`); the rollup binary and client SDK are scaffolds. Fee charging, genesis seeding, RPC endpoints, and block-header timestamp plumbing are open work items.
+**Pre-devnet.** No public chain is running yet, but the protocol works end-to-end against a local Celestia mocha-testnet. As of Phase A:
 
-Current tracked work lives in the [GitHub issues](https://github.com/ligate-io/ligate-chain/issues). If you are considering a contribution, start there.
+- Attestation module: data types, state layout, call handlers, ed25519 signature validation, replay protection, fee routing.
+- Runtime: `ligate-stf` composes the curated module set on the upgraded Sovereign SDK.
+- DA: Celestia adapter wired for block submission and ingestion.
+- ZK: Risc0 inner zkVM with a Celestia guest binary that runs the full STF.
+- Fees: real `$LGT` transfers through `sov-bank`, with up to 50% of attestation fees routable to the schema owner.
+- Genesis: checked-in devnet config (bank, attestation, attester incentives, prover incentives, sequencer registry, operator incentives).
+- Addresses: `lig1` accounts, `lpk1` pubkeys, `lsc1` schema IDs, `las1` attestor set IDs, `lph1` payload hashes (Bech32m).
+
+Open work items toward public devnet: explorer, faucet, hosted RPC endpoint, EVM authenticator ([#72](https://github.com/ligate-io/ligate-chain/issues/72)), and the v1 staking and disputes modules. Current tracked work lives in the [GitHub issues](https://github.com/ligate-io/ligate-chain/issues).
 
 v0 scope is the attestation protocol only. Identity, disputes/slashing, payments, and the agent registry are explicit v1 and v2 non-goals documented in the spec.
 
