@@ -1,25 +1,54 @@
 # Ligate Chain devnet config
 
-Single-node MockDa + MockZkvm devnet, ready to boot:
+Two pre-built rollup configs share one set of genesis JSONs:
+
+| Flavour | DA layer | When to use |
+|---|---|---|
+| `rollup.toml` | In-process MockDa (SQLite) | Default. Local dev, no external services. |
+| `celestia.toml` | Real Celestia (Mocha or local node) | Multi-node experiments, DA-cost testing. |
+
+## Boot the mock-DA flavour
 
 ```sh
-cargo run --bin ligate-node \
-  --rollup-config-path devnet/rollup.toml \
-  --genesis-config-dir   devnet/genesis
+cargo run --bin ligate-node
 ```
 
-(Defaults match the layout, so a bare `cargo run --bin ligate-node`
-also works from the repo root.)
+Defaults match the layout (`devnet/rollup.toml` + `devnet/genesis/`),
+so the bare command works from the repo root.
+
+## Boot the Celestia flavour
+
+```sh
+# Mocha public RPC, signer key from your local secret store:
+SOV_CELESTIA_RPC_URL=wss://celestia-mocha.public-rpc.com \
+SOV_CELESTIA_SIGNER_KEY=$(pass celestia/devnet-signer) \
+cargo run --bin ligate-node -- --da-layer celestia
+```
+
+Or against a local light node (typical for CI / soak testing):
+
+```sh
+SOV_CELESTIA_RPC_URL=ws://127.0.0.1:26658 \
+SOV_CELESTIA_SIGNER_KEY=... \
+cargo run --bin ligate-node -- --da-layer celestia
+```
+
+The checked-in `celestia.toml` has placeholder values for
+`rpc_url`, `grpc_url`, and `signer_private_key` — the binary will
+read overrides from `SOV_CELESTIA_RPC_URL`,
+`SOV_CELESTIA_GRPC_URL`, and `SOV_CELESTIA_SIGNER_KEY` if set, so
+secrets never need to land in the repo.
 
 ## What's here
 
-- `rollup.toml` — node-level config: storage paths, DA, sequencer,
-  proof manager. Annotated inline.
+- `rollup.toml` — MockDa node config.
+- `celestia.toml` — Celestia node config.
 - `genesis/*.json` — one file per runtime module the chain
-  initialises at genesis. See [`ligate_stf::genesis_config`]
-  (`crates/stf/src/genesis_config.rs`) for the loader contract and
-  the cross-module invariants that get checked before the chain
-  starts.
+  initialises at genesis. **Shared between both flavours** — only
+  the DA layer differs, not the rollup state. See
+  [`ligate_stf::genesis_config`](../crates/stf/src/genesis_config.rs)
+  for the loader contract and the cross-module invariants that get
+  checked before the chain starts.
 
 ## Bootstrap actor
 
@@ -37,19 +66,30 @@ boot story narrow:
 | Prover reward addr | same | |
 
 The two other accounts seeded with `$LGT` are Anvil #1
-(`0x70997970…`) and #2 (`0x3C44Cd…`) — useful for end-to-end
+(`0x70997970…`) and #2 (`0x3C44Cd…`). Useful for end-to-end
 transfer testing without minting more.
 
 ## $LGT layout
 
-- 9 decimals (Solana-style nano units)
-- Genesis supply: 120M LGT
-  - Bootstrap: 100M LGT
-  - Anvil #1: 10M LGT
-  - Anvil #2: 10M LGT
+- 9 decimals (Solana-style nano units).
+- Genesis supply: 120M LGT.
+  - Bootstrap: 100M LGT.
+  - Anvil #1: 10M LGT.
+  - Anvil #2: 10M LGT.
 - `lgt_token_id` is the deterministic `config_gas_token_id()` from
   `constants.toml`. The genesis loader cross-checks this against
   `attestation.lgt_token_id` and refuses to boot on mismatch.
+
+## Celestia namespaces
+
+Both batch and proof namespaces are pinned in `constants.toml`:
+
+- `BATCH_NAMESPACE = "lig-dvn-tb"` — devnet tx batches.
+- `PROOF_NAMESPACE = "lig-dvn-tp"` — devnet zk proofs.
+
+A misconfigured node and the canonical chain can't disagree
+silently — the namespaces are compiled into the binary via
+`config_value!()`.
 
 ## What's _not_ here
 
@@ -57,10 +97,8 @@ transfer testing without minting more.
   `initial_schemas` in `attestation.json` are intentionally empty.
   Schema registration via tx after boot is the same code path —
   better to exercise it than to bake test fixtures into genesis.
-- **Real chain-id binding.** The runtime ships with `CHAIN_HASH =
-  [0u8; 32]` until the build-script slice lands. Anyone with the
-  same SDK pin and matching JSONs would produce a hash-compatible
-  chain. Fine for a closed devnet, blocks any external sequencer
-  story until we wire the real schema-derived hash.
-- **Multi-node story.** The MockDa adapter is single-process. Phase
-  A.3 swaps it for Celestia and a real DA + sequencer split.
+- **Real proving.** Both DA flavours run against MockZkvm. Phase
+  A.4 swaps in Risc0 (or SP1); the diff is contained to the
+  `Spec` alias + `create_prover_service` body in each blueprint.
+- **Mainnet namespaces.** The `lig-dvn-*` namespaces are devnet-
+  scoped; mainnet picks fresh ones to avoid devnet replay risk.
