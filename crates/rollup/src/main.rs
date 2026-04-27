@@ -90,6 +90,18 @@ async fn run() -> anyhow::Result<()> {
             format!("Failed to read rollup configuration from {}", args.rollup_config_path)
         })?;
 
+    // Make sure the storage path exists before any SDK component
+    // reaches into it. SQLite (mock DA) and RocksDB (state) both
+    // refuse to create their files if the parent directory is
+    // missing, and we want first-run `cargo run --bin ligate-node`
+    // to work without a separate `mkdir` step.
+    std::fs::create_dir_all(&rollup_config.storage.path).with_context(|| {
+        format!(
+            "Failed to create rollup storage directory at {}",
+            rollup_config.storage.path.display()
+        )
+    })?;
+
     let genesis_paths = GenesisPaths::from_dir(&args.genesis_config_dir);
 
     let rollup = MockLigateRollup::<Native>::default()

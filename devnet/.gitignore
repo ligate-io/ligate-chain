@@ -1,0 +1,3 @@
+# Runtime data — RocksDB instances, ledger db, mock DA SQLite.
+# Regenerated on every boot from the genesis JSONs.
+data/

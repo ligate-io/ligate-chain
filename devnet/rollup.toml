@@ -1,0 +1,98 @@
+# Ligate Chain devnet rollup config.
+#
+# Boots a single-node devnet against MockDa (in-process DA via SQLite)
+# with mock zkVM proving. Production targets — Celestia DA (Phase
+# A.3), real proving (Phase A.4) — get their own config files when
+# they land.
+#
+# Run with:
+#   cargo run --bin ligate-node \
+#     --rollup-config-path devnet/rollup.toml \
+#     --genesis-config-dir   devnet/genesis
+#
+# All paths relative to wherever the node is invoked from. The
+# defaults below assume you run from the repo root.
+
+[da]
+# In-process MockDa backed by SQLite. Use `mode=memory` if you want
+# an ephemeral chain that resets on every restart.
+connection_string = "sqlite://devnet/data/da.sqlite?mode=rwc"
+# 32-byte hex address the node uses to "post" blobs on the mock DA
+# layer. Matches `seq_da_address` in `genesis/sequencer_registry.json`.
+sender_address = "0000000000000000000000000000000000000000000000000000000000000000"
+# Instant finality — every produced block is final. Fine for a
+# single-node devnet.
+finalization_blocks = 0
+
+[da.block_producing.periodic]
+# 1s block time — fast enough for interactive demos, slow enough that
+# logs are readable.
+block_time_ms = 1000
+
+[storage]
+# Rollup's data directory. RocksDB lives under `<path>/{user,kernel}-db`,
+# the ledger under `<path>/ledger-db`.
+path = "devnet/data"
+# 4 GiB in-memory state cache. Way more than the devnet needs but
+# matches what the SDK demo ships and keeps slot processing fast.
+state_cache_size = 4294967296
+user_commit_concurrency = 4
+# 15M expected state entries. Sized for a devnet — production
+# revisits this once we know real workload shape.
+user_hashtable_buckets = 15_000_000
+user_preallocate_ht = false
+kernel_commit_concurrency = 2
+# Keep the last 20 versions queryable; prune anything older every
+# 100 DA blocks.
+pruner_block_interval = 100
+pruner_versions_to_keep = 20
+
+[runner]
+# Poll the DA layer 20 times per block (50ms × 20 = 1000ms = 1
+# block). Catches new blobs with negligible latency.
+da_polling_interval_ms = 50
+
+[runner.http_config]
+bind_host = "127.0.0.1"
+bind_port = 12346
+
+[monitoring]
+# Telegraf endpoint (UDP). The devnet doesn't need metrics shipping;
+# pointing at a port nothing's listening on is harmless — UDP just
+# drops the packets.
+telegraf_address = "udp://127.0.0.1:8094"
+tokio_runtime_metrics_interval_millis = 500
+
+[proof_manager]
+aggregated_proof_block_jump = 1
+# Same Anvil dev address as the bootstrap actor. It receives
+# proving rewards in zk mode (chosen via `chain_state.json`).
+prover_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+max_number_of_transitions_in_db = 100
+max_number_of_transitions_in_memory = 30
+
+[sequencer]
+blob_processing_timeout_secs = 3000
+max_batch_size_bytes = 1048576
+max_concurrent_blobs = 128
+max_allowed_node_distance_behind = 10
+# The devnet sequencer is the same Anvil dev actor that owns the
+# treasury / attester / prover roles. Single-actor genesis simplifies
+# the boot story.
+rollup_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+
+[sequencer.preferred]
+# TODO: drop once Sovereign-Labs/sovereign-sdk-wip#2814 lands.
+disable_state_root_consistency_checks = true
+recovery_strategy = "TryToSave"
+batch_execution_time_limit_millis = 2000
+num_cache_warmup_workers = 0
+ideal_lag_behind_finalized_slot = 3
+
+[sequencer.extension]
+# `RollupConfig::extension_or_panic()` is called from
+# `FullNodeBlueprint::sequencer_additional_apis`. We don't override
+# that hook, so the field is unused — but the SDK still requires the
+# section to exist. Keep this matching the demo so any future
+# override picks up sensible defaults.
+max_log_limit = 20000
