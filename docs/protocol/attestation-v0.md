@@ -281,7 +281,7 @@ Cosmos-style string identifiers, locked to a single canonical ladder so every co
 | Public testnet (later)     | `ligate-testnet-1` |
 | Mainnet (later)            | `ligate-1`         |
 
-The trailing number bumps **only** on a chain restart that breaks state continuity (full reset, new genesis). Soft upgrades via the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42)) keep the same id.
+The trailing number bumps **only** on a chain restart that breaks state continuity (full reset, new genesis). Soft upgrades via the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42)) keep the same id. The full soft-fork-vs-hard-fork story (when a change actually requires a chain-id bump, what the `CHAIN_HASH` guard catches automatically, and how the pre-mainnet vs post-mainnet upgrade flow differs) lives in [`upgrades.md`](upgrades.md).
 
 The `0x` prefix is **never** correct on a chain id. Chain ids are bare strings, not hex.
 
