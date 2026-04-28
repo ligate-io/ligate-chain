@@ -20,6 +20,14 @@
 #
 # Auto-merge is deliberately not configured. Maintainers review every
 # Dependabot PR until we have a track record of clean upgrades.
+#
+# Ignore rules cover crates whose newer versions are blocked by the
+# Sovereign SDK rev we git-pin to. The SDK macros emit code against
+# specific transitive-dep API shapes; bumping past what the SDK
+# supports breaks compilation across half the workspace. Pattern when
+# a Dependabot PR fails for this reason: close the PR, add the
+# dep-name to the ignore list below, revisit when we bump the SDK
+# pin in `Cargo.toml` to a rev that supports the newer API.
 
 version: 2
 updates:
@@ -44,6 +52,22 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # schemars 1.x is a major-version bump with breaking API changes
+      # (gen module renamed, schema_name() signature changed, schema
+      # module became private). Sovereign SDK derive macros at our
+      # pinned rev still consume the 0.8 API. Revisit when the SDK
+      # rev we track adopts schemars 1.x. See closed #100.
+      - dependency-name: "schemars"
+        update-types: ["version-update:semver-major"]
+      # strum 0.26 -> 0.27 reorganised VariantArray / VariantNames.
+      # The SDK's #[derive(DispatchCall)] and friends emit code
+      # against the 0.26 trait shapes. Pre-1.0 minor IS breaking
+      # in semver terms here. Revisit on SDK rev bump. See closed #101.
+      - dependency-name: "strum"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
     labels:
       - "foundation"
       - "p2"
