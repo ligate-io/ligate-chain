@@ -269,3 +269,22 @@ themisra.verify(receipt_id):
 ```
 
 The attestor quorum HTTP API, the Themisra payload canonicalisation, and the TypeScript/Rust SDK surfaces are out of scope for this chain-level spec, they're Themisra product concerns, documented in the `themisra-pop` crate and the `@ligate/themisra` package.
+
+## Chain id
+
+Cosmos-style string identifiers, locked to a single canonical ladder so every config file, doc, and frontend agrees on what to write:
+
+| Environment                | Chain id           |
+| -------------------------- | ------------------ |
+| Local single-node dev      | `ligate-localnet`  |
+| Public devnet              | `ligate-devnet-1`  |
+| Public testnet (later)     | `ligate-testnet-1` |
+| Mainnet (later)            | `ligate-1`         |
+
+The trailing number bumps **only** on a chain restart that breaks state continuity (full reset, new genesis). Soft upgrades via the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42)) keep the same id.
+
+The `0x` prefix is **never** correct on a chain id. Chain ids are bare strings, not hex.
+
+The EIP-155 numeric chain id (the integer EVM tooling uses) is a separate concept and is not assigned in v0–v3. If we ever reserve one, potentially as part of the v4 EVM track ([#52](https://github.com/ligate-io/ligate-chain/issues/52)), it lives alongside the string id and does not replace it. The `CHAIN_ID = 4242` constant in [`constants.toml`](../../constants.toml) is the SDK's tx-signing domain-separation integer, not an EIP-155 id.
+
+A locked convention plus a mechanical sweep across configs, docs, and frontends is tracked in [#54](https://github.com/ligate-io/ligate-chain/issues/54).
