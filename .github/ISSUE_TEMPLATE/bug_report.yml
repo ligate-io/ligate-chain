@@ -1,0 +1,83 @@
+name: Bug report
+description: Something is broken in the chain code, devnet config, or build system
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please fill in the fields below so we can reproduce and triage quickly.
+
+        **Do not file security vulnerabilities here.** See [`SECURITY.md`](https://github.com/ligate-io/ligate-chain/blob/main/SECURITY.md) for the private disclosure process.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe the bug. What did you observe?
+      placeholder: "When I run `cargo run --bin ligate-node`, the node panics with..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen
+      placeholder: "The node should boot and serve RPC on port 8080."
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal sequence that reliably reproduces the bug.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit hash
+      description: Output of `git rev-parse HEAD`.
+      placeholder: "59f8f65..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux (Ubuntu / Debian)
+        - Linux (other)
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Other (please describe in 'What happened')
+    validations:
+      required: true
+
+  - type: input
+    id: rust-version
+    attributes:
+      label: Rust toolchain
+      description: Output of `rustc --version`. Should match `rust-toolchain.toml`.
+      placeholder: "rustc 1.93.0 (254b59607 2026-01-19)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error output
+      description: Trim to the relevant sections. Use code blocks for readability.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Optional. Hardware quirks, custom configs, things you tried that did not work.

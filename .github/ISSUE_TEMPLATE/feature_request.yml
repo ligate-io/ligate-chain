@@ -1,0 +1,65 @@
+name: Feature request
+description: Propose a new capability for the chain, modules, or SDK
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to propose a new feature, module, or extension to an existing surface. For protocol-shape changes (new `CallMessage` variants, state-layout shifts, wire-format breaks), please read [`docs/protocol/attestation-v0.md`](https://github.com/ligate-io/ligate-chain/blob/main/docs/protocol/attestation-v0.md) first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user-visible problem does this feature address? Avoid jumping to a solution here.
+      placeholder: "Today there is no way for an indexer to subscribe to new attestations as they land. Polling the REST endpoint at 200ms intervals is wasteful and adds visible latency to UI surfaces."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed approach
+      description: What should we build? Sketch the surface (API, types, state shape) at enough detail for a reviewer to evaluate trade-offs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you weigh, and why did you reject them?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Suggested scope
+      description: Which release window does this fit into? See the `v0` / `v0.5` / `v1` / `v2` / `v3` / `v4` labels for guidance.
+      options:
+        - v0 (devnet readiness)
+        - v0.5 (Ligate MCP / Iris)
+        - v1 (post-devnet, identity + disputes + economic trust)
+        - v2 (cryptographic verification, payments, agents)
+        - v3 (decentralisation, ecosystem)
+        - v4 (general-purpose extension via EVM compatibility)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Suggested priority
+      options:
+        - p0 (blocking critical path)
+        - p1 (important but not blocking)
+        - p2 (nice-to-have)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Optional. Links to specs, prior art in other chains, sketches.

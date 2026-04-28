@@ -255,16 +255,17 @@ v0 scope is the attestation protocol only. Identity, disputes/slashing, payments
 
 ## Contributing
 
-Required reading before a non-trivial PR:
+The full contributor guide is in [`CONTRIBUTING.md`](CONTRIBUTING.md): local dev setup (including the macOS libclang gotcha and the per-machine Risc0 workaround), code style, commit conventions, PR process, and the CI gates your branch has to pass.
 
-1. [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md) for the protocol itself.
-2. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for the CI jobs your branch has to pass.
+Required reading before a non-trivial protocol PR:
 
-CI runs six jobs and all must pass: `cargo fmt --check`, `cargo clippy -D warnings`, `cargo check`, `cargo test`, `cargo doc` (with `RUSTDOCFLAGS=-D warnings`), and `cargo audit`. Please run them locally before pushing; the full list is in the "Build and test" section above.
+1. [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md) — the protocol specification.
+2. [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md) — addressing and signature schemes.
+3. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — the CI gates.
 
-Commit style: one-line subject (imperative mood, under ~72 chars), blank line, short body explaining the why. Keep changes focused; open separate PRs for independent concerns.
+This project adopts the [Contributor Covenant](CODE_OF_CONDUCT.md). Security disclosures go through [`SECURITY.md`](SECURITY.md), not public issues.
 
-Issues, questions, and bug reports: [github.com/ligate-io/ligate-chain/issues](https://github.com/ligate-io/ligate-chain/issues).
+Issues and bug reports: [github.com/ligate-io/ligate-chain/issues](https://github.com/ligate-io/ligate-chain/issues). General questions and design discussions: [GitHub Discussions](https://github.com/ligate-io/ligate-chain/discussions).
 
 ## License
 

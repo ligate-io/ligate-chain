@@ -1,0 +1,67 @@
+# Dependabot config for ligate-chain.
+#
+# Two ecosystems we care about:
+#   - cargo: workspace dependencies in Cargo.toml + transitives
+#   - github-actions: pinned action versions in .github/workflows/
+#
+# Both run weekly on Monday morning Europe/Amsterdam to land in our
+# review queue at the start of the work week. The five-PR cap on cargo
+# avoids review-queue floods on weeks with many small bumps.
+#
+# Grouping rationale:
+#
+#   - sov-* crates are a single git-pinned Sovereign SDK rev. Bumping
+#     them piecemeal would create incompatible PRs that don't compile;
+#     group them so a Dependabot PR moves the whole rev together.
+#   - risc0-* crates are released in lockstep. Same logic.
+#
+# Major-version bumps stay separate (default behaviour) so we eyeball
+# each one rather than auto-grouping breaking changes.
+#
+# Auto-merge is deliberately not configured. Maintainers review every
+# Dependabot PR until we have a track record of clean upgrades.
+
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 5
+    groups:
+      sov-rollup-deps:
+        patterns:
+          - "sov-*"
+        update-types:
+          - "minor"
+          - "patch"
+      risc0:
+        patterns:
+          - "risc0-*"
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "foundation"
+      - "p2"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 3
+    labels:
+      - "foundation"
+      - "p2"
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
