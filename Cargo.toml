@@ -69,7 +69,7 @@ tracing    = "0.1"
 borsh      = { version = "1", features = ["derive"] }
 schemars   = { version = "0.8.21", features = ["derive"] }
 sha2       = { version = "=0.10.9", default-features = false }
-strum      = { version = "0.26.3", features = ["derive"] }
+strum      = { version = "0.27.2", features = ["derive"] }
 ed25519-dalek = { version = "=2.1.1", default-features = false }
 # jsonrpsee version may need bumping; we'll find out during the
 # upgrade. Keeping the v0.20.1 pin for now.

@@ -633,7 +633,7 @@ dependencies = [
  "sov-modules-api",
  "sov-state",
  "sov-test-utils",
- "strum 0.26.3",
+ "strum 0.27.2",
  "tempfile",
  "thiserror 2.0.18",
 ]
@@ -1912,7 +1912,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -4139,7 +4139,7 @@ dependencies = [
  "sov-rollup-interface",
  "sov-state",
  "sov-test-utils",
- "strum 0.26.3",
+ "strum 0.27.2",
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
@@ -4165,7 +4165,7 @@ dependencies = [
  "sov-prover-incentives",
  "sov-sequencer-registry",
  "sov-uniqueness",
- "strum 0.26.3",
+ "strum 0.27.2",
 ]
 
 [[package]]
@@ -5484,7 +5484,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "itertools 0.13.0",
  "log",
  "multimap",
