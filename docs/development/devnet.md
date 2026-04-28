@@ -1,8 +1,16 @@
 # Ligate Chain v0 Devnet Operator Runbook
 
-**Status:** planning document for the v0 devnet. Several sections describe
-capability that is not yet wired into the repo. Those sections are marked
-**Preview only** and link to the tracking issues.
+**Status:** the chain runs end-to-end against MockDa or Celestia mocha-testnet
+today (Phase A landed in PRs #65–#74). The single-node boot path, genesis
+config loading, attestation module call handlers, and Risc0 inner zkVM are
+all wired. Outstanding items are the **federated multi-org topology**
+(genesis ceremony, attestor key management) and the **public-facing
+infrastructure** (hosted RPC, faucet, explorer) — those sections are
+marked **Future work** and link to their tracking issues.
+
+For a fast local-only boot (single-node mock-DA, no ceremony), see
+[`devnet/README.md`](../../devnet/README.md). This document is the
+multi-operator playbook for when public devnet spins up.
 
 This document is **operations**. For the on-chain protocol (types, state,
 invariants, fees), read [`docs/protocol/attestation-v0.md`](../protocol/attestation-v0.md)
@@ -86,11 +94,14 @@ schema's client SDK (e.g. `@ligate/themisra`), not the attestor.
 
 ## 3. Prerequisites to run a node
 
-> **Preview only.** The node binary in `crates/rollup/src/main.rs` is
-> currently a placeholder. Real runtime wiring is tracked in #13 and the
-> Celestia DA adapter in #2. The steps below describe the intended
-> environment once that work lands. Do not expect any of the commands in
-> sections 5 and 6 to execute today.
+The node binary (`ligate-node` in [`crates/rollup`](../../crates/rollup))
+boots a single-node rollup against either MockDa (in-process SQLite, the
+default) or real Celestia (mocha-testnet or local light/bridge node).
+Phase A landed across #65 (`ligate-stf` runtime), #66 (genesis loader +
+cross-module validation), #67 (rollup binary on the new SDK), #68
+(checked-in devnet config), #69 (`CHAIN_HASH` from runtime schema), #71
+(Celestia DA adapter), #74 (Risc0 zkVM + lig1 addresses). The commands
+in sections 5 and 6 below run today.
 
 You will need:
 
@@ -113,12 +124,19 @@ You will need:
 
 ## 4. Genesis ceremony
 
-> **Preview only.** Genesis config loading is not implemented. Tracked in
-> #8. Everything in this section describes the intended devnet launch
-> process, not something you can run today.
+> **Future work.** The genesis loader runs today (per-module JSON files
+> under `devnet/genesis/`, assembled by `crates/stf::genesis_config`).
+> What's still future-only is the **multi-org coordination process**
+> below — picking attestor pubkeys, agreeing on the threshold, and
+> committing a signed-off `genesis.json` set across orgs. That ceremony
+> happens once we have ≥ 3 attestor orgs lined up, gated on design
+> partner conversations rather than chain code.
 
 The genesis ceremony is a one-time coordinated event to produce a shared
-`genesis.json`.
+set of per-module genesis JSONs (today: `bank.json`, `accounts.json`,
+`sequencer_registry.json`, `operator_incentives.json`,
+`attester_incentives.json`, `prover_incentives.json`, `chain_state.json`,
+`attestation.json`).
 
 **Who is on the call**
 
@@ -143,47 +161,56 @@ The genesis ceremony is a one-time coordinated event to produce a shared
 
 **Output**
 
-A `genesis.json` committed to this repo (exact path pending #8), signed
-off on by all participating orgs. The sequencer and every attestor node
-boot from an identical copy of that file.
+A directory of per-module JSON files committed to this repo (under
+`devnet/genesis/`), signed off on by all participating orgs. The
+sequencer and every full node boot from an identical copy of those
+files. A canonical example lives at
+[`docs/development/genesis.example.json`](genesis.example.json) (the
+attestation module's slice; the runbook example expands this set).
 
 ## 5. Running a node
 
-> **Preview only.** The `ligate-node` binary does not exist yet. Command
-> shapes below are placeholders to illustrate the intended interface.
-> Tracked in #13.
+The current `ligate-node` binary takes a `--da-layer` flag (`mock` or
+`celestia`) and points at a rollup config TOML plus a genesis directory.
+Per-flavour boot details live in
+[`devnet/README.md`](../../devnet/README.md). The shapes below are the
+intended **devnet operator** form, layered on top of that local-boot
+flow with hardened defaults (persistent state dir, externalised auth
+tokens, public RPC bind).
 
 **Sequencer**
 
 ```bash
-# placeholder shape, not a runnable command
-ligate-node sequencer \
-    --config   /etc/ligate/genesis.json \
-    --data-dir /var/lib/ligate \
-    --da-endpoint http://127.0.0.1:26658 \
-    --da-auth-token "$CELESTIA_AUTH_TOKEN" \
-    --rpc-addr 0.0.0.0:8545
+SOV_CELESTIA_RPC_URL=wss://celestia-mocha.public-rpc.com \
+SOV_CELESTIA_SIGNER_KEY=$(pass celestia/devnet-signer) \
+cargo run --release --bin ligate-node -- \
+    --da-layer celestia \
+    --rollup-config-path /etc/ligate/celestia.toml \
+    --genesis-config-dir /etc/ligate/genesis
 ```
+
+The `[storage]` section of `celestia.toml` controls the data
+directory; CLI flags for it land in a future binary release.
 
 **Attestor or full node**
 
-```bash
-# placeholder shape, not a runnable command
-ligate-node full \
-    --config   /etc/ligate/genesis.json \
-    --data-dir /var/lib/ligate \
-    --sequencer-rpc https://rpc.devnet.ligate.io \
-    --attestor-key-file /etc/ligate/attestor.key \
-    --rpc-addr 127.0.0.1:8545
-```
+A full node uses the same binary with the same args; it differs from
+the sequencer only in **what's allowed to do at runtime**, which is
+governed by genesis (`sequencer_registry.json` lists who can sequence,
+`attester_incentives.json` who can attest). An attestor org runs the
+node, signs blobs server-side via its quorum service, and submits
+through the sequencer's RPC. See section 7 for key handling.
 
-The `--attestor-key-file` flag is only meaningful if the node is
-participating as an attestor. A plain full node watches state without
-signing.
+> **Future work.** A flag like `--attestor-key-file` is **not** part of
+> the v0 binary. v0 attestors sign off-chain in their quorum service
+> (their own infra, outside this repo) and the chain only verifies the
+> resulting M-of-N signatures on `SubmitAttestation`. Bundling
+> attestor-key handling into `ligate-node` is a v1+ design call,
+> tracked alongside the staking module (#50).
 
 **Health checks**
 
-Once the binary lands, a healthy node logs roughly:
+A healthy node logs roughly:
 
 - `sequencer: produced block height=N da_height=M` (sequencer only)
 - `da: submitted blob height=N size=B` (sequencer only)
@@ -191,16 +218,18 @@ Once the binary lands, a healthy node logs roughly:
   `SubmitAttestation` it sees
 - No sustained `da: submission failed` or `rpc: 5xx` lines
 
-A minimal `GET /health` endpoint on the node RPC will return 200 when the
-node is caught up to DA and able to serve queries. Exact response shape
-pending #21.
+For programmatic liveness, the SDK auto-mounts `/sequencer/ready` and
+`/rollup/sync-status` (see the SDK's [REST surface](https://github.com/Sovereign-Labs/sovereign-sdk)
+for the full set; a curated reference for our deployed surface is the
+follow-up tracked alongside #79).
 
 ## 6. Submitting a test attestation
 
-> **Preview only.** There is no `ligate-cli` today, and the Rust client
-> in `crates/client-rs` is a scaffold. The flow below is the intended
-> shape for devnet. Once the RPC query layer (#21) and node binary (#13)
-> land, we will ship a CLI that implements these steps.
+The chain-side query API for verifying receipts landed in #93 (closed
+read-side of #21). A dedicated `ligate-cli` operator tool that wraps
+the steps below into one-line commands is **future work** (own issue
+forthcoming). Today the steps execute via `crates/client-rs` typed
+builders + a Rust caller, or by hitting the REST endpoints with `curl`.
 
 The end-to-end flow for a single Themisra attestation on devnet:
 
@@ -235,14 +264,18 @@ The end-to-end flow for a single Themisra attestation on devnet:
    `CallMessage::SubmitAttestation { schema_id, payload_hash, signatures }`
    to the sequencer. Signatures must meet the schema's
    `AttestorSet.threshold` or the tx is rejected.
-5. **Query**. Read the attestation back via RPC:
+5. **Query**. Read the attestation back via REST:
 
    ```
-   attestation_getAttestation(schema_id, payload_hash) -> Option<Attestation>
+   GET /modules/attestation/attestations/{schemaId}:{payloadHash}
    ```
 
    Returns the on-chain record: schema ID, payload hash, submitter,
-   timestamp, validated signatures.
+   timestamp, validated signatures. Companion endpoints:
+   `GET /modules/attestation/schemas/{schemaId}` and
+   `GET /modules/attestation/attestor-sets/{attestorSetId}`. Wired in
+   PR #93. Range / by-submitter / aggregation queries land in the
+   indexer service (#91), not the node.
 
 The `(schema_id, payload_hash)` pair is write-once. Resubmitting the same
 pair is rejected at the state-transition layer (invariant 5 in the
@@ -327,26 +360,33 @@ operator should watch:
 - Any unexpected signing requests (digests that did not come from the
   authorised quorum endpoint). Treat as a security event.
 
-The node will expose Prometheus metrics once #13 lands. Grafana
-dashboards will live under `ops/grafana/` in this repo. Both are TBD.
+A Prometheus `/metrics` endpoint on `ligate-node` is **future work** —
+the SDK exposes hooks but we haven't wired them or shipped Grafana
+templates. Tracked as a follow-up in the chain backlog.
 
 ## 9. Known limitations (devnet phase)
 
-| Limitation                          | Tracking issue |
-|-------------------------------------|----------------|
-| No economic slashing (v1 feature)   | v1 `disputes` module, not filed yet |
-| Fee routing enforcement not wired   | #22 |
-| No query RPC for attestations       | #21 |
-| Node binary is a placeholder        | #13 |
-| Celestia DA adapter not wired       | #2  |
-| Genesis config loader not written   | #8  |
+| Limitation | Tracking issue |
+|---|---|
+| No economic slashing (v1 feature) | #51 (disputes module, v1) |
+| No `list_by_schema` REST endpoint (deferred from #21) | follow-up; deeper queries land in the indexer service |
+| Hosted public RPC + sequencer infrastructure not stood up | #79 |
+| Block explorer not deployed | #80 |
+| Devnet faucet not deployed | #95 |
+| Force-include path (sequencer-bypass) not designed | #81 (v1) |
+| Multi-sequencer / leader rotation | #82 (v1) |
+| Block indexer service (Postgres + ingest) | #91 |
+| WebSocket / SSE live event stream | #92 |
+| Prometheus metrics endpoint on `ligate-node` | not yet filed |
+| `ligate-cli` operator tool | not yet filed |
 
-The attestation module itself (`crates/modules/attestation`) is live:
-`Schema`, `AttestorSet`, `Attestation`, the `CallMessage` enum, state
-transitions, and ed25519 signature validation are all implemented
-against Sovereign SDK rev `13e4077c329ff14954b32e3180d43a6d86fa3172`.
-The gap is everything around it: the runnable node, DA, genesis, RPC,
-fee routing. See the issues above for current work.
+The chain itself is live: `Schema`, `AttestorSet`, `Attestation`, the
+`CallMessage` enum, state transitions, ed25519 signature validation,
+fee routing, runtime composition, Celestia DA, and the Risc0 inner
+zkVM are all implemented against Sovereign SDK rev
+`f89964c66bcfb6a31712e43278378b54c33d3779`. The gaps above are
+**around** the chain: hosted infrastructure, ops tooling, indexing,
+and the v1 economic-trust module set.
 
 ## 10. Getting help
 
