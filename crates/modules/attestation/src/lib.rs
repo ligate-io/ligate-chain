@@ -28,6 +28,12 @@
 
 #![deny(missing_docs)]
 
+#[cfg(feature = "native")]
+mod query;
+
+#[cfg(feature = "native")]
+pub use query::{AttestationResponse, AttestorSetResponse, SchemaResponse};
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
