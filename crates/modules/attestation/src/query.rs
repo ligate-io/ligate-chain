@@ -132,14 +132,8 @@ impl<S: Spec> HasCustomRestApi for AttestationModule<S> {
     fn custom_rest_api(&self, state: ApiState<S>) -> axum::Router<()> {
         axum::Router::new()
             .route("/schemas/{schemaId}", get(Self::route_get_schema))
-            .route(
-                "/attestor-sets/{attestorSetId}",
-                get(Self::route_get_attestor_set),
-            )
-            .route(
-                "/attestations/{attestationId}",
-                get(Self::route_get_attestation),
-            )
+            .route("/attestor-sets/{attestorSetId}", get(Self::route_get_attestor_set))
+            .route("/attestations/{attestationId}", get(Self::route_get_attestation))
             .with_state(state.with(self.clone()))
     }
 }

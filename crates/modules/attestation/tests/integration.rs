@@ -1224,10 +1224,7 @@ async fn query_get_schema_returns_404_for_unknown_id() {
 
     let resp = env
         .runner
-        .query_api(
-            &attestation_api_path(&format!("schemas/{unknown_schema_id}")),
-            &client,
-        )
+        .query_api(&attestation_api_path(&format!("schemas/{unknown_schema_id}")), &client)
         .await;
 
     assert_eq!(resp.status().as_u16(), 404);
@@ -1239,10 +1236,7 @@ async fn query_get_schema_returns_400_for_invalid_bech32() {
     let client = env.runner.setup_rest_api_server().await;
 
     // Garbage path segment. Not a valid Bech32 string.
-    let resp = env
-        .runner
-        .query_api(&attestation_api_path("schemas/not-a-valid-id"), &client)
-        .await;
+    let resp = env.runner.query_api(&attestation_api_path("schemas/not-a-valid-id"), &client).await;
 
     assert_eq!(resp.status().as_u16(), 400);
 }
