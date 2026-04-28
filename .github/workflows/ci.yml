@@ -36,8 +36,45 @@ env:
   # shell — it's a per-machine workaround, not a CI-wide one.
 
 jobs:
+  # Detect whether the PR or push touches anything that affects the
+  # Rust build. Docs-only PRs (README, /docs, license, gitignore,
+  # issue templates) don't need fmt/clippy/check/test/doc to run -
+  # they can't change the compile result. The `code` output is
+  # consumed by every code-checking job below; if it's `false`, those
+  # jobs are skipped and the `CI pass` summary at the bottom accepts
+  # the skipped state as a pass.
+  #
+  # `cargo audit` deliberately ignores this filter: new RUSTSEC
+  # advisories appear independent of our diff, so we want every PR
+  # (including docs PRs) to surface them.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Negative-list filter: every path is "code" *except* the
+          # patterns below. Safer default than enumerating code paths
+          # because anything new (a new crate, a new toml, a new
+          # workflow) is gated on as code by default.
+          filters: |
+            code:
+              - '**'
+              - '!**.md'
+              - '!docs/**'
+              - '!LICENSE*'
+              - '!.gitignore'
+              - '!.github/ISSUE_TEMPLATE/**'
+              - '!.github/CODEOWNERS'
+
   fmt:
     name: cargo fmt
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +86,8 @@ jobs:
 
   clippy:
     name: cargo clippy
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +102,8 @@ jobs:
 
   check:
     name: cargo check
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +117,8 @@ jobs:
 
   test:
     name: cargo test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +142,8 @@ jobs:
 
   doc:
     name: cargo doc
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: -D warnings
@@ -112,6 +157,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --workspace --no-deps --document-private-items
 
+  # `cargo audit` runs on every PR including docs-only changes.
+  # New RUSTSEC advisories can appear at any time independent of the
+  # diff, and we want every PR to be a checkpoint for security
+  # signal even if it's just a typo fix.
   audit:
     name: cargo audit
     runs-on: ubuntu-latest
@@ -131,3 +180,53 @@ jobs:
             --ignore RUSTSEC-2026-0066 \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2025-0055
+
+  # Single summary check that the branch ruleset can require. By
+  # gating only on `CI pass`, docs-only PRs (where fmt/clippy/check/
+  # test/doc are skipped by `paths-filter`) can still merge: this job
+  # accepts `skipped` as a pass for the code-checking jobs when the
+  # `changes` job reported no code change. Real failures still fail.
+  #
+  # Replaces the previous setup where each individual job was a
+  # required check, which would deadlock docs-only PRs forever.
+  ci-pass:
+    name: CI pass
+    if: always()
+    needs: [changes, fmt, clippy, check, test, doc, audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required checks
+        env:
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
+          AUDIT_RESULT: ${{ needs.audit.result }}
+          FMT_RESULT: ${{ needs.fmt.result }}
+          CLIPPY_RESULT: ${{ needs.clippy.result }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          DOC_RESULT: ${{ needs.doc.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+
+          # cargo audit runs on every PR; it must succeed.
+          if [[ "$AUDIT_RESULT" != "success" ]]; then
+            echo "::error::cargo audit: $AUDIT_RESULT"
+            fail=1
+          fi
+
+          # Docs-only change: code-checking jobs are correctly skipped.
+          # Otherwise: every code-checking job must succeed.
+          if [[ "$CODE_CHANGED" == "true" ]]; then
+            for var in FMT_RESULT CLIPPY_RESULT CHECK_RESULT TEST_RESULT DOC_RESULT; do
+              result="${!var}"
+              if [[ "$result" != "success" ]]; then
+                echo "::error::${var,,}: $result"
+                fail=1
+              fi
+            done
+          else
+            echo "Docs-only change. Code-checking jobs correctly skipped."
+          fi
+
+          if [[ $fail -ne 0 ]]; then exit 1; fi
+          echo "All required checks succeeded."
