@@ -371,10 +371,16 @@ impl<S: Spec> SignedAttestationPayload<S> {
 /// `rename = "CallMessage"` keeps the schema name stable across
 /// generic instantiations, sidestepping the type-parameter-name
 /// resolution issue the auto-derive otherwise hits on `<S>`.
+// `#[non_exhaustive]` so downstream consumers must include a `_ =>`
+// arm when matching CallMessage. New protocol variants land in v1+
+// (e.g. `RegisterTokenSchema`, `RegisterIdentity`); the attribute
+// keeps non-Ligate code from compile-breaking on those additions.
+// Matches the `std::io::ErrorKind` pattern for protocol enums.
 #[derive(Debug, Clone, PartialEq, Eq, JsonSchema, UniversalWallet)]
 #[serialize(Borsh, Serde)]
 #[schemars(bound = "S::Address: ::schemars::JsonSchema", rename = "CallMessage")]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum CallMessage<S: Spec> {
     /// Register a new [`AttestorSet`].
     ///
@@ -634,6 +640,7 @@ pub struct AttestationConfig<S: Spec> {
 /// returned from a Module handler, so callers of the RPC can pattern-match
 /// on the wire shape while the chain runtime stays generic.
 #[derive(Debug, ThisError)]
+#[non_exhaustive]
 pub enum AttestationError {
     /// `threshold` was greater than the number of supplied members.
     #[error("attestor set threshold ({threshold}) exceeds member count ({count})")]
@@ -759,6 +766,7 @@ pub enum AttestationError {
     Deserialize,
     schemars::JsonSchema,
 )]
+#[non_exhaustive]
 pub enum AttestationEvent {
     /// Placeholder variant. Never emitted in v0; reserved so the enum
     /// is non-empty (Borsh derives require at least one variant on

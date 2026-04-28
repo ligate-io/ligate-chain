@@ -94,6 +94,7 @@ pub use attestation::{
 
 /// Errors surfaced by the Ligate client SDK.
 #[derive(Debug, ThisError)]
+#[non_exhaustive]
 pub enum ClientError {
     /// Caller supplied a `Vec<PubKey>` longer than
     /// [`MAX_ATTESTOR_SET_MEMBERS`].

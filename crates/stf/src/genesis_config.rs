@@ -108,6 +108,7 @@ impl GenesisPaths {
 /// `Io` and `ParseJson` keep the offending path in the error so
 /// operators can pinpoint the bad file without scanning logs.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum GenesisError {
     /// Failed to read a per-module JSON file from disk.
     #[error("failed to read {path}: {source}")]
