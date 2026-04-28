@@ -34,8 +34,8 @@ cd ligate-chain
 # macOS first install:           xcode-select --install
 cargo build --workspace
 
-# Run the full test suite
-cargo test --workspace --lib --tests
+# Run the workspace tests (lib + integration + doctests)
+cargo test --workspace
 ```
 
 ### Run a node
@@ -54,7 +54,7 @@ cargo run --bin ligate-node -- --da-layer celestia
 
 Defaults pick up `devnet/rollup.toml` (or `devnet/celestia.toml`) and the `devnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$LGT` so you can exercise transfers without minting.
 
-A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Full operator runbook (genesis ceremony, attestor key generation, multi-org topology) lives in [`docs/development/devnet.md`](docs/development/devnet.md); per-flavour boot details are in [`devnet/README.md`](devnet/README.md).
+A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`devnet/README.md`](devnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 
 ## What is this repo
 
