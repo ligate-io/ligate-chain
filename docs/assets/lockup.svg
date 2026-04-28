@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="185" height="48" viewBox="0 0 185 48" fill="none" role="img" aria-label="Ligate Labs">
+  <title>Ligate Labs</title>
+  <mask id="lm">
+    <rect width="48" height="48" fill="white"/>
+    <rect x="2.5" y="13.5" width="28" height="21" rx="10.5" fill="black"/>
+  </mask>
+  <g mask="url(#lm)">
+    <rect x="19" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
+  </g>
+  <rect x="4" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
+  <text x="62" y="24" dominant-baseline="central" style="font-family:'Space Grotesk','Inter','Helvetica Neue',Arial,sans-serif;font-size:22px;font-weight:500;letter-spacing:-0.02em;" fill="#A7D28C">Ligate<tspan dx="4" style="font-weight:400;" fill="#A7D28C" opacity="0.65">Labs</tspan></text>
+</svg>

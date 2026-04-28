@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-label="Ligate Labs mark">
+  <title>Ligate Labs mark</title>
+  <mask id="lm">
+    <rect width="48" height="48" fill="white"/>
+    <rect x="2.5" y="13.5" width="28" height="21" rx="10.5" fill="black"/>
+  </mask>
+  <g mask="url(#lm)">
+    <rect x="19" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
+  </g>
+  <rect x="4" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
+</svg>
