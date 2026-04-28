@@ -5,7 +5,7 @@
     <rect x="2.5" y="13.5" width="28" height="21" rx="10.5" fill="black"/>
   </mask>
   <g mask="url(#lm)">
-    <rect x="19" y="15" width="25" height="18" rx="9" stroke="#F4F2EC" stroke-width="3" fill="none"/>
+    <rect x="19" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
   </g>
   <rect x="4" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
 </svg>

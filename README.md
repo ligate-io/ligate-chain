@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://ligate.io">
-    <img src="docs/assets/lockup.svg" alt="Ligate Labs" width="200">
+    <img src="docs/assets/mark.svg" alt="Ligate" width="80">
   </a>
 </p>
 
@@ -22,21 +22,39 @@
 
 ## Quick start
 
+### Build and test
+
 ```bash
 # Clone
 git clone https://github.com/ligate-io/ligate-chain
 cd ligate-chain
 
 # Build the workspace (Rust 1.93 auto-installs via rust-toolchain.toml).
-# On Ubuntu / Debian first install: sudo apt install -y libclang-dev clang
-# On macOS first install: xcode-select --install
+# Ubuntu / Debian first install: sudo apt install -y libclang-dev clang
+# macOS first install:           xcode-select --install
 cargo build --workspace
 
 # Run the full test suite
 cargo test --workspace --lib --tests
 ```
 
-A public devnet is targeted for **Q2 2026**. Until then the protocol works end-to-end against a local Celestia mocha-testnet — see [`devnet/`](devnet) for the genesis configs and [`docs/development/devnet.md`](docs/development/devnet.md) for the operator runbook.
+### Run a node
+
+The `ligate-node` binary boots a single-node rollup against the checked-in devnet genesis. Two flavours, sharing the same chain state and only differing in DA layer:
+
+```bash
+# Default: in-process MockDa (SQLite). Single command, no external services.
+cargo run --bin ligate-node
+
+# Real Celestia DA (Mocha public RPC). Needs a Celestia signer key.
+SOV_CELESTIA_RPC_URL=wss://celestia-mocha.public-rpc.com \
+SOV_CELESTIA_SIGNER_KEY=$(pass celestia/devnet-signer) \
+cargo run --bin ligate-node -- --da-layer celestia
+```
+
+Defaults pick up `devnet/rollup.toml` (or `devnet/celestia.toml`) and the `devnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$LGT` so you can exercise transfers without minting.
+
+A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Full operator runbook (genesis ceremony, attestor key generation, multi-org topology) lives in [`docs/development/devnet.md`](docs/development/devnet.md); per-flavour boot details are in [`devnet/README.md`](devnet/README.md).
 
 ## What is this repo
 
