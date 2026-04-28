@@ -1,14 +1,14 @@
 <p align="center">
   <a href="https://ligate.io">
-    <img src="docs/assets/mark.svg" alt="Ligate" width="80">
+    <img src="docs/assets/lockup.svg" alt="Ligate Labs" width="220">
   </a>
 </p>
 
 <h1 align="center">Ligate Chain</h1>
 
 <p align="center">
-  <strong>The on-chain attestation protocol for AI.</strong><br>
-  A sovereign rollup on Celestia.
+  <strong>The permissionless on-chain attestation protocol.</strong><br>
+  A sovereign rollup on Celestia. AI provenance is the wedge use case, not the only one.
 </p>
 
 <p align="center">
@@ -72,7 +72,7 @@ The canonical specification is in [`docs/protocol/attestation-v0.md`](docs/proto
 
 ## What Ligate Chain is, and isn't
 
-Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The closer comparisons are Celestia, Hyperliquid, dYdX v4, or Cosmos app-chains: each chain has a narrow remit and is shaped around it. Our remit is on-chain attestation infrastructure for AI claims.
+Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The closer comparisons are Celestia, Hyperliquid, dYdX v4, or Cosmos app-chains: each chain has a narrow remit and is shaped around it. Our remit is on-chain attestation infrastructure — any cryptographically signed off-chain record, verifiable later by anyone, with the curated module set (tokens, NFTs, payments, identity, agents) layered around it. AI provenance is the highest-conviction wedge use case (via Themisra) but the protocol is domain-agnostic: anyone registers a schema and an attestor set, anyone submits attestations under it.
 
 **It is:**
 
@@ -87,7 +87,7 @@ Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contrac
 - An L2 in the Optimism / Arbitrum sense. We do not settle to Ethereum.
 - A general DeFi platform. The chain is shaped for attestation primitives plus a few sister modules. Lending, AMMs, perps, and similar live on chains designed for them.
 
-If you want to build a generalised dApp, this is the wrong chain. If you want verifiable on-chain receipts for AI activity at scale, this is the chain we are building for that.
+**What you can build on Ligate Chain today and through the v1 roadmap:** apps that register schemas and submit attestations (any domain — AI provenance, supply-chain, document notary, oracle data, governance receipts, KYC checkpoints, sensor logs, you name it); apps that issue fungible tokens or NFTs once `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) modules ship; apps that compose with payments, identity, agent registry, and disputes modules as those land. **What you can't build today:** anything requiring arbitrary smart-contract execution (no EVM in v0–v3; tracked as a v4 option in [#52](https://github.com/ligate-io/ligate-chain/issues/52)). For chain-shaped Web3 features through curated modules + a permissionless attestation primitive, this is the chain. For arbitrary Solidity/Rust contracts, an EVM L2 or Solana is the right place today.
 
 ## Architecture
 
