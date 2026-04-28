@@ -39,6 +39,21 @@ ignore = [
     # transitively bumps astral-tokio-tar to >= 0.6.0.
     "RUSTSEC-2026-0066",
 
+    # astral-tokio-tar 0.5.6, PAX header desynchronization. Same dep
+    # path as -0066 above (testcontainers -> astral-tokio-tar in the
+    # sov-test-utils dev-deps). Same threat-model justification: we
+    # never extract attacker-controlled tar archives. Solution per
+    # RUSTSEC: upgrade to >= 0.6.1; clears when SDK testcontainers
+    # bumps. Filed 2026-04-28.
+    "RUSTSEC-2026-0112",
+
+    # astral-tokio-tar 0.5.6, `unpack_in` can chmod arbitrary directories
+    # by following symlinks. Same dep path as -0066 / -0112. Same
+    # threat-model justification: not reachable from production code.
+    # Solution: upgrade to >= 0.6.1; clears when SDK testcontainers
+    # bumps. Filed 2026-04-28.
+    "RUSTSEC-2026-0113",
+
     # rsa 0.9.x Marvin attack (CVSS 5.9). Pulled by sqlx-mysql, which is
     # a transitive build-time dep of sov-db's optional sqlx integration.
     # No production code path uses MySQL or RSA decryption; the Marvin
