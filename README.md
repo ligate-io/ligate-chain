@@ -89,6 +89,80 @@ Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contrac
 
 If you want to build a generalised dApp, this is the wrong chain. If you want verifiable on-chain receipts for AI activity at scale, this is the chain we are building for that.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    User["Users / Apps<br/>(client SDK)"]
+    Celestia[("Celestia DA<br/>Mocha testnet")]
+
+    subgraph chain["Ligate Chain (Sovereign SDK rollup)"]
+        Sequencer["Sequencer<br/>tx ordering + batching"]
+        FullNode["Full Node<br/>cargo run --bin ligate-node"]
+        Prover["Risc0 Prover<br/>ZK state proofs"]
+    end
+
+    subgraph offchain["Off-chain attestor quorum (per schema)"]
+        Quorum["Quorum Service"]
+        Attestors["Attestor Nodes<br/>ed25519 signers"]
+    end
+
+    User -->|submit_tx| Sequencer
+    User -->|JSON-RPC query| FullNode
+    User -.->|attestation request| Quorum
+    Quorum --> Attestors
+    Attestors -.->|signed digests| Quorum
+    Quorum -.->|signed attestation| User
+
+    Sequencer -->|blob| Celestia
+    Celestia -->|blob stream| FullNode
+    Celestia -->|blob stream| Prover
+    Prover -.->|state proof| FullNode
+```
+
+### How nodes coordinate
+
+Ligate Chain is a **sovereign rollup**, not a peer-to-peer blockchain. Full nodes do not gossip with each other. Each node:
+
+1. Subscribes to a Celestia namespace and pulls the rollup's blobs as they appear.
+2. Independently runs the STF over each blob to derive the chain state.
+3. Serves JSON-RPC queries against its own derived state.
+
+Coordination happens through two places, **never through node-to-node messaging**:
+
+- **The sequencer** is the canonical entry point for transactions. Users submit transactions to its RPC; it batches them, picks an order, and posts the batch as a blob to Celestia. In v0, Ligate Labs runs the only sequencer; multi-sequencer (leader rotation, based-rollup) is a v1+ direction.
+- **Celestia** is the source of truth for inclusion and ordering. Every node sees the same blob stream and therefore reaches the same state. The chain's "consensus" is delegated to Celestia's DA + ordering — the rollup itself only enforces the STF. Disagreements about state are impossible if a node has correctly executed the STF over the same blobs.
+
+This is the standard rollup model. Same shape as every Sovereign SDK rollup, every modern Cosmos app-chain on Celestia (Stride, Dymension), and every Ethereum L2 (Optimism, Arbitrum, Base) — minus settlement back to Ethereum, since we are sovereign and don't post proofs to an L1.
+
+### Attestors are application-layer, not consensus
+
+Attestor nodes are **not** chain consensus participants. They sign attestation digests off-chain on behalf of a particular schema's quorum:
+
+1. The schema's off-chain **quorum service** (e.g. Themisra's attestor service for `themisra.proof-of-prompt/v1`) receives a sign request from the user.
+2. It produces a canonical digest and forwards it to each attestor node in its set.
+3. Each **attestor node** holds an ed25519 keypair, signs the digest, returns the signature.
+4. The quorum service collects the M-of-N signatures and hands the user a fully-signed attestation.
+5. The user's client SDK submits a `SubmitAttestation` transaction containing the signatures to the sequencer.
+6. The on-chain `attestation` module verifies the signatures match the schema's registered attestor set and writes the attestation to state.
+
+Each schema gets its own attestor set with its own threshold. Different schemas can share attestor pools, or each can run its own. The chain layer stays neutral; signing logic stays in product-specific quorum services.
+
+### What's centralised in v0, and what isn't
+
+For v0 devnet:
+
+| Layer | Status | Path to decentralise |
+|---|---|---|
+| Data availability | **Decentralised** via Celestia | Already there |
+| State verification | **Decentralised** — anyone runs `ligate-node` and re-derives | Already there |
+| Sequencer | **Centralised** (Ligate Labs) | v1+: leader rotation / shared sequencer |
+| Public RPC endpoint | **Centralised** (Ligate Labs hosted) | Anyone runs their own full node today; community RPCs over time |
+| Schema attestor sets | **Federated per-schema** (3–5 orgs each for first-party schemas) | Permissionless: any project registers its own |
+| Prover | **Centralised** (Ligate Labs) | v2: prover marketplace (#39) |
+
+The attestation primitive itself is permissionless from day one — anyone can register a new schema with a new attestor set without asking us. The infrastructure around it (sequencer, RPC, prover) decentralises over the v1 → v2 horizon.
+
 ## Workspace layout
 
 Cargo workspace (resolver 2). Members:
