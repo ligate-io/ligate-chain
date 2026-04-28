@@ -142,7 +142,11 @@ Issues, questions, and bug reports: [github.com/ligate-io/ligate-chain/issues](h
 
 Licensed under either of:
 
-- Apache License, Version 2.0
-- MIT License
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](LICENSE-APACHE) or <https://www.apache.org/licenses/LICENSE-2.0>)
+- MIT License ([`LICENSE-MIT`](LICENSE-MIT) or <https://opensource.org/licenses/MIT>)
 
-at your option. See the workspace manifest ([`Cargo.toml`](Cargo.toml)) for the canonical license declaration.
+at your option.
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this repository by you, as defined in the Apache-2.0 license, shall be dual-licensed as above, without any additional terms or conditions.
