@@ -1,6 +1,42 @@
-# Ligate Chain
+<p align="center">
+  <a href="https://ligate.io">
+    <img src="docs/assets/lockup.svg" alt="Ligate Labs" width="200">
+  </a>
+</p>
 
-Ligate Chain: the on-chain attestation protocol. A Sovereign SDK rollup on Celestia.
+<h1 align="center">Ligate Chain</h1>
+
+<p align="center">
+  <strong>The on-chain attestation protocol for AI.</strong><br>
+  A sovereign rollup on Celestia.
+</p>
+
+<p align="center">
+  <a href="https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml"><img src="https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg" alt="License: Apache-2.0 OR MIT"></a>
+  <a href="https://docs.ligate.io"><img src="https://img.shields.io/badge/docs-docs.ligate.io-A7D28C.svg" alt="Docs"></a>
+  <a href="#development-status"><img src="https://img.shields.io/badge/status-pre--devnet-E8833A.svg" alt="Pre-devnet"></a>
+</p>
+
+---
+
+## Quick start
+
+```bash
+# Clone
+git clone https://github.com/ligate-io/ligate-chain
+cd ligate-chain
+
+# Build the workspace (Rust 1.93 auto-installs via rust-toolchain.toml).
+# On Ubuntu / Debian first install: sudo apt install -y libclang-dev clang
+# On macOS first install: xcode-select --install
+cargo build --workspace
+
+# Run the full test suite
+cargo test --workspace --lib --tests
+```
+
+A public devnet is targeted for **Q2 2026**. Until then the protocol works end-to-end against a local Celestia mocha-testnet — see [`devnet/`](devnet) for the genesis configs and [`docs/development/devnet.md`](docs/development/devnet.md) for the operator runbook.
 
 ## What is this repo
 
