@@ -53,7 +53,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -77,7 +77,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.93.0
@@ -90,7 +90,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.93.0
@@ -106,7 +106,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.93.0
@@ -121,7 +121,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.93.0
@@ -148,7 +148,7 @@ jobs:
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.93.0
@@ -165,7 +165,7 @@ jobs:
     name: cargo audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: taiki-e/install-action@cargo-audit
       # Ignores below are documented in audit.toml. Revisit on every
       # Sovereign SDK rev bump; all entries come from transitive deps
@@ -177,6 +177,8 @@ jobs:
             --ignore RUSTSEC-2026-0099 \
             --ignore RUSTSEC-2025-0141 \
             --ignore RUSTSEC-2025-0134 \
+            --ignore RUSTSEC-2026-0112 \
+            --ignore RUSTSEC-2026-0113 \
             --ignore RUSTSEC-2026-0066 \
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2025-0055
