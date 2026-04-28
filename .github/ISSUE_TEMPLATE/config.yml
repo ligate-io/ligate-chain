@@ -1,0 +1,16 @@
+# Disables the "Open a blank issue" link so every new issue uses one of
+# the templates above. Keeps the queue actionable.
+blank_issues_enabled: false
+
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/ligate-io/ligate-chain/discussions
+    about: General questions, design discussions, and "how do I…" go in Discussions, not Issues. File an issue only when the answer requires a code change.
+
+  - name: Security vulnerability
+    url: https://github.com/ligate-io/ligate-chain/security/advisories/new
+    about: Do not file public issues for vulnerabilities. Open a private security advisory instead. See SECURITY.md for the full disclosure policy.
+
+  - name: Email the maintainers
+    url: mailto:hello@ligate.io
+    about: For anything that doesn't fit Discussions, a public issue, or a security advisory.
