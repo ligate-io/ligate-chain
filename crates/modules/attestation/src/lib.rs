@@ -41,8 +41,8 @@ use sha2::{Digest, Sha256};
 use sov_bank::{Amount, Bank, Coins, TokenId};
 use sov_modules_api::macros::{serialize, UniversalWallet};
 use sov_modules_api::{
-    Context, DaSpec, GenesisState, Module, ModuleId, ModuleInfo, SafeString, SafeVec, Spec,
-    StateMap, StateValue, TxState,
+    Context, DaSpec, GenesisState, Module, ModuleId, ModuleInfo, ModuleRestApi, SafeString,
+    SafeVec, Spec, StateMap, StateValue, TxState,
 };
 use thiserror::Error as ThisError;
 
@@ -439,7 +439,7 @@ pub enum CallMessage<S: Spec> {
 /// Call handlers and genesis config live in sibling issues; this struct
 /// exists to lock down the state layout that every other piece of the
 /// module keys off.
-#[derive(Clone, ModuleInfo)]
+#[derive(Clone, ModuleInfo, ModuleRestApi)]
 pub struct AttestationModule<S: Spec> {
     /// Module's own discriminant id. Filled by the SDK from the value
     /// keyed by `ATTESTATION_DISCRIMINANT` in `constants.toml` (21 in

@@ -1046,3 +1046,203 @@ fn submit_attestation_rejects_empty_signatures() {
         }),
     });
 }
+
+// ============================================================================
+// REST query API (GET /modules/attestation/...)
+// ============================================================================
+//
+// These exercise the routes wired up in `attestation::query` via the
+// SDK's `TestRunner::setup_rest_api_server`. The runtime auto-mounts
+// every module's `HasCustomRestApi` impl under `/modules/<name>/`, so
+// hitting `/modules/attestation/schemas/<id>` invokes the route in
+// `query.rs` against live runtime state.
+//
+// Each test follows the pattern:
+//   1. setup() + register attestor set + register schema (+ optionally
+//      submit attestation) via tx executions, exactly like the call-
+//      handler integration tests above.
+//   2. setup_rest_api_server().await to start an axum server on a
+//      random port and obtain a reqwest::Client.
+//   3. query_api_response::<T>(path, client).await for the typed body,
+//      or query_api(...) when we want to inspect the HTTP status code
+//      directly (the 404 / 400 cases).
+
+use attestation::{AttestationResponse, AttestorSetResponse, SchemaResponse};
+use sov_test_utils::runtime::ApiPath;
+
+/// Path builder that produces `/modules/attestation/<suffix>` matching
+/// the routes mounted by `HasCustomRestApi` for the attestation module.
+fn attestation_api_path(suffix: &str) -> ApiPath {
+    ApiPath::query_module("attestation").with_custom_api_path(suffix)
+}
+
+/// Pre-stage state that the query-route tests need: an attestor set, a
+/// schema registered against it, and (for the attestation case) one
+/// submitted attestation. Returns the ids the tests assert against.
+struct StagedQueryState {
+    attestor_set_id: attestation::AttestorSetId,
+    schema_id: attestation::SchemaId,
+    submitter_addr: <S as sov_modules_api::Spec>::Address,
+    payload_hash: attestation::PayloadHash,
+}
+
+fn stage_query_state(env: &mut TestEnv, signers: &[SigningKey; 3]) -> StagedQueryState {
+    let submitter_addr = env.submitter.address();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterAttestorSet { members: safe_members(signers), threshold: 2 },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let attestor_set_id = AttestorSet::derive_id(&pubkeys_of(signers), 2);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("themisra.proof-of-prompt"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "themisra.proof-of-prompt", 1);
+
+    let payload_hash = attestation::PayloadHash::from([0x42u8; 32]);
+    let digest = attestation::SignedAttestationPayload::<S> {
+        schema_id,
+        payload_hash,
+        submitter: submitter_addr,
+        timestamp: 0,
+    }
+    .digest();
+    let sig_vec: Vec<AttestorSignature> = signers[..2]
+        .iter()
+        .map(|sk| AttestorSignature {
+            pubkey: PubKey::from(sk.verifying_key().to_bytes()),
+            sig: SafeVec::<u8, MAX_ATTESTOR_SIGNATURE_BYTES>::try_from(
+                sk.sign(&digest).to_bytes().to_vec(),
+            )
+            .unwrap(),
+        })
+        .collect();
+    let signatures =
+        SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(sig_vec).unwrap();
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+
+    StagedQueryState { attestor_set_id, schema_id, submitter_addr, payload_hash }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn query_get_schema_returns_registered_schema() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let staged = stage_query_state(&mut env, &signers);
+
+    let client = env.runner.setup_rest_api_server().await;
+    let resp: SchemaResponse<S> = env
+        .runner
+        .query_api_response(
+            &attestation_api_path(&format!("schemas/{}", staged.schema_id)),
+            &client,
+        )
+        .await;
+
+    assert_eq!(resp.schema.owner, staged.submitter_addr);
+    assert_eq!(resp.schema.name.as_str(), "themisra.proof-of-prompt");
+    assert_eq!(resp.schema.version, 1);
+    assert_eq!(resp.schema.attestor_set, staged.attestor_set_id);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn query_get_attestor_set_returns_registered_set() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let staged = stage_query_state(&mut env, &signers);
+
+    let client = env.runner.setup_rest_api_server().await;
+    let resp: AttestorSetResponse = env
+        .runner
+        .query_api_response(
+            &attestation_api_path(&format!("attestor-sets/{}", staged.attestor_set_id)),
+            &client,
+        )
+        .await;
+
+    assert_eq!(resp.attestor_set.threshold, 2);
+    // The module sorts members at registration time so the
+    // AttestorSetId derivation is deterministic. Compare as sorted
+    // sets rather than ordered slices.
+    let mut got: Vec<PubKey> = resp.attestor_set.members.as_slice().to_vec();
+    got.sort_by_key(|pk| *pk.as_bytes());
+    let mut expected = pubkeys_of(&signers);
+    expected.sort_by_key(|pk| *pk.as_bytes());
+    assert_eq!(got, expected);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn query_get_attestation_returns_submitted_attestation() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let signers = sample_signers();
+    let staged = stage_query_state(&mut env, &signers);
+
+    let attestation_id =
+        attestation::AttestationId::from_pair(&staged.schema_id, &staged.payload_hash);
+
+    let client = env.runner.setup_rest_api_server().await;
+    let resp: AttestationResponse<S> = env
+        .runner
+        .query_api_response(
+            &attestation_api_path(&format!("attestations/{attestation_id}")),
+            &client,
+        )
+        .await;
+
+    assert_eq!(resp.attestation.schema_id, staged.schema_id);
+    assert_eq!(resp.attestation.payload_hash, staged.payload_hash);
+    assert_eq!(resp.attestation.submitter, staged.submitter_addr);
+    assert_eq!(resp.attestation.signatures.as_slice().len(), 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn query_get_schema_returns_404_for_unknown_id() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let client = env.runner.setup_rest_api_server().await;
+
+    // Well-formed Bech32 with the right HRP, but no schema with this id
+    // exists in state. Construct deterministically to avoid relying on
+    // a random pick that might collide with a registered schema.
+    let unknown_schema_id = attestation::SchemaId::from([0xAAu8; 32]);
+
+    let resp = env
+        .runner
+        .query_api(
+            &attestation_api_path(&format!("schemas/{unknown_schema_id}")),
+            &client,
+        )
+        .await;
+
+    assert_eq!(resp.status().as_u16(), 404);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn query_get_schema_returns_400_for_invalid_bech32() {
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+    let client = env.runner.setup_rest_api_server().await;
+
+    // Garbage path segment. Not a valid Bech32 string.
+    let resp = env
+        .runner
+        .query_api(&attestation_api_path("schemas/not-a-valid-id"), &client)
+        .await;
+
+    assert_eq!(resp.status().as_u16(), 400);
+}
