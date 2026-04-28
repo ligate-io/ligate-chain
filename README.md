@@ -248,6 +248,7 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 - Fees: real `$LGT` transfers through `sov-bank`, with up to 50% of attestation fees routable to the schema owner.
 - Genesis: checked-in devnet config (bank, attestation, attester incentives, prover incentives, sequencer registry, operator incentives).
 - Addresses: `lig1` accounts, `lpk1` pubkeys, `lsc1` schema IDs, `las1` attestor set IDs, `lph1` payload hashes (Bech32m).
+- Chain id ladder (Cosmos-style strings): `ligate-localnet` (single-node local dev), `ligate-devnet-1` (public devnet), `ligate-testnet-1` (later), `ligate-1` (mainnet). Trailing number bumps only on state-breaking restarts. Spec section [`Chain id`](docs/protocol/attestation-v0.md#chain-id).
 
 Open work items toward public devnet: explorer, faucet, hosted RPC endpoint, EVM authenticator ([#72](https://github.com/ligate-io/ligate-chain/issues/72)), and the v1 staking and disputes modules. Current tracked work lives in the [GitHub issues](https://github.com/ligate-io/ligate-chain/issues).
 

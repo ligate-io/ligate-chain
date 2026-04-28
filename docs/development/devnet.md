@@ -14,6 +14,13 @@ first.
 
 Ligate Chain v0 devnet is a **federated attestation testnet**:
 
+- **Chain id**: `ligate-devnet-1`. The trailing number bumps only on a
+  state-breaking restart (full reset, new genesis); soft upgrades via
+  the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42))
+  keep the same id. Full ladder (`ligate-localnet` / `ligate-devnet-1` /
+  `ligate-testnet-1` / `ligate-1`) is locked in
+  [the protocol spec](../protocol/attestation-v0.md#chain-id) per
+  [#54](https://github.com/ligate-io/ligate-chain/issues/54).
 - 3 to 5 attestor organisations, each running one attestor node, each holding
   an independently generated ed25519 keypair. (Ligate Chain accepts only
   ed25519 signatures today — see
