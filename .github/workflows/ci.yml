@@ -157,6 +157,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --workspace --no-deps --document-private-items
 
+  # Cheap belt-and-braces check that the DA-agnostic crates haven't
+  # accidentally picked up a hard dependency on Celestia. The SDK's
+  # type discipline already keeps `crates/stf/`, `crates/modules/`,
+  # `crates/stf-declaration/`, and `crates/client-rs/` generic over
+  # the DA spec, but a stray `use sov_celestia_adapter::*` would still
+  # compile silently. This grep guard catches drift at PR time.
+  #
+  # Tracking issue: #117 (DA-agnostic by construction).
+  da-isolation:
+    name: DA isolation
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: ./scripts/check-da-isolation.sh
+
   # `cargo audit` runs on every PR including docs-only changes.
   # New RUSTSEC advisories can appear at any time independent of the
   # diff, and we want every PR to be a checkpoint for security
@@ -194,7 +211,7 @@ jobs:
   ci-pass:
     name: CI pass
     if: always()
-    needs: [changes, fmt, clippy, check, test, doc, audit]
+    needs: [changes, fmt, clippy, check, test, doc, da-isolation, audit]
     runs-on: ubuntu-latest
     steps:
       - name: Verify required checks
@@ -206,6 +223,7 @@ jobs:
           CHECK_RESULT: ${{ needs.check.result }}
           TEST_RESULT: ${{ needs.test.result }}
           DOC_RESULT: ${{ needs.doc.result }}
+          DA_ISOLATION_RESULT: ${{ needs.da-isolation.result }}
         run: |
           set -euo pipefail
           fail=0
@@ -219,7 +237,7 @@ jobs:
           # Docs-only change: code-checking jobs are correctly skipped.
           # Otherwise: every code-checking job must succeed.
           if [[ "$CODE_CHANGED" == "true" ]]; then
-            for var in FMT_RESULT CLIPPY_RESULT CHECK_RESULT TEST_RESULT DOC_RESULT; do
+            for var in FMT_RESULT CLIPPY_RESULT CHECK_RESULT TEST_RESULT DOC_RESULT DA_ISOLATION_RESULT; do
               result="${!var}"
               if [[ "$result" != "success" ]]; then
                 echo "::error::${var,,}: $result"
