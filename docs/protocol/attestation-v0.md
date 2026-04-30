@@ -139,15 +139,37 @@ enum CallMessage {
 
 ## Query RPC (read path)
 
+The chain's REST API is **point lookups only by design**. Three endpoints, all single-key:
+
 ```
-get_schema(schema_id)                       -> Option<Schema>
-get_attestor_set(set_id)                    -> Option<AttestorSet>
-get_attestation(schema_id, payload_hash)    -> Option<Attestation>
-list_attestations_by_schema(schema_id, pagination)  -> Vec<AttestationKey>
-list_schemas_by_owner(owner, pagination)    -> Vec<SchemaId>
+GET /modules/attestation/schemas/{schema_id}                       -> Schema | 404
+GET /modules/attestation/attestor-sets/{attestor_set_id}           -> AttestorSet | 404
+GET /modules/attestation/attestations/{schema_id}:{payload_hash}   -> Attestation | 404
 ```
 
-No transactions. No state changes. Cheap to serve from indexed node.
+Wired in [PR #93](https://github.com/ligate-io/ligate-chain/pull/93) (closes the read-side of [#21](https://github.com/ligate-io/ligate-chain/issues/21)). 400 on malformed Bech32, 404 on missing key, 200 with typed JSON body otherwise.
+
+### What's deliberately not here
+
+List, range, time-bucketed, by-submitter, aggregation, top-N, search, full-text — none of those are on the chain. Three reasons:
+
+1. **The chain's data is keyed for verification, not for search.** Every node would have to scan the full attestations map to satisfy a `list_by_schema` query, which is microseconds at v0 devnet volume and minutes at production volume. Pushing search work into the consensus path makes every node pay for every random user's query.
+2. **Adding a secondary index is a hard fork.** A `StateMap<SchemaId, _>` populated on the write path would change the on-chain state shape — see [`docs/protocol/upgrades.md`](upgrades.md) for what counts as a hard fork. We don't want speculative hard forks for query patterns that have a better home elsewhere.
+3. **There's a better home.** Range / list / aggregation queries belong in a separate **indexer service** ([#91](https://github.com/ligate-io/ligate-chain/issues/91)) that reads the chain's REST + WebSocket surface and writes into a real database (Postgres). Standard pattern across every mature chain — Cosmos has Numia / SubQuery / Mintscan, Ethereum has The Graph / Goldsky / Alchemy, Solana has Helius / Triton, Aptos / Sui ship official indexers alongside their validators. The chain stays narrow and fast; the indexer absorbs query-pattern complexity.
+
+If a future query pattern can be answered with a single direct lookup against existing state (e.g. `get_schema_owner_count` derived as a counter on the schema entry), it's fair game for the chain. If it requires scanning, sorting, joining, or windowing, it belongs in the indexer — full stop.
+
+### What lives in the indexer instead
+
+Tracked in [#91](https://github.com/ligate-io/ligate-chain/issues/91), shipping pre-public-devnet alongside the explorer ([#80](https://github.com/ligate-io/ligate-chain/issues/80)):
+
+- `list_attestations_by_schema(schema_id, from?, to?, page, limit)` — the canonical example
+- `list_schemas_by_owner(owner_address, page, limit)`
+- `list_attestations_by_submitter(address, page, limit)`
+- Time-range queries, top-N stats, full-text search
+- WebSocket subscriptions for live events ([#92](https://github.com/ligate-io/ligate-chain/issues/92))
+
+These read the chain's point-lookup REST + the future event firehose; they do not require any chain-side change. The boundary holds.
 
 ---
 
