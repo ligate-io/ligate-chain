@@ -117,6 +117,68 @@ The upgrade module is the v1 path forward. Until it lands, hard forks are the pr
 
 ---
 
+## Roadmap: bringing researched primitives to the chain
+
+Ligate maintains a public research repository at [`ligate-research`](https://github.com/ligate-io/ligate-research) where protocol-level primitives are designed in working-paper form before they land in the chain. This section maps each planned primitive to the chain-side mechanism that brings it in, and explains the staging logic that makes the rollout tractable.
+
+### The two-flavor pattern
+
+Adding a researched primitive to the chain is operationally one of two things, depending on where we are in the chain-id ladder:
+
+- **Pre-mainnet (now through v2):** new primitive ships as a new module in the runtime composition, paired with a chain-id bump. Fresh genesis, no state migration, operators redeploy. This is the easy case and we use it freely.
+- **Post-mainnet (v3+):** new primitive must either be baked into mainnet from genesis, or scheduled via the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42)) at a coordinated block height. The latter is real work and is reserved for things we genuinely could not anticipate at mainnet launch.
+
+The strategic implication: **bake every known primitive into mainnet from day 1.** Use chain-id bumps freely while pre-mainnet to integrate primitives as their research papers stabilize. Reserve post-mainnet upgrades for unknown future work.
+
+### Planned primitives and where they land
+
+| Paper | Lands in | Mechanism | Chain-id transition |
+|---|---|---|---|
+| **PoUA** (consensus weighting) | v3 mainnet from genesis | Module + warmup-then-activation soft fork | `ligate-testnet-1` → `ligate-1` |
+| **Native delegation** (Iris foundation) | v0.5 module | Chain-id bump | `ligate-devnet-1` → `ligate-devnet-2` |
+| **Per-schema fee markets** | v1 module | Chain-id bump | `ligate-devnet-2` → `ligate-testnet-1` |
+| **Cross-schema composition** | Post-mainnet, demand-driven | Upgrade module ceremony | Within `ligate-1` |
+| **Time-locked / commit-reveal attestations** | Post-mainnet, demand-driven | Upgrade module ceremony | Within `ligate-1` |
+
+The first three land pre-mainnet. By the time `ligate-1` mainnet starts producing blocks, the runtime composition includes the `reputation` module (PoUA), the `delegation` module, and the per-schema fee market machinery. None of these require a post-mainnet hard fork because they're already in the genesis-time runtime.
+
+The last two are reserved for post-mainnet only if a real use case emerges. Cross-schema composition needs partner demand we have not yet collected. Time-locked attestations are niche enough that we should not pre-commit runtime real estate for them.
+
+### PoUA specifically: how it activates without a hard fork
+
+PoUA is the most subtle of the planned primitives because it changes consensus weighting, which would normally be a hard-fork-class change. The design avoids that:
+
+1. **Mainnet genesis includes the `reputation` module** with its full state, update worker, REST endpoints, and slashing logic.
+2. **Mainnet starts in warmup**: validators run with `weight = stake` (legacy stake-only PoS) for the first $T_{\text{warmup}}$ epochs (recommended 14 epochs, ≈2.3 days). Reputation accumulates per the §4.3 update function but does not enter vote weight.
+3. **Activation is a single governance transaction** at the end of warmup, flipping a `reputation_active: bool` flag in module state from `false` to `true`.
+4. **At the next block boundary after activation**, every validator computes `weight = stake × reputation` and the BFT vote tally uses the new weighting.
+
+This is a soft fork class change because the activation does not change wire format, signature shape, or runtime composition. It changes a single state value. The flag-flip mechanism is the same one used for any governance-controlled boolean parameter.
+
+The economic activation timing matters: validators present at warmup-end carry their accumulated reputation into the post-warmup phase. Validators who join after warmup begin at $r_{\min}$. This gives a ~2-3 day window during which reputation distributions are forming under uniform conditions, with no opportunity for early-arrivals to lock in disproportionate consensus power before the rest of the field has caught up.
+
+Full mechanism specification is in the [PoUA working paper §4.6 and §7.4](https://github.com/ligate-io/ligate-research/blob/main/papers/poua/poua.pdf).
+
+### What if we want a primitive we did not anticipate?
+
+The post-mainnet path uses the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42)). The mechanics, in the order they happen:
+
+1. **Engineering**: implement the new module on a testnet branch. Run for ≥2 months on a parallel testnet to surface bugs before mainnet exposure.
+2. **Governance**: file a proposal with the new module's code reference, the activation block height, and the migration story (if any state migrates).
+3. **Validator binary distribution**: every node operator pulls the new binary and loads it before the activation block. The upgrade module enforces this at the binary level: an unupgraded node will fail to apply blocks past the activation height and will self-halt.
+4. **Migration**: any new state fields get default values via the genesis-config-style hooks we already use for module initialization. Existing state is untouched.
+5. **Activation**: at block N, the new module's logic kicks in. No state break, no chain-id change.
+
+This is tractable but expensive — multi-month coordination, ecosystem-wide tooling updates (wallets, indexers, explorers all need awareness of the new module's events). Cosmos chains do this 2-3 times per year at maturity. Plan for that cadence post-mainnet.
+
+### Why this discipline matters
+
+A chain that adds primitives post-mainnet via routine hard forks accumulates two costs over time. The first is coordination overhead: every ecosystem participant has to track upgrade schedules. The second is fragmentation: validators that don't upgrade lag the network; wallets that don't upgrade misrepresent state to users.
+
+The strategy of "bake known primitives into mainnet from day 1" trades pre-mainnet engineering effort for post-mainnet operational simplicity. We do more work in the v0-v2 phase, ship a richer mainnet, and minimize the rate at which the ecosystem has to absorb breaking changes once real value flows.
+
+---
+
 ## Coordination with Celestia DA
 
 We use Celestia for data availability. Celestia upgrades on its own cadence; we are a consumer.
