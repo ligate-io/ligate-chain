@@ -84,12 +84,43 @@ fn setup_with_initial(
         attestor_set_fee,
         initial_attestor_sets,
         initial_schemas: vec![],
+        max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
     };
 
     let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), attestation_config);
 
     let runner = TestRunner::new_with_genesis(genesis.into_genesis_params(), RT::default());
 
+    TestEnv { runner, submitter, treasury, lgt_token_id }
+}
+
+/// Like [`setup_with_initial`] but lets the test override the
+/// genesis-time `max_builder_bps` cap. Used by the cap-related tests
+/// that exercise a non-default state value. Fees are zero so the cap
+/// is the only behaviour under test.
+fn setup_with_cap(initial_attestor_sets: Vec<InitialAttestorSet>, max_builder_bps: u16) -> TestEnv {
+    let genesis_config =
+        HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(2);
+
+    let submitter = genesis_config.additional_accounts()[0].clone();
+    let treasury_user = genesis_config.additional_accounts()[1].clone();
+    let treasury = treasury_user.address();
+
+    let lgt_token_id = config_gas_token_id();
+
+    let attestation_config = AttestationConfig::<S> {
+        treasury,
+        lgt_token_id,
+        attestation_fee: Amount::ZERO,
+        schema_registration_fee: Amount::ZERO,
+        attestor_set_fee: Amount::ZERO,
+        initial_attestor_sets,
+        initial_schemas: vec![],
+        max_builder_bps,
+    };
+
+    let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), attestation_config);
+    let runner = TestRunner::new_with_genesis(genesis.into_genesis_params(), RT::default());
     TestEnv { runner, submitter, treasury, lgt_token_id }
 }
 
@@ -240,7 +271,88 @@ fn register_schema_rejects_over_cap_fee_routing() {
                 name: safe_name("over-cap"),
                 version: 1,
                 attestor_set: attestor_set_id,
-                fee_routing_bps: 6000, // > MAX_BUILDER_BPS (5000)
+                fee_routing_bps: 6000, // > DEFAULT_MAX_BUILDER_BPS (5000)
+                fee_routing_addr: Some(env.submitter.address()),
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+        }),
+    });
+}
+
+#[test]
+fn register_schema_accepts_bps_at_default_cap() {
+    // The default genesis config sets `max_builder_bps` to
+    // `DEFAULT_MAX_BUILDER_BPS` (5000). A schema with bps exactly
+    // equal to the cap is allowed (the comparison is strict-greater).
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("at-default-cap"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
+                fee_routing_addr: Some(env.submitter.address()),
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Successful(_)));
+        }),
+    });
+}
+
+#[test]
+fn register_schema_honours_custom_cap_at_genesis() {
+    // Genesis sets max_builder_bps to 3000. A schema with bps 2999
+    // succeeds: the handler reads the cap from state, not from the
+    // const default (5000).
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_cap(initial, 3000);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("under-custom-cap"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 2999,
+                fee_routing_addr: Some(env.submitter.address()),
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert!(matches!(result.tx_receipt, TxEffect::Successful(_)));
+        }),
+    });
+}
+
+#[test]
+fn register_schema_rejects_above_custom_cap() {
+    // Genesis sets max_builder_bps to 3000. A schema with bps 3001
+    // fails: the handler must read from state, not the const default
+    // (which would let 3001 through since 3001 < 5000).
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_cap(initial, 3000);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("over-custom-cap"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 3001,
                 fee_routing_addr: Some(env.submitter.address()),
             },
         ),

@@ -400,7 +400,7 @@ pub enum CallMessage<S: Spec> {
     /// Costs `SCHEMA_REGISTRATION_FEE` $LGT (governance, default 100 $LGT).
     /// Owner is the transaction submitter. `attestor_set` must reference
     /// an already-registered [`AttestorSet`]. `fee_routing_bps` must be
-    /// ≤ `MAX_BUILDER_BPS` (5000 in v0). `fee_routing_addr` must be
+    /// ≤ `DEFAULT_MAX_BUILDER_BPS` (5000 in v0). `fee_routing_addr` must be
     /// `Some` iff `fee_routing_bps > 0`.
     RegisterSchema {
         /// See [`Schema::name`]. Bounded by [`SafeString`]'s default
@@ -526,13 +526,35 @@ pub struct AttestationModule<S: Spec> {
     /// as [`AttestationModule::total_treasury_collected`].
     #[state]
     pub builder_fees_collected: StateMap<S::Address, Amount>,
+
+    /// Maximum `fee_routing_bps` accepted at schema registration.
+    ///
+    /// Set at genesis from [`AttestationConfig::max_builder_bps`], default
+    /// [`DEFAULT_MAX_BUILDER_BPS`] (5000 = 50%). Stored in state so the
+    /// future governance module ([#41](https://github.com/ligate-io/ligate-chain/issues/41))
+    /// can update it via a tx without a hard fork.
+    ///
+    /// Handlers (`handle_register_schema`, `seed_from_config`) read from
+    /// state and fall back to [`DEFAULT_MAX_BUILDER_BPS`] if the value is
+    /// not yet set. The fallback is defensive against state corruption or
+    /// mid-upgrade reads, never a normal operating path.
+    #[state]
+    pub max_builder_bps: StateValue<u16>,
 }
 
 // ----- Protocol constants -----------------------------------------------------
 
-/// Maximum `fee_routing_bps` accepted at schema registration (5000 = 50%).
-/// Governance-adjustable in v1+; hardcoded for v0.
-pub const MAX_BUILDER_BPS: u16 = 5000;
+/// Default maximum `fee_routing_bps` accepted at schema registration
+/// (5000 = 50%). Genesis configs that omit
+/// [`AttestationConfig::max_builder_bps`] fall back to this value.
+///
+/// The runtime cap lives in
+/// [`AttestationModule::max_builder_bps`] state and is governance-tunable
+/// via the future governance module
+/// ([#41](https://github.com/ligate-io/ligate-chain/issues/41)). This
+/// const is kept as the fallback for defensive reads (state-corruption,
+/// mid-upgrade) and the genesis-config default.
+pub const DEFAULT_MAX_BUILDER_BPS: u16 = 5000;
 
 /// Default attestation fee in $LGT, in the chain's smallest unit.
 /// Placeholder constant. Real fee sizing is a governance parameter set
@@ -574,7 +596,7 @@ pub struct InitialAttestorSet {
 /// Validated with the same rules as [`CallMessage::RegisterSchema`]: the
 /// referenced attestor set must be known (either declared in
 /// [`AttestationConfig::initial_attestor_sets`] or registered earlier in
-/// the genesis flow), `fee_routing_bps <= MAX_BUILDER_BPS`, and the
+/// the genesis flow), `fee_routing_bps <= DEFAULT_MAX_BUILDER_BPS`, and the
 /// address / bps orphan check. `owner` is supplied explicitly at genesis
 /// because there is no transaction sender at that point.
 #[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
@@ -588,7 +610,7 @@ pub struct InitialSchema<S: Spec> {
     pub version: u32,
     /// [`AttestorSetId`] the schema binds to.
     pub attestor_set: AttestorSetId,
-    /// Fee routing basis points (`0..=MAX_BUILDER_BPS`).
+    /// Fee routing basis points (`0..=DEFAULT_MAX_BUILDER_BPS`).
     pub fee_routing_bps: u16,
     /// Fee routing address; required iff `fee_routing_bps > 0`.
     pub fee_routing_addr: Option<S::Address>,
@@ -628,6 +650,17 @@ pub struct AttestationConfig<S: Spec> {
     /// in `initial_attestor_sets` above, or by a previous `InitialSchema`
     /// bootstrap pass, though the latter is not supported today).
     pub initial_schemas: Vec<InitialSchema<S>>,
+    /// Maximum `fee_routing_bps` accepted at schema registration.
+    /// Default [`DEFAULT_MAX_BUILDER_BPS`] (5000 = 50%) preserves v0
+    /// behaviour. Stored in state at genesis so the governance module
+    /// ([#41](https://github.com/ligate-io/ligate-chain/issues/41)) can
+    /// raise or lower it later without a hard fork.
+    #[serde(default = "default_max_builder_bps")]
+    pub max_builder_bps: u16,
+}
+
+fn default_max_builder_bps() -> u16 {
+    DEFAULT_MAX_BUILDER_BPS
 }
 
 // ============================================================================
@@ -672,7 +705,7 @@ pub enum AttestationError {
     #[error("schema references an unregistered attestor set")]
     UnknownAttestorSet,
 
-    /// `fee_routing_bps` exceeded the protocol cap [`MAX_BUILDER_BPS`].
+    /// `fee_routing_bps` exceeded the protocol cap [`DEFAULT_MAX_BUILDER_BPS`].
     #[error("fee routing bps ({bps}) exceeds protocol cap ({cap})")]
     FeeRoutingExceedsCap {
         /// Supplied basis points.
@@ -851,6 +884,7 @@ impl<S: Spec> AttestationModule<S> {
         self.attestation_fee.set(&config.attestation_fee, state)?;
         self.schema_registration_fee.set(&config.schema_registration_fee, state)?;
         self.attestor_set_fee.set(&config.attestor_set_fee, state)?;
+        self.max_builder_bps.set(&config.max_builder_bps, state)?;
 
         for initial in &config.initial_attestor_sets {
             if initial.members.is_empty() {
@@ -882,10 +916,10 @@ impl<S: Spec> AttestationModule<S> {
         }
 
         for schema in &config.initial_schemas {
-            if schema.fee_routing_bps > MAX_BUILDER_BPS {
+            if schema.fee_routing_bps > config.max_builder_bps {
                 return Err(AttestationError::FeeRoutingExceedsCap {
                     bps: schema.fee_routing_bps,
-                    cap: MAX_BUILDER_BPS,
+                    cap: config.max_builder_bps,
                 }
                 .into());
             }
@@ -972,12 +1006,12 @@ impl<S: Spec> AttestationModule<S> {
         context: &Context<S>,
         state: &mut impl TxState<S>,
     ) -> anyhow::Result<()> {
-        if fee_routing_bps > MAX_BUILDER_BPS {
-            return Err(AttestationError::FeeRoutingExceedsCap {
-                bps: fee_routing_bps,
-                cap: MAX_BUILDER_BPS,
-            }
-            .into());
+        // Read the cap from state, falling back to the const default if
+        // unset. Defensive against state-corruption / mid-upgrade reads;
+        // post-genesis the value is always present.
+        let cap = self.max_builder_bps.get(state)?.unwrap_or(DEFAULT_MAX_BUILDER_BPS);
+        if fee_routing_bps > cap {
+            return Err(AttestationError::FeeRoutingExceedsCap { bps: fee_routing_bps, cap }.into());
         }
         if (fee_routing_bps > 0) != fee_routing_addr.is_some() {
             return Err(AttestationError::OrphanFeeRouting.into());
@@ -1170,7 +1204,7 @@ impl<S: Spec> AttestationModule<S> {
 }
 
 /// Split an attestation fee into `(builder_share, treasury_share)` per
-/// `fee_routing_bps` (basis points, capped at [`MAX_BUILDER_BPS`]).
+/// `fee_routing_bps` (basis points, capped at [`DEFAULT_MAX_BUILDER_BPS`]).
 ///
 /// `Amount` is a `u128` newtype. The intermediate split is computed as
 /// `total / 10_000 * bps + (total % 10_000) * bps / 10_000` to keep the

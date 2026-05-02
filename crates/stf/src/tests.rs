@@ -100,6 +100,7 @@ mod genesis_loader {
             attestor_set_fee: Amount(0),
             initial_attestor_sets: vec![],
             initial_schemas: vec![],
+            max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
         };
 
         GenesisConfig::<S> {
