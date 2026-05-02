@@ -14,6 +14,13 @@ pub mod genesis_config;
 pub mod runtime;
 mod runtime_capabilities;
 
+/// Test-only trait impls for the production runtime, gated behind
+/// the `test-utils` cargo feature so they don't ship in production
+/// builds. Lets external integration tests drive the runtime through
+/// the SDK's `TestRunner`. See the module's own docs for context.
+#[cfg(feature = "test-utils")]
+pub mod test_utils;
+
 #[cfg(test)]
 mod tests;
 
