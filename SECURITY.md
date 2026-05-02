@@ -10,6 +10,10 @@ This policy applies to **`ligate-io/ligate-chain`**. Product applications
 (Themisra, Iris, Mneme) live in separate repositories; each carries its own
 SECURITY.md that takes precedence for issues scoped to that product.
 
+For the current attacker model, the v0 protections in place, and what is
+deliberately not modeled yet, see
+[`docs/protocol/threat-model.md`](docs/protocol/threat-model.md).
+
 ## Where to report
 
 **Use GitHub Private Security Advisories — preferred channel.**

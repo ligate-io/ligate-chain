@@ -181,6 +181,7 @@ Protocol docs:
 - [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md): attestation protocol specification v0.
 - [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md): how Ligate addresses (`lig1…`) work, why MetaMask doesn't sign for the chain today, and what changes when EVM auth ([#72](https://github.com/ligate-io/ligate-chain/issues/72)) lands.
 - [`docs/protocol/rest-api.md`](docs/protocol/rest-api.md): full reference for every REST endpoint exposed by `ligate-node`.
+- [`docs/protocol/threat-model.md`](docs/protocol/threat-model.md): v0 attacker model, mitigations, and what is deliberately out of scope.
 
 ## Build and test
 
