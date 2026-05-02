@@ -86,8 +86,8 @@ use thiserror::Error as ThisError;
 pub use attestation::{
     Attestation, AttestationConfig, AttestationId, AttestorSet, AttestorSetId, AttestorSignature,
     CallMessage, Hash32, PayloadHash, PubKey, Schema, SchemaId, SignedAttestationPayload,
-    MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS, MAX_ATTESTOR_SIGNATURE_BYTES,
-    MAX_BUILDER_BPS,
+    DEFAULT_MAX_BUILDER_BPS, MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS,
+    MAX_ATTESTOR_SIGNATURE_BYTES,
 };
 
 // ----- Errors -----------------------------------------------------------------
@@ -157,8 +157,9 @@ pub fn register_attestor_set<S: Spec>(
 /// Build a [`CallMessage::RegisterSchema`].
 ///
 /// `fee_routing_addr` must be `Some` iff `fee_routing_bps > 0`, and
-/// `fee_routing_bps` must be `<= attestation::MAX_BUILDER_BPS` (5000
-/// in v0). The state transition enforces these invariants; this
+/// `fee_routing_bps` must be `<= attestation::DEFAULT_MAX_BUILDER_BPS`
+/// (5000 in v0; the runtime cap lives in module state and is
+/// governance-tunable). The state transition enforces these invariants; this
 /// builder is a thin typed wrapper around the enum variant. Returns
 /// [`ClientError::SchemaNameOverCap`] if `name` exceeds the
 /// `SafeString` default cap.

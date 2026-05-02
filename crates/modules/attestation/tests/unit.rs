@@ -9,7 +9,7 @@
 //!   matter for sets; threshold / version / owner / name all
 //!   participate).
 //! - `SignedAttestationPayload::digest` determinism.
-//! - `MAX_BUILDER_BPS` cap.
+//! - `DEFAULT_MAX_BUILDER_BPS` cap.
 //! - `split_attestation_fee` math at zero, mid, cap, and overflow-
 //!   adjacent inputs.
 //!
@@ -215,6 +215,7 @@ fn attestation_config_json_round_trip() {
             fee_routing_bps: 1000,
             fee_routing_addr: Some(sample_addr(5)),
         }],
+        max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
     };
     let json = serde_json::to_string(&cfg).expect("encode");
     let decoded: AttestationConfig<S> = serde_json::from_str(&json).expect("decode");
@@ -356,10 +357,13 @@ fn signed_payload_digest_changes_with_submitter() {
 // ----- Protocol constants ----------------------------------------------------
 
 #[test]
-fn max_builder_bps_is_half() {
-    // Documenting the invariant explicitly so a future refactor
-    // doesn't silently raise the cap without thought.
-    assert_eq!(attestation::MAX_BUILDER_BPS, 5000);
+fn default_max_builder_bps_is_half() {
+    // Documenting the default invariant explicitly so a future refactor
+    // doesn't silently raise the const default without thought. The
+    // runtime cap lives in module state (governance-tunable per #40);
+    // this asserts the bootstrap default for genesis configs that
+    // omit `AttestationConfig::max_builder_bps`.
+    assert_eq!(attestation::DEFAULT_MAX_BUILDER_BPS, 5000);
 }
 
 // Compile-time assertion: ed25519 (64 bytes) and BLS (48 bytes)

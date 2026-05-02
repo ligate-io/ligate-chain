@@ -5,5 +5,6 @@
   "schema_registration_fee": "100000000",
   "attestor_set_fee": "50000000",
   "initial_attestor_sets": [],
-  "initial_schemas": []
+  "initial_schemas": [],
+  "max_builder_bps": 5000
 }

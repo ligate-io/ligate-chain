@@ -123,6 +123,7 @@ fn setup_with_seeded_state() -> StagedGenesis {
             fee_routing_bps: 0,
             fee_routing_addr: None,
         }],
+        max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
     };
 
     let minimal: MinimalOptimisticGenesisConfig<S> = high_level.into();

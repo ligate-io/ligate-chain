@@ -71,6 +71,7 @@ fn runtime_genesis_config_round_trips_for_production_spec() {
         attestor_set_fee: Amount(0),
         initial_attestor_sets: vec![],
         initial_schemas: vec![],
+        max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
     };
 
     let genesis = GenesisConfig::<S> {
