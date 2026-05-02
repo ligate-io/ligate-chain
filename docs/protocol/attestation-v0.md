@@ -260,6 +260,8 @@ The protocol intentionally does not handle:
 
 **v2 optionally adds cryptographic proof** by letting schemas carry zkML/TEE proof hashes in their payloads. Ligate stays neutral on proving tech, customers bring their own.
 
+For the full v0 attacker model, every protection mechanism with its file location, and the list of risks deliberately out of scope, see [`threat-model.md`](threat-model.md).
+
 ---
 
 ## How Themisra consumes this

@@ -222,6 +222,8 @@ A change that survives all four layers is a soft fork.
 - A vulnerability in the SDK at our pinned rev that we don't know about. Mitigated by the SDK's own advisory process, which we'd pick up on the next pin bump.
 - An attestor org compromising its own signing key. Out of scope for chain protection; that's the attestor's operational concern, documented in the [devnet runbook §7](../development/devnet.md).
 
+For the full v0 attacker model and every mitigation across attestation, sequencer, wire-format, primitive, and operational layers, see [`threat-model.md`](threat-model.md).
+
 ---
 
 ## What this document does **not** cover, deliberately
