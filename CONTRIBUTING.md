@@ -110,7 +110,13 @@ cargo test -p attestation query_get_schema_returns_registered_schema
 SKIP_GUEST_BUILD=1 cargo test --workspace
 ```
 
-If you're touching a state map, an attestor signature path, or the genesis loader, run the full suite — there are 29+ integration tests that exercise the cross-module invariants (sequencer-registry locking, attester/prover bonds, fee routing through `sov-bank`).
+The end-to-end smoke test in [`crates/rollup/tests/e2e_smoke.rs`](crates/rollup/tests/e2e_smoke.rs) exercises the production runtime + auto-mounted REST surface against `TestRunner` with a genesis-seeded attestor set and schema. It runs automatically as part of `cargo test --workspace`. To run it in isolation:
+
+```bash
+cargo test -p ligate-rollup --test e2e_smoke
+```
+
+If you're touching a state map, an attestor signature path, or the genesis loader, run the full suite. There are 29+ integration tests that exercise the cross-module invariants (sequencer-registry locking, attester/prover bonds, fee routing through `sov-bank`).
 
 ## Code style
 

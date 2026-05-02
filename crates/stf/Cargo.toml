@@ -47,6 +47,12 @@ sov-rollup-apis = { workspace = true, optional = true }
 # module invariant checks against `attestation::AttestationConfig`).
 attestation = { path = "../modules/attestation" }
 
+# Test-only trait impls (MinimalGenesis for Runtime) live behind the
+# `test-utils` feature. Pulled in only when downstream integration
+# tests opt in via `features = ["test-utils"]` in dev-dependencies.
+sov-test-utils         = { workspace = true, optional = true }
+sov-sequencer-registry = { workspace = true, optional = true }
+
 [build-dependencies]
 # `native` features are required because `sov_build` exercises
 # host-side trait impls (signature verification, ZkVM hosts) that
@@ -79,4 +85,12 @@ native = [
     "sov-rollup-interface/native",
     "sov-state/native",
     "attestation/native",
+]
+# Opt-in test scaffolding: enables the `test_utils` module, which
+# provides `MinimalGenesis<Runtime<S>>` so the SDK's `TestRunner` can
+# drive the production runtime in external integration tests.
+test-utils = [
+    "dep:sov-test-utils",
+    "dep:sov-sequencer-registry",
+    "native",
 ]

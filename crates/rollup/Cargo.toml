@@ -50,9 +50,15 @@ sov-stf-runner                 = { workspace = true }
 ligate-stf = { path = "../stf", features = ["native"] }
 
 [dev-dependencies]
-attestation    = { path = "../modules/attestation" }
-serde_json     = { workspace = true }
-sov-test-utils = { workspace = true }
-tempfile       = { workspace = true }
+attestation     = { path = "../modules/attestation" }
+ed25519-dalek   = { workspace = true }
+serde_json      = { workspace = true }
+sov-test-utils  = { workspace = true }
+tempfile        = { workspace = true }
+# Re-list ligate-stf with the `test-utils` feature so the e2e smoke
+# tests get the `MinimalGenesis` impl on the production runtime that
+# `TestRunner` requires. Cargo unions this with the [dependencies]
+# entry above for test builds.
+ligate-stf      = { path = "../stf", features = ["test-utils"] }
 # `sov-celestia-adapter` already lives in `[dependencies]`, so the
 # integration tests can use it directly.

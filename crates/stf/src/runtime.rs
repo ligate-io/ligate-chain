@@ -134,6 +134,23 @@ where
     }
 }
 
+impl<S: Spec> EncodeCall<attestation::AttestationModule<S>> for Runtime<S>
+where
+    S::Address: FromVmAddress<EthereumAddress>,
+{
+    fn encode_call(
+        data: <attestation::AttestationModule<S> as sov_modules_api::Module>::CallMessage,
+    ) -> Vec<u8> {
+        <RuntimeInner<S> as EncodeCall<attestation::AttestationModule<S>>>::encode_call(data)
+    }
+
+    fn to_decodable(
+        data: <attestation::AttestationModule<S> as sov_modules_api::Module>::CallMessage,
+    ) -> Self::Decodable {
+        <RuntimeInner<S> as EncodeCall<attestation::AttestationModule<S>>>::to_decodable(data)
+    }
+}
+
 impl<S: Spec> BlockHooks for Runtime<S>
 where
     S::Address: FromVmAddress<EthereumAddress>,
