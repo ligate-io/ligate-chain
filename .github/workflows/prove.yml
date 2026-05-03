@@ -49,14 +49,13 @@ jobs:
       - name: Install libclang (librocksdb-sys build dep)
         run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
 
-      # Cache the cargo-risczero binary + the risc0 toolchain
-      # (rustc + r0vm + circuit artifacts). The toolchain alone is
-      # ~500 MB; refetching weekly without a cache would burn time.
-      - name: Cache cargo-risczero + risc0 toolchain
+      # Cache the rzup binary + the Risc0 toolchain (RISC-V rustc +
+      # r0vm + circuit artifacts). The toolchain alone is ~500 MB;
+      # refetching weekly without a cache would burn time.
+      - name: Cache rzup + Risc0 toolchain
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin/cargo-risczero
             ~/.risc0
           # Pinning to Cargo.lock ties cache invalidation to dep
           # changes; that's the right granularity for this layer.
@@ -64,19 +63,17 @@ jobs:
           restore-keys: |
             risc0-tools-${{ runner.os }}-
 
-      - name: Install cargo-risczero
+      - name: Install rzup + Risc0 toolchain
+        # `rzup` is the modern Risc0 toolchain manager (replaced the
+        # legacy `cargo risczero install` flow in risc0 v3+). The
+        # one-liner installer drops `rzup` into `~/.risc0/bin` and
+        # `rzup install rust` fetches the RISC-V rustc + r0vm.
         run: |
-          if ! command -v cargo-risczero >/dev/null; then
-            cargo install cargo-risczero --locked
+          if [ ! -f "$HOME/.risc0/bin/rzup" ]; then
+            curl -L https://risczero.com/install | bash
           fi
-
-      - name: Install Risc0 toolchain
-        # `cargo risczero install` downloads the RISC-V rustc and
-        # r0vm into ~/.risc0/. Skipped on cache hit.
-        run: |
-          if [ ! -d "$HOME/.risc0/toolchains" ]; then
-            cargo risczero install
-          fi
+          echo "$HOME/.risc0/bin" >> $GITHUB_PATH
+          "$HOME/.risc0/bin/rzup" install rust
 
       - uses: Swatinem/rust-cache@v2
 
