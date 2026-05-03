@@ -1,0 +1,361 @@
+# cargo-deny config.
+#
+# Enforces license, duplicate-version, and source-policy rules on top
+# of cargo-audit's RUSTSEC checks. Tracking issue: #120.
+#
+# Revisit every time we upgrade the Sovereign SDK rev (most exceptions
+# below are transitive through the SDK's pinned deps).
+
+[licenses]
+version = 2
+# Permissive OSS licenses we're comfortable shipping. Anything not in
+# this list (or in `exceptions` / `clarify` below) fails CI.
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+  # Sovereign SDK ships under a custom commercial license (10% revenue
+  # share for production rollups, OFAC compliance, notification
+  # obligation). Full text at:
+  # https://github.com/Sovereign-Labs/sovereign-sdk/blob/main/LICENSE.md
+  "LicenseRef-Sovereign-Permissionless-Commercial-License",
+]
+
+# Sovereign SDK crates don't declare a license in their Cargo.toml
+# (the SPCL is at repo root, not per-crate). Clarify each one we depend
+# on so cargo-deny can match it against the allow list above.
+#
+# The list mirrors our Cargo.lock; trim or extend as the SDK surface
+# we use grows.
+
+[[licenses.clarify]]
+name = "sov-accounts"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-address"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-api-spec"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-attester-incentives"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-bank"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-blob-sender"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-blob-storage"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-build"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-capabilities"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-celestia-adapter"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-chain-state"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-cli"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-db"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-db-types"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-full-node-configs"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-kernels"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-ledger-apis"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-metrics"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-mock-da"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-mock-zkvm"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-modules-api"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-modules-macros"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-modules-rollup-blueprint"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-modules-stf-blueprint"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-node-client"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-operator-incentives"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-paymaster"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-prover-incentives"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-rest-utils"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-risc0-adapter"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-rollup-apis"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-rollup-full-node-interface"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-rollup-interface"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-sequencer"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-sequencer-registry"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-state"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-stf-runner"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-test-utils"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-uniqueness"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-value-setter"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "sov-zkvm-utils"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+[[licenses.clarify]]
+name = "nearly-linear"
+expression = "LicenseRef-Sovereign-Permissionless-Commercial-License"
+license-files = []
+
+# LGPL transitives. Every entry below is pulled by risc0 (the prover
+# stack) and gets statically linked into our prover binary.
+#
+# LGPL static-linking compliance hinges on users being able to swap
+# the LGPL'd portion. We satisfy that by publishing the chain source
+# (Apache-2.0 OR MIT) so anyone can rebuild against a different
+# revision of these crates. None of the LGPL'd code is forked into our
+# tree; we use them strictly as upstream libraries.
+
+[[licenses.exceptions]]
+# Build-script dep of risc0-circuit-recursion (downloads circuit
+# artifacts at build time). Not in any runtime path.
+allow = ["LGPL-3.0-or-later"]
+name = "downloader"
+version = "0.2.8"
+
+[[licenses.exceptions]]
+allow = ["LGPL-3.0-only"]
+name = "malachite"
+version = "0.4.22"
+
+[[licenses.exceptions]]
+allow = ["LGPL-3.0-only"]
+name = "malachite-base"
+version = "0.4.22"
+
+[[licenses.exceptions]]
+allow = ["LGPL-3.0-only"]
+name = "malachite-float"
+version = "0.4.22"
+
+[[licenses.exceptions]]
+allow = ["LGPL-3.0-only"]
+name = "malachite-nz"
+version = "0.4.22"
+
+[[licenses.exceptions]]
+allow = ["LGPL-3.0-only"]
+name = "malachite-q"
+version = "0.4.22"
+
+[[licenses.exceptions]]
+# UEFI types pulled by Rust std's platform-detection layer for some
+# target triples. Not reachable from any code path we ship.
+allow = ["LGPL-2.1-or-later"]
+name = "r-efi"
+version = "5.3.0"
+
+[[licenses.exceptions]]
+allow = ["LGPL-2.1-or-later"]
+name = "r-efi"
+version = "6.0.0"
+
+# Advisories: vulnerability ignores mirror `audit.toml` (rationale
+# documented there). cargo-deny additionally fires on `unmaintained`
+# advisories, which cargo-audit treats as warnings; those are
+# captured in the second block below.
+[advisories]
+version = 2
+ignore = [
+  # --- Vulnerability ignores (synced with audit.toml) ---
+  "RUSTSEC-2023-0071", # rsa Marvin attack via sqlx-mysql (no MySQL in our path)
+  "RUSTSEC-2025-0055", # tracing-subscriber ANSI escape via deep risc0 chain
+  "RUSTSEC-2025-0134", # rustls-pemfile unmaintained, jsonrpsee transitive
+  "RUSTSEC-2025-0141", # bincode 1.x unmaintained via sov-db
+  "RUSTSEC-2026-0066", # astral-tokio-tar dir-traversal via sov-test-utils dev-dep
+  "RUSTSEC-2026-0112", # astral-tokio-tar PAX header desync, same dep path
+  "RUSTSEC-2026-0113", # astral-tokio-tar chmod via symlinks, same dep path
+
+  # --- Unmaintained-crate advisories ---
+  # These are quality signals, not vulnerabilities. Every one is
+  # transitive through the SDK or risc0; we don't choose them
+  # directly. Revisit when SDK rev bumps.
+  "RUSTSEC-2023-0089", # atomic-polyfill, archived, transitive via risc0/embassy
+  "RUSTSEC-2024-0388", # derivative, archived, transitive via SDK proc-macros
+  "RUSTSEC-2024-0436", # paste, archived (still works), transitive deep
+  "RUSTSEC-2025-0057", # fxhash, archived, transitive via SDK dep graph
+]
+
+[bans]
+# Duplicate versions are pervasive in the SDK + risc0 transitive
+# graph. Warning on them produces noise without actionable diffs at
+# our level (we don't control the upstream pins). Track separately if
+# we ever see a *new* duplicate from one of our direct deps.
+multiple-versions = "allow"
+
+# Belt-and-braces against accidental TLS regressions. We use Rustls
+# everywhere; native-tls / openssl creeping in via a transitive change
+# would silently switch us to system OpenSSL and surprise the deploy
+# story.
+deny = [
+  { name = "native-tls" },
+  { name = "openssl" },
+  { name = "openssl-sys" },
+]
+
+[sources]
+# Crates.io is the only registry we expect.
+unknown-registry = "deny"
+# Git deps are allowed only from the explicit allow-list below; any
+# new git source has to go through deny.toml. Keeps the SDK pin from
+# silently growing siblings.
+unknown-git = "deny"
+required-git-spec = "rev"
+allow-git = [
+  "https://github.com/Sovereign-Labs/sovereign-sdk.git",
+  # SDK's RocksDB wrapper, pulled by sov-db / sov-blob-sender. Lives
+  # in a separate repo from the main SDK; both are pinned by rev.
+  "https://github.com/sovereign-labs/rockbound",
+]
