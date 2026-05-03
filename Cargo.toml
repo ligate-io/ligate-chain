@@ -12,7 +12,15 @@ members = [
 # it's a separate cargo workspace targeting the risc0 RISC-V
 # triple, not our host toolchain. The outer `provers/risc0/`
 # crate compiles it via `risc0-build`.
-exclude = ["crates/rollup/provers/risc0/guest-celestia"]
+#
+# `crates/modules/attestation/fuzz/` is excluded because cargo-fuzz
+# crates require nightly + libfuzzer-sys, which doesn't build on
+# stable. Run via `cargo +nightly fuzz build/run` from inside the
+# fuzz dir. Tracking issue: #119.
+exclude = [
+    "crates/rollup/provers/risc0/guest-celestia",
+    "crates/modules/attestation/fuzz",
+]
 
 [workspace.package]
 version = "0.0.1"
