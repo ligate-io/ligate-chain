@@ -4,7 +4,7 @@
 //! `StateMap<SchemaId, Schema<S>>`. A corrupted state byte stream
 //! must surface as a typed error, not a panic, otherwise an
 //! attacker who can poison the state tree (e.g. via a malicious
-//! Celestia DA payload) could halt nodes.
+//! DA blob) could halt nodes.
 
 #![no_main]
 
