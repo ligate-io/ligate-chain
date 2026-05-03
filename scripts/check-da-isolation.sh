@@ -17,6 +17,7 @@
 # turn into a real swap blocker over time.
 #
 # Tracking issue: ligate-io/ligate-chain#117
+# Companion doc: docs/protocol/da-layers.md (architecture + adapter playbook)
 
 set -euo pipefail
 

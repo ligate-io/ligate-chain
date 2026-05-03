@@ -250,6 +250,7 @@ For the full v0 attacker model and every mitigation across attestation, sequence
 | Change attestor signature scheme | Hard | Every existing signature breaks | Coordinated reset, schema version bump |
 | Bump Sovereign SDK rev | Soft if `CHAIN_HASH` unchanged, hard otherwise | `CHAIN_HASH` derivation; review the SDK changelog | Test build, check the hash, then either soft-release or coordinated-reset |
 | Switch Celestia testnet (mocha → mocha-2) | Hard (operationally) | `celestia.toml` change | Coordinated reset (every operator re-syncs from the new namespace) |
+| Swap DA layer (Celestia → Avail / EigenDA / etc.) | Hard | New `--da-layer` arm; `CHAIN_HASH` may shift if guest crate changes | Coordinated reset; see [`da-layers.md`](da-layers.md) for the playbook |
 
 ---
 
@@ -260,4 +261,5 @@ For the full v0 attacker model and every mitigation across attestation, sequence
 - [`crates/stf/src/runtime_capabilities.rs`](../../crates/stf/src/runtime_capabilities.rs) — where `CHAIN_HASH` plugs into the runtime authenticator
 - [`tests/borsh_snapshot.rs`](../../crates/modules/attestation/tests/borsh_snapshot.rs) — the wire-format guard
 - [`audit.toml`](../../audit.toml) + [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — `cargo audit` gate
+- [`da-layers.md`](da-layers.md) — DA-agnostic-by-construction architecture and adapter playbook
 - Issues [#40](https://github.com/ligate-io/ligate-chain/issues/40) (constants → state), [#41](https://github.com/ligate-io/ligate-chain/issues/41) (governance), [#42](https://github.com/ligate-io/ligate-chain/issues/42) (upgrade module), [#43](https://github.com/ligate-io/ligate-chain/issues/43) closed, [#45](https://github.com/ligate-io/ligate-chain/issues/45) closed, [#54](https://github.com/ligate-io/ligate-chain/issues/54) chain-id ladder
