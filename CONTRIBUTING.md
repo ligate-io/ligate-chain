@@ -190,8 +190,15 @@ The required gate is **`CI pass`**. It's a summary job that watches the underlyi
 | `cargo test` | Workspace lib + integration + doctests | yes |
 | `cargo doc` | rustdoc with `-D warnings` | yes |
 | `cargo audit` | RUSTSEC advisories | **no** — runs on every PR |
+| `cargo deny` | License / duplicate / source policy | yes |
 
 Why `cargo audit` ignores the path filter: new advisories appear independent of your diff. We want every PR to be a checkpoint for security signal.
+
+`cargo deny` enforces three policies on top of `cargo audit`:
+
+- **Licenses**: every transitive dep must resolve to a license in the allow list. New deps with copyleft or non-OSI licenses fail CI.
+- **Sources**: git deps may only come from the explicit allow list (currently the Sovereign SDK + its `rockbound` storage repo). Stops a stray `git = "..."` URL from sneaking in.
+- **Bans**: denies `native-tls`, `openssl`, and `openssl-sys`. We're Rustls-only; a transitive that flips us back to system OpenSSL would surprise the deploy story.
 
 Local equivalent (run before pushing):
 
@@ -202,9 +209,12 @@ cargo check --workspace --all-targets
 cargo test --workspace
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 cargo audit
+cargo deny check  # brew install cargo-deny  (or `cargo install cargo-deny --locked`)
 ```
 
 Ignored advisories live in [`audit.toml`](audit.toml) — every entry is a transitive dep pinned by the Sovereign SDK. They clear automatically on SDK upgrades.
+
+Policy rules and per-crate exceptions live in [`deny.toml`](deny.toml). The Sovereign SDK ships under a custom commercial license (the SPCL); its crates are clarified to that license-ref. LGPL transitives (`malachite*`, `downloader`, `r-efi`) are pulled by risc0. Rationale for each exception is inline in the file.
 
 ## Filing issues
 

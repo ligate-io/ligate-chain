@@ -175,6 +175,21 @@ jobs:
       - uses: actions/checkout@v6
       - run: ./scripts/check-da-isolation.sh
 
+  # `cargo-deny` enforces our license / duplicate / source policy
+  # (see `deny.toml`). Gated on `code == true` because the policy
+  # only kicks in when the dep graph changes, and the dep graph only
+  # changes when a Rust file or Cargo manifest is touched, which is
+  # exactly what the `code` filter captures.
+  deny:
+    name: cargo deny
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: taiki-e/install-action@cargo-deny
+      - run: cargo deny check
+
   # `cargo audit` runs on every PR including docs-only changes.
   # New RUSTSEC advisories can appear at any time independent of the
   # diff, and we want every PR to be a checkpoint for security
@@ -212,7 +227,7 @@ jobs:
   ci-pass:
     name: CI pass
     if: always()
-    needs: [changes, fmt, clippy, check, test, doc, da-isolation, audit]
+    needs: [changes, fmt, clippy, check, test, doc, da-isolation, deny, audit]
     runs-on: ubuntu-latest
     steps:
       - name: Verify required checks
@@ -225,6 +240,7 @@ jobs:
           TEST_RESULT: ${{ needs.test.result }}
           DOC_RESULT: ${{ needs.doc.result }}
           DA_ISOLATION_RESULT: ${{ needs.da-isolation.result }}
+          DENY_RESULT: ${{ needs.deny.result }}
         run: |
           set -euo pipefail
           fail=0
@@ -238,7 +254,7 @@ jobs:
           # Docs-only change: code-checking jobs are correctly skipped.
           # Otherwise: every code-checking job must succeed.
           if [[ "$CODE_CHANGED" == "true" ]]; then
-            for var in FMT_RESULT CLIPPY_RESULT CHECK_RESULT TEST_RESULT DOC_RESULT DA_ISOLATION_RESULT; do
+            for var in FMT_RESULT CLIPPY_RESULT CHECK_RESULT TEST_RESULT DOC_RESULT DA_ISOLATION_RESULT DENY_RESULT; do
               result="${!var}"
               if [[ "$result" != "success" ]]; then
                 echo "::error::${var,,}: $result"
