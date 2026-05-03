@@ -146,6 +146,30 @@ fn safe_name(s: &str) -> SafeString {
     SafeString::try_from(s.to_string()).expect("name fits SafeString default cap")
 }
 
+/// Asserts the tx reverted AND the rendered reason contains `phrase`.
+///
+/// Pinning the phrase guards against a refactor that changes which
+/// `AttestationError` variant fires on a given input. Without this,
+/// `matches!(_, TxEffect::Reverted(_))` accepts any reversion as
+/// success, including bug-induced ones (e.g. an unrelated panic
+/// elsewhere in the handler that surfaces as a different error).
+///
+/// Pair every negative-path test with one of these calls. See the
+/// coverage matrix in `docs/development/error-coverage.md`.
+#[track_caller]
+fn assert_reverted_with(receipt: &TxEffect<S>, phrase: &str) {
+    match receipt {
+        TxEffect::Reverted(payload) => {
+            let msg = payload.reason.to_string();
+            assert!(
+                msg.contains(phrase),
+                "expected phrase '{phrase}' in reverted reason, got: {msg}",
+            );
+        }
+        other => panic!("expected Reverted, got {other:?}"),
+    }
+}
+
 #[test]
 fn register_attestor_set_happy_path() {
     let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::new(7));
@@ -210,7 +234,7 @@ fn register_attestor_set_rejects_threshold_above_members() {
             CallMessage::RegisterAttestorSet { members, threshold: 2 },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "exceeds member count");
         }),
     });
 }
@@ -227,7 +251,7 @@ fn register_attestor_set_rejects_zero_threshold() {
             CallMessage::RegisterAttestorSet { members, threshold: 0 },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "must be at least 1");
         }),
     });
 }
@@ -250,7 +274,7 @@ fn register_schema_requires_existing_attestor_set() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "unregistered attestor set");
         }),
     });
 }
@@ -276,7 +300,7 @@ fn register_schema_rejects_over_cap_fee_routing() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "exceeds protocol cap");
         }),
     });
 }
@@ -357,7 +381,7 @@ fn register_schema_rejects_above_custom_cap() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "exceeds protocol cap");
         }),
     });
 }
@@ -466,7 +490,7 @@ fn register_schema_rejects_orphan_routing_bps_without_addr() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "fee routing misconfigured");
         }),
     });
 }
@@ -492,7 +516,7 @@ fn register_schema_rejects_orphan_routing_addr_without_bps() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "fee routing misconfigured");
         }),
     });
 }
@@ -514,7 +538,7 @@ fn submit_attestation_requires_existing_schema() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "schema not found");
         }),
     });
 }
@@ -608,7 +632,7 @@ fn full_register_register_submit_flow() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "attestation already exists");
         }),
     });
 }
@@ -683,7 +707,7 @@ fn submit_below_threshold_rejects() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "quorum not met");
         }),
     });
 }
@@ -706,7 +730,7 @@ fn submit_with_unknown_pubkey_rejects() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "not in the schema's attestor set");
         }),
     });
 }
@@ -732,7 +756,7 @@ fn submit_with_invalid_signature_rejects() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "did not verify");
         }),
     });
 }
@@ -753,7 +777,7 @@ fn submit_with_duplicate_pubkey_rejects() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "duplicate attestor pubkey");
         }),
     });
 }
@@ -779,7 +803,61 @@ fn submit_with_bad_sig_length_rejects() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
-            assert!(matches!(result.tx_receipt, TxEffect::Reverted(_)));
+            assert_reverted_with(&result.tx_receipt, "expected 64 for ed25519");
+        }),
+    });
+}
+
+#[test]
+fn submit_with_off_curve_pubkey_rejects() {
+    // Pin the `InvalidAttestorPubkey` variant. The handler runs
+    // `VerifyingKey::from_bytes` on the signature's pubkey field;
+    // bytes that don't decompress to a curve point surface as
+    // `InvalidAttestorPubkey`. Most 32-byte values DO decompress
+    // (ed25519-dalek's `from_bytes` is permissive about canonical
+    // encoding); we use `[0x02; 32]`, which empirically fails with
+    // "Cannot decompress Edwards point" because the y value has no
+    // valid x square root mod p.
+    //
+    // The attestor-set registration handler doesn't curve-validate
+    // members (only structural invariants), so we can seed the set
+    // with this off-curve pubkey at genesis and let the submit
+    // path discover the failure during signature verification.
+    let off_curve_pk = PubKey::from([0x02u8; 32]);
+    let initial = vec![InitialAttestorSet { members: vec![off_curve_pk], threshold: 1 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&[off_curve_pk], 1);
+    let submitter_addr = env.submitter.address();
+
+    // Register a schema bound to the off-curve attestor set.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("off-curve"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ),
+        assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
+    });
+    let schema_id = Schema::<S>::derive_id(&submitter_addr, "off-curve", 1);
+
+    // Submit an attestation whose only signature has the off-curve
+    // pubkey. Sig content is irrelevant; the pubkey check fires
+    // before signature verification.
+    let payload_hash = attestation::PayloadHash::from([0x07u8; 32]);
+    let bogus_sig =
+        AttestorSignature { pubkey: off_curve_pk, sig: SafeVec::try_from(vec![0u8; 64]).unwrap() };
+    let signatures = SafeVec::try_from(vec![bogus_sig]).unwrap();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
+        ),
+        assert: Box::new(|result, _state| {
+            assert_reverted_with(&result.tx_receipt, "not a valid ed25519 point");
         }),
     });
 }
@@ -839,10 +917,7 @@ fn submit_digest_is_bound_to_submitter() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
-            assert!(
-                matches!(result.tx_receipt, TxEffect::Reverted(_)),
-                "wrong-submitter digest must not verify"
-            );
+            assert_reverted_with(&result.tx_receipt, "did not verify");
         }),
     });
 }
@@ -1033,11 +1108,7 @@ fn register_attestor_set_rejects_duplicate() {
             CallMessage::RegisterAttestorSet { members: safe_members(&signers), threshold: 2 },
         ),
         assert: Box::new(|result, _state| {
-            assert!(
-                matches!(result.tx_receipt, TxEffect::Reverted(_)),
-                "duplicate attestor set must revert: {:?}",
-                result.tx_receipt
-            );
+            assert_reverted_with(&result.tx_receipt, "attestor set already registered");
         }),
     });
 }
@@ -1080,11 +1151,7 @@ fn register_schema_rejects_duplicate() {
             },
         ),
         assert: Box::new(|result, _state| {
-            assert!(
-                matches!(result.tx_receipt, TxEffect::Reverted(_)),
-                "duplicate schema must revert: {:?}",
-                result.tx_receipt
-            );
+            assert_reverted_with(&result.tx_receipt, "schema already registered");
         }),
     });
 }
@@ -1105,11 +1172,7 @@ fn register_attestor_set_rejects_empty_members() {
             CallMessage::RegisterAttestorSet { members: empty, threshold: 1 },
         ),
         assert: Box::new(|result, _state| {
-            assert!(
-                matches!(result.tx_receipt, TxEffect::Reverted(_)),
-                "empty members must revert: {:?}",
-                result.tx_receipt
-            );
+            assert_reverted_with(&result.tx_receipt, "must have at least one member");
         }),
     });
 }
@@ -1150,11 +1213,7 @@ fn submit_attestation_rejects_empty_signatures() {
             CallMessage::SubmitAttestation { schema_id, payload_hash, signatures: empty_sigs },
         ),
         assert: Box::new(|result, _state| {
-            assert!(
-                matches!(result.tx_receipt, TxEffect::Reverted(_)),
-                "empty signatures must revert: {:?}",
-                result.tx_receipt
-            );
+            assert_reverted_with(&result.tx_receipt, "quorum not met");
         }),
     });
 }

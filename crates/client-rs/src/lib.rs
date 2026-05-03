@@ -331,6 +331,47 @@ mod tests {
     }
 
     #[test]
+    fn submit_attestation_rejects_over_cap_signatures() {
+        // MAX_ATTESTATION_SIGNATURES + 1 signatures. Pin the
+        // `AttestationSignaturesOverCap` variant explicitly so a
+        // future refactor that replaces the cap check with a
+        // different error type fails this test loudly.
+        let schema_id = sample_schema_id(1);
+        let payload_hash = sample_payload_hash(2);
+        let too_many: Vec<AttestorSignature> = (0..=MAX_ATTESTATION_SIGNATURES as u8)
+            .map(|i| AttestorSignature {
+                pubkey: sample_pubkey(i),
+                sig: SafeVec::try_from(vec![0u8; 64]).unwrap(),
+            })
+            .collect();
+        let result = submit_attestation::<S>(schema_id, payload_hash, too_many);
+        match result {
+            Err(ClientError::AttestationSignaturesOverCap { actual, max }) => {
+                assert_eq!(actual, MAX_ATTESTATION_SIGNATURES + 1);
+                assert_eq!(max, MAX_ATTESTATION_SIGNATURES);
+            }
+            other => panic!("expected AttestationSignaturesOverCap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn register_schema_rejects_over_cap_name() {
+        // SafeString's default cap is 256 bytes; the SDK enforces
+        // it via TryFrom<String>. Anything longer than that surfaces
+        // as `SchemaNameOverCap`. We use 1024 chars to be well past
+        // any plausible bump.
+        let too_long = "a".repeat(1024);
+        let attestor_set_id = AttestorSetId::from([1u8; 32]);
+        let result = register_schema::<S>(too_long.clone(), 1, attestor_set_id, 0, None);
+        match result {
+            Err(ClientError::SchemaNameOverCap(name)) => {
+                assert_eq!(name, too_long);
+            }
+            other => panic!("expected SchemaNameOverCap, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn register_schema_builds_correct_variant() {
         let attestor_set_id = AttestorSetId::from([7u8; 32]);
         let fee_addr = sample_address(9);
