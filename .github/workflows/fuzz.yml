@@ -1,0 +1,86 @@
+name: Fuzz
+
+# Nightly cargo-fuzz run across the protocol's untrusted-byte
+# decoders. Pairs with `cargo audit` and `cargo deny`: those gate
+# advisories and licenses, this gates panic surfaces in our own code.
+#
+# Tracking issue: #119.
+#
+# Cron-only by design. Every-PR fuzzing would burn runner minutes
+# without a corpus to feed; nightly buys continuous coverage at
+# ~10 min budget across all targets.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Nightly 03:00 UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # libfuzzer-sys statically links the runtime; no DYLD/LD_LIBRARY_PATH
+  # tweaks needed on Linux runners. Local macOS users may need to set
+  # LIBCLANG_PATH; see CONTRIBUTING.md.
+
+jobs:
+  fuzz:
+    name: cargo fuzz
+    runs-on: ubuntu-latest
+    # Cold build is ~5 min, then 7 targets × ~85s = ~10 min runs.
+    # 30 leaves headroom for the first-run cache miss.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+
+      - name: Install libclang (librocksdb-sys build dep)
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Cache scoped to the fuzz crate; avoids polluting the host
+          # workspace cache with sanitizer-flavoured builds.
+          workspaces: |
+            crates/modules/attestation/fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build all fuzz targets
+        working-directory: crates/modules/attestation/fuzz
+        run: cargo +nightly fuzz build
+
+      # Per-target time budget. 85 seconds × 7 targets = ~10 min
+      # runtime. Each target re-uses the build artifact from the
+      # previous step so the only cost here is fuzzing time.
+      - name: Run targets
+        working-directory: crates/modules/attestation/fuzz
+        run: |
+          set -euo pipefail
+          for target in \
+            borsh_call_message \
+            borsh_schema \
+            borsh_attestor_set \
+            borsh_attestation \
+            borsh_signed_payload \
+            bech32_id \
+            attestation_id_parse
+          do
+            echo "::group::$target"
+            cargo +nightly fuzz run "$target" -- -max_total_time=85
+            echo "::endgroup::"
+          done
+
+      # If any target found a crash, libfuzzer writes the input to
+      # `fuzz/artifacts/<target>/crash-*`. Surface it as a workflow
+      # artifact so we can pull the input locally and reproduce.
+      - name: Upload crash artifacts (if any)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ github.run_id }}
+          path: crates/modules/attestation/fuzz/artifacts/**
+          if-no-files-found: ignore
+          retention-days: 14

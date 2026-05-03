@@ -216,6 +216,36 @@ Ignored advisories live in [`audit.toml`](audit.toml) — every entry is a trans
 
 Policy rules and per-crate exceptions live in [`deny.toml`](deny.toml). The Sovereign SDK ships under a custom commercial license (the SPCL); its crates are clarified to that license-ref. LGPL transitives (`malachite*`, `downloader`, `r-efi`) are pulled by risc0. Rationale for each exception is inline in the file.
 
+## Fuzzing
+
+The protocol's untrusted-byte decoders (Borsh, Bech32m, REST path parsers) get nightly coverage via `cargo-fuzz`. Targets live in [`crates/modules/attestation/fuzz/`](crates/modules/attestation/fuzz/) and run on the [`Fuzz`](.github/workflows/fuzz.yml) workflow each night against a ~10 min total time budget across all targets. Cron-only by design: every-PR fuzzing without a checked-in corpus burns runner minutes for marginal coverage gain.
+
+Targets cover Borsh deserialization of `CallMessage`, `Schema`, `AttestorSet`, `Attestation`, `SignedAttestationPayload`, plus Bech32m decode for the four typed IDs (`SchemaId`, `AttestorSetId`, `PayloadHash`, `PubKey`) and `AttestationId` colon-separated round-trips. Tracking issue: [#119](https://github.com/ligate-io/ligate-chain/issues/119).
+
+Run locally:
+
+```bash
+# One-time: nightly + cargo-fuzz
+rustup toolchain install nightly
+cargo install cargo-fuzz --locked  # or: brew install cargo-fuzz
+
+# Build all targets
+cd crates/modules/attestation/fuzz
+cargo +nightly fuzz build
+
+# Run a single target (15-second smoke)
+cargo +nightly fuzz run borsh_call_message -- -max_total_time=15
+
+# Reproduce a crash from the workflow's `fuzz-crashes-*` artifact
+cargo +nightly fuzz run <target> artifacts/<target>/crash-<hash>
+```
+
+On macOS, `librocksdb-sys` (transitive through the SDK) needs libclang. If `cargo +nightly fuzz build` fails with a `libclang.dylib not found` error, set `LIBCLANG_PATH=/opt/homebrew/opt/llvm/lib` (after `brew install llvm`).
+
+Found a crash? Two options:
+1. Fix the bug inline in your PR. Add the crash input to a `corpus/<target>/` seed (cargo-fuzz auto-replays everything in `corpus/`).
+2. File a separate issue with the input attached. Higher-severity crashes (state-tree corruption, panic in a public REST handler) are security-track and should follow [`SECURITY.md`](SECURITY.md) instead of public issues.
+
 ## Filing issues
 
 Use the GitHub issue forms:

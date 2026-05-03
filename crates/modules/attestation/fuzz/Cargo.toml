@@ -1,0 +1,82 @@
+[package]
+name = "attestation-fuzz"
+description = "cargo-fuzz harnesses for the attestation module's untrusted-byte entry points"
+version = "0.0.1"
+edition = "2021"
+license = "Apache-2.0 OR MIT"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+# Own workspace so the parent `cargo build --workspace` on stable
+# doesn't try to build the fuzz binaries (libfuzzer-sys requires
+# nightly). Explicit deps below; no `workspace = true` because the
+# parent isn't visible from this sub-workspace.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+attestation = { path = ".." }
+
+# SDK pins. Keep in sync with the parent workspace's
+# `workspace.dependencies` block. Bump alongside SDK rev upgrades.
+sov-modules-api = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-test-utils = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-address = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+
+borsh = "1.5"
+
+# Each target is its own binary. cargo-fuzz auto-discovers them but
+# explicit `[[bin]]` blocks make `cargo build` happy and surface the
+# inventory in tooling.
+
+[[bin]]
+name = "borsh_call_message"
+path = "fuzz_targets/borsh_call_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "borsh_schema"
+path = "fuzz_targets/borsh_schema.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "borsh_attestor_set"
+path = "fuzz_targets/borsh_attestor_set.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "borsh_attestation"
+path = "fuzz_targets/borsh_attestation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "borsh_signed_payload"
+path = "fuzz_targets/borsh_signed_payload.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bech32_id"
+path = "fuzz_targets/bech32_id.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "attestation_id_parse"
+path = "fuzz_targets/attestation_id_parse.rs"
+test = false
+doc = false
+bench = false
