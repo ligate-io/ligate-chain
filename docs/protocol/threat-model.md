@@ -305,6 +305,7 @@ Public GitHub issues for suspected vulnerabilities are not appropriate; a public
 - [`attestation-v0.md`](attestation-v0.md): protocol specification (entities, state, fees, invariants)
 - [`addresses-and-signing.md`](addresses-and-signing.md): Bech32m HRP map, signature scheme rationale
 - [`upgrades.md`](upgrades.md): soft-fork vs hard-fork policy, `CHAIN_HASH` guard
+- [`da-layers.md`](da-layers.md): DA-agnostic architecture and adapter playbook (DA-layer trust posture)
 - [`rest-api.md`](rest-api.md): full REST endpoint reference
 - [`SECURITY.md`](../../SECURITY.md): disclosure policy
 - [`devnet/README.md`](../../devnet/README.md): local boot recipe
