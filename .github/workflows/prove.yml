@@ -1,0 +1,102 @@
+name: Prove
+
+# Builds the Risc0 zkVM guest (`ligate-prover-guest-celestia-risc0`).
+# Catches drift in the guest STF that the main `ci.yml` workflow
+# misses because it sets `SKIP_GUEST_BUILD=1` to keep the dev-loop
+# fast.
+#
+# Tracking issue: #83.
+#
+# This workflow is NOT a required check on PRs. Cron + manual
+# dispatch are the primary triggers; the path-filtered PR trigger is
+# advisory (signals guest drift inline but doesn't gate merge). If
+# you want it required, add it to the branch ruleset alongside
+# `CI pass` once the workflow is proven stable.
+
+on:
+  # Weekly drift check. Catches upstream SDK / risc0 toolchain bumps
+  # before they show up in a PR.
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  # Manual button for cutting releases or chasing a specific failure.
+  workflow_dispatch:
+  # Inline check for any change inside the prover crate or this
+  # workflow. The host CI already type-checks the host-side STF, so
+  # we don't trigger on `crates/stf/**` or `crates/modules/**` here.
+  pull_request:
+    paths:
+      - 'crates/rollup/provers/**'
+      - '.github/workflows/prove.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  guest-build:
+    name: Risc0 guest compile
+    runs-on: ubuntu-latest
+    # Toolchain install + first guest build is ~20 minutes on a
+    # cold cache. Subsequent runs hit the cache and finish in
+    # ~5 minutes. 60 leaves headroom for upstream slowdowns.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.0
+
+      - name: Install libclang (librocksdb-sys build dep)
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+
+      # Cache the cargo-risczero binary + the risc0 toolchain
+      # (rustc + r0vm + circuit artifacts). The toolchain alone is
+      # ~500 MB; refetching weekly without a cache would burn time.
+      - name: Cache cargo-risczero + risc0 toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-risczero
+            ~/.risc0
+          # Pinning to Cargo.lock ties cache invalidation to dep
+          # changes; that's the right granularity for this layer.
+          key: risc0-tools-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            risc0-tools-${{ runner.os }}-
+
+      - name: Install cargo-risczero
+        run: |
+          if ! command -v cargo-risczero >/dev/null; then
+            cargo install cargo-risczero --locked
+          fi
+
+      - name: Install Risc0 toolchain
+        # `cargo risczero install` downloads the RISC-V rustc and
+        # r0vm into ~/.risc0/. Skipped on cache hit.
+        run: |
+          if [ ! -d "$HOME/.risc0/toolchains" ]; then
+            cargo risczero install
+          fi
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Build the host prover crate WITHOUT `SKIP_GUEST_BUILD=1`.
+      # Its build.rs calls `risc0_build::embed_methods_with_options`
+      # which compiles the guest sub-crate to a RISC-V ELF and emits
+      # `ROLLUP_ELF` + `ROLLUP_ID` (image id) constants.
+      - name: Build host + guest
+        run: cargo build -p ligate-prover-risc0 --release
+
+      # Sanity: print the image id so failures during a release cut
+      # are easier to triage (you can compare it against the previous
+      # green run's id at a glance from the Actions log).
+      - name: Surface guest image id
+        run: |
+          set -euo pipefail
+          methods="$(find target/release/build/ligate-prover-risc0-*/out -name methods.rs | head -1)"
+          if [[ -z "$methods" ]]; then
+            echo "::warning::methods.rs not found; image id unavailable"
+            exit 0
+          fi
+          echo "Image id from $methods:"
+          grep -A1 'ROLLUP_ID' "$methods" || true
