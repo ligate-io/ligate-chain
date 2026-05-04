@@ -91,3 +91,50 @@ async fn metrics_endpoint_serves_attestation_counters_at_zero() {
         assert!(body.contains(expected), "expected '{expected}' (cold-start zero), got:\n{body}",);
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn state_db_size_gauge_reflects_disk_usage() {
+    // Phase 2 of #110. Builds a tempdir with a known total file
+    // size, drives `sample_state_db_size` once, and asserts the
+    // `ligate_state_db_size_bytes` gauge in `/metrics` matches the
+    // sampled value. Catches:
+    //
+    // 1. The directory walker (recursive, follows symlinks one
+    //    level, skips unreadable entries).
+    // 2. The Prometheus gauge wiring (`IntGauge::set` + Prometheus
+    //    text-format encoding).
+    // 3. End-to-end /metrics rendering for a numeric metric (the
+    //    rest of the smoke test only exercises counters).
+
+    let dir = tempfile::tempdir().expect("tempdir");
+
+    // Write three files at different depths totalling 6 bytes.
+    let nested = dir.path().join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    std::fs::write(dir.path().join("a.bin"), b"AA").unwrap();
+    std::fs::write(dir.path().join("b.bin"), b"BB").unwrap();
+    std::fs::write(nested.join("c.bin"), b"CC").unwrap();
+
+    metrics::sample_state_db_size(dir.path());
+
+    let addr = spawn_metrics_server().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("reqwest client builds");
+    let body = client
+        .get(format!("http://{addr}/metrics"))
+        .send()
+        .await
+        .expect("metrics endpoint responds")
+        .text()
+        .await
+        .expect("body is utf-8");
+
+    // Substring match: `ligate_state_db_size_bytes 6` is the
+    // canonical Prometheus text-format line for our gauge.
+    assert!(
+        body.contains("ligate_state_db_size_bytes 6"),
+        "expected gauge to read 6 bytes after sampling 3 x 2-byte files, got:\n{body}",
+    );
+}
