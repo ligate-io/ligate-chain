@@ -29,6 +29,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod celestia_rollup;
+pub mod health;
 pub mod metrics;
 mod mock_rollup;
 
