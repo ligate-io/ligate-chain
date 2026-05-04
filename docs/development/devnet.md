@@ -192,6 +192,8 @@ cargo run --release --bin ligate-node -- \
 The `[storage]` section of `celestia.toml` controls the data
 directory; CLI flags for it land in a future binary release.
 
+For the full Celestia setup runbook (light-node provisioning, auth tokens, env-var hygiene, common failure modes), see [`celestia-ops.md`](celestia-ops.md). It assumes you've already validated the chain against Mock DA via [`devnet/README.md`](../../devnet/README.md).
+
 **Attestor or full node**
 
 A full node uses the same binary with the same args; it differs from
