@@ -89,6 +89,11 @@ async-trait = "0.1"
 clap        = { version = "4", features = ["derive"] }
 tokio       = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"] }
 rustls      = { version = "0.23", default-features = false, features = ["ring"] }
+# Prometheus + axum for the `/metrics` endpoint (#110). Both already
+# present in the dep tree via SDK transitives; we explicitly pin via
+# the workspace so direct uses don't silently shift on SDK rev bumps.
+prometheus  = { version = "0.14", default-features = false }
+axum        = { version = "0.8", default-features = false, features = ["tokio", "http1"] }
 # Risc0 toolchain versions track the SDK workspace.
 risc0-zkvm          = { version = "3.0", default-features = false }
 risc0-zkvm-platform = "2.2"

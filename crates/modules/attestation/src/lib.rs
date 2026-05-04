@@ -34,6 +34,9 @@ mod query;
 #[cfg(feature = "native")]
 pub use query::{AttestationResponse, AttestorSetResponse, SchemaResponse};
 
+#[cfg(feature = "native")]
+pub mod metrics;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -991,6 +994,9 @@ impl<S: Spec> AttestationModule<S> {
 
         self.attestor_sets.set(&id, &AttestorSet { members: sorted_members, threshold }, state)?;
 
+        #[cfg(feature = "native")]
+        metrics::record_attestor_set_registered();
+
         Ok(())
     }
 
@@ -1041,6 +1047,9 @@ impl<S: Spec> AttestationModule<S> {
             &Schema { owner, name, version, attestor_set, fee_routing_bps, fee_routing_addr },
             state,
         )?;
+
+        #[cfg(feature = "native")]
+        metrics::record_schema_registered();
 
         Ok(())
     }
@@ -1116,6 +1125,9 @@ impl<S: Spec> AttestationModule<S> {
             &Attestation { schema_id, payload_hash, submitter, timestamp, signatures },
             state,
         )?;
+
+        #[cfg(feature = "native")]
+        metrics::record_attestation_submitted();
 
         Ok(())
     }

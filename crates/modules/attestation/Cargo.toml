@@ -22,6 +22,12 @@ thiserror.workspace = true
 sov-modules-api = { workspace = true }
 sov-bank        = { workspace = true }
 
+# Prometheus counters for the module's call paths. Optional behind
+# the `metrics` feature so the in-zkVM build (which doesn't need
+# observability) doesn't pull libcompiler_builtins dupes. Tracking
+# issue: #110 (Phase 1 scope).
+prometheus = { workspace = true, optional = true }
+
 [dev-dependencies]
 attestation     = { path = ".", features = ["native"] }
 serde_json.workspace = true
@@ -35,7 +41,11 @@ tokio.workspace = true
 
 [features]
 default = []
+# `native` includes Prometheus counters: only the host build
+# observes them, the zkVM guest stays clean. The counters expose
+# nothing in the zkVM proof; they live entirely on the prover host.
 native = [
     "sov-modules-api/native",
     "sov-bank/native",
+    "dep:prometheus",
 ]

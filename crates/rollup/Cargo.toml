@@ -49,8 +49,20 @@ sov-stf-runner                 = { workspace = true }
 # trait impls) is available to the blueprint.
 ligate-stf = { path = "../stf", features = ["native"] }
 
+# Direct path dep so main.rs can call `attestation::metrics::init()`
+# at startup. The `native` feature pulls in the Prometheus counter
+# definitions; the rest of the binary already gets the type via the
+# ligate-stf chain.
+attestation = { path = "../modules/attestation", features = ["native"] }
+
+# Prometheus + axum for the `/metrics` endpoint (issue #110, Phase 1).
+# axum runs in its own tokio task next to the SDK's REST server so we
+# don't have to touch the blueprint's router setup.
+prometheus = { workspace = true, features = ["process"] }
+axum       = { workspace = true }
+
 [dev-dependencies]
-attestation     = { path = "../modules/attestation" }
+reqwest         = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 ed25519-dalek   = { workspace = true }
 serde_json      = { workspace = true }
 sov-test-utils  = { workspace = true }

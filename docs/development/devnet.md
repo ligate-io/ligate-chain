@@ -360,9 +360,34 @@ operator should watch:
 - Any unexpected signing requests (digests that did not come from the
   authorised quorum endpoint). Treat as a security event.
 
-A Prometheus `/metrics` endpoint on `ligate-node` is **future work** —
-the SDK exposes hooks but we haven't wired them or shipped Grafana
-templates. Tracked as a follow-up in the chain backlog.
+### Prometheus `/metrics` endpoint
+
+`ligate-node` exposes a Prometheus text-format `/metrics` endpoint at
+`http://127.0.0.1:9100/metrics` by default. Phase 1 of [#110](https://github.com/ligate-io/ligate-chain/issues/110)
+ships three counters:
+
+- `ligate_attestor_sets_registered_total`
+- `ligate_schemas_registered_total`
+- `ligate_attestations_submitted_total`
+
+Cold-start values are zero; each counter increments on a successful call
+to the corresponding `RegisterAttestorSet` / `RegisterSchema` /
+`SubmitAttestation` handler.
+
+```bash
+# Default bind (localhost-only, safe for direct scraping in dev).
+curl http://127.0.0.1:9100/metrics
+
+# Behind a reverse proxy with operator-controlled exposure.
+ligate-node --metrics-bind 127.0.0.1:9100 ...
+
+# Disable the endpoint entirely.
+ligate-node --metrics-bind off ...
+```
+
+Phase 2 expands the metric set (DA submission latency, mempool depth,
+RPC histograms, state DB size) and ships a starter Grafana dashboard.
+Tracked under follow-up issues filed alongside the Phase 1 PR.
 
 ## 9. Known limitations (devnet phase)
 
@@ -377,7 +402,7 @@ templates. Tracked as a follow-up in the chain backlog.
 | Multi-sequencer / leader rotation | #82 (v1) |
 | Block indexer service (Postgres + ingest) | #91 |
 | WebSocket / SSE live event stream | #92 |
-| Prometheus metrics endpoint on `ligate-node` | not yet filed |
+| Full Prometheus metric set + Grafana dashboard | follow-up to #110 |
 | `ligate-cli` operator tool | not yet filed |
 
 The chain itself is live: `Schema`, `AttestorSet`, `Attestation`, the

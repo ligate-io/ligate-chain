@@ -12,12 +12,13 @@
 //!   serves no purpose with mock zkVM, and we want startup to be
 //!   fast for devnet smoke testing.
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
 
 use anyhow::Context as _;
 use clap::Parser;
-use ligate_rollup::{CelestiaLigateRollup, MockLigateRollup};
+use ligate_rollup::{metrics, CelestiaLigateRollup, MockLigateRollup};
 use ligate_stf::genesis_config::GenesisPaths;
 use sov_address::MultiAddressEvm;
 use sov_celestia_adapter::CelestiaService;
@@ -55,6 +56,18 @@ struct Args {
     /// [`ligate_stf::genesis_config`] for the expected layout.
     #[arg(long, default_value = "devnet/genesis")]
     genesis_config_dir: PathBuf,
+
+    /// Address to bind the Prometheus `/metrics` endpoint on.
+    ///
+    /// Defaults to `127.0.0.1:9100` so a fresh `cargo run --bin
+    /// ligate-node` exposes metrics for local scraping without
+    /// leaking them to the network. Operators behind a reverse
+    /// proxy override to a public bind. Pass `off` to disable the
+    /// endpoint entirely.
+    ///
+    /// Tracking issue: #110.
+    #[arg(long, default_value = "127.0.0.1:9100")]
+    metrics_bind: String,
 }
 
 /// DA layers we know how to dispatch into.
@@ -117,8 +130,32 @@ async fn run() -> anyhow::Result<()> {
         da_layer = ?args.da_layer,
         rollup_config_path = %rollup_config_path,
         genesis_config_dir = ?args.genesis_config_dir,
+        metrics_bind = %args.metrics_bind,
         "Starting Ligate rollup",
     );
+
+    // Spawn the Prometheus `/metrics` server before the rollup
+    // takes the foreground tokio task. If the user passed
+    // `--metrics-bind off`, skip the spawn and run blind. We do
+    // NOT join the metrics task back into the main flow; on
+    // rollup shutdown the task gets dropped with the runtime.
+    if !is_metrics_disabled(&args.metrics_bind) {
+        let addr: SocketAddr = args
+            .metrics_bind
+            .parse()
+            .with_context(|| format!("invalid --metrics-bind value: {}", args.metrics_bind))?;
+        // Pre-touch the attestation counters so they appear in
+        // `/metrics` output even before the first tx lands.
+        attestation::metrics::init();
+        let listener = metrics::bind(addr)
+            .await
+            .with_context(|| format!("metrics server failed to bind {addr}"))?;
+        tokio::spawn(async move {
+            if let Err(e) = metrics::serve(listener).await {
+                tracing::error!(error = ?e, "metrics server stopped");
+            }
+        });
+    }
 
     let genesis_paths = GenesisPaths::from_dir(&args.genesis_config_dir);
 
@@ -126,6 +163,12 @@ async fn run() -> anyhow::Result<()> {
         SupportedDaLayer::Mock => run_with_mock(&rollup_config_path, &genesis_paths).await,
         SupportedDaLayer::Celestia => run_with_celestia(&rollup_config_path, &genesis_paths).await,
     }
+}
+
+/// `--metrics-bind off` (case-insensitive) disables the metrics
+/// endpoint entirely. Any other value gets parsed as a `SocketAddr`.
+fn is_metrics_disabled(value: &str) -> bool {
+    matches!(value.to_ascii_lowercase().as_str(), "off" | "none" | "disabled")
 }
 
 async fn run_with_mock(
