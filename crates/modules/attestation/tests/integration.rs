@@ -146,6 +146,28 @@ fn safe_name(s: &str) -> SafeString {
     SafeString::try_from(s.to_string()).expect("name fits SafeString default cap")
 }
 
+/// Read the current value of the rejection counter for a given
+/// `reason` label. Returns 0 if the counter / label hasn't been
+/// seen yet by the registry.
+///
+/// Walks the global Prometheus default registry rather than holding
+/// a direct handle to the counter, so this helper survives if the
+/// metrics module is refactored. Phase 2 of #110.
+fn rejection_counter(reason: &str) -> u64 {
+    for mf in prometheus::gather() {
+        if mf.name() != "ligate_attestations_rejected_total" {
+            continue;
+        }
+        for m in mf.get_metric() {
+            let matches = m.get_label().iter().any(|l| l.name() == "reason" && l.value() == reason);
+            if matches {
+                return m.get_counter().get_value() as u64;
+            }
+        }
+    }
+    0
+}
+
 /// Asserts the tx reverted AND the rendered reason contains `phrase`.
 ///
 /// Pinning the phrase guards against a refactor that changes which
@@ -519,6 +541,47 @@ fn register_schema_rejects_orphan_routing_addr_without_bps() {
             assert_reverted_with(&result.tx_receipt, "fee routing misconfigured");
         }),
     });
+}
+
+#[test]
+fn rejection_counter_bumps_on_typed_attestation_error() {
+    // Phase 2 of #110. Submits a tx that fires `UnknownSchema`
+    // (simplest variant to trigger: no setup needed beyond the
+    // default `setup`) and asserts the
+    // `ligate_attestations_rejected_total{reason="unknown_schema"}`
+    // counter increments by exactly 1.
+    //
+    // Uses a before/after delta because tests share the global
+    // Prometheus default registry; another test running in parallel
+    // could have bumped the counter between observations.
+
+    let before = rejection_counter("unknown_schema");
+
+    let mut env = setup(Amount::ZERO, Amount::ZERO, Amount::ZERO);
+
+    let bogus_schema = attestation::SchemaId::from([0xCAu8; 32]);
+    let bogus_payload = attestation::PayloadHash::from([0xFEu8; 32]);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::SubmitAttestation {
+                schema_id: bogus_schema,
+                payload_hash: bogus_payload,
+                signatures: SafeVec::try_from(Vec::<AttestorSignature>::new()).unwrap(),
+            },
+        ),
+        assert: Box::new(|result, _state| {
+            assert_reverted_with(&result.tx_receipt, "schema not found");
+        }),
+    });
+
+    let after = rejection_counter("unknown_schema");
+    assert_eq!(
+        after - before,
+        1,
+        "expected unknown_schema rejection counter to bump by 1, got delta {}",
+        after - before
+    );
 }
 
 #[test]

@@ -8,26 +8,28 @@ The acceptance criterion: every `pub` Error variant has at least one test assert
 
 All in `crates/modules/attestation/src/lib.rs`. Tests in `crates/modules/attestation/tests/integration.rs` unless noted.
 
-| Variant | Phrase pinned | Test |
-|---|---|---|
-| `ThresholdExceedsMembers` | `exceeds member count` | `register_attestor_set_rejects_threshold_above_members` |
-| `ZeroThreshold` | `must be at least 1` | `register_attestor_set_rejects_zero_threshold` |
-| `EmptyAttestorSet` | `must have at least one member` | `register_attestor_set_rejects_empty_members` |
-| `DuplicateAttestorSet` | `attestor set already registered` | `register_attestor_set_rejects_duplicate` |
-| `DuplicateSchema` | `schema already registered` | `register_schema_rejects_duplicate` |
-| `UnknownAttestorSet` | `unregistered attestor set` | `register_schema_requires_existing_attestor_set` |
-| `FeeRoutingExceedsCap` | `exceeds protocol cap` | `register_schema_rejects_over_cap_fee_routing` + `register_schema_rejects_above_custom_cap` |
-| `OrphanFeeRouting` | `fee routing misconfigured` | `register_schema_rejects_orphan_routing_bps_without_addr` + `register_schema_rejects_orphan_routing_addr_without_bps` |
-| `UnknownSchema` | `schema not found` | `submit_attestation_requires_existing_schema` |
-| `DuplicateAttestation` | `attestation already exists` | `full_register_register_submit_flow` (write-once branch) |
-| `DuplicateSignaturePubkey` | `duplicate attestor pubkey` | `submit_with_duplicate_pubkey_rejects` |
-| `UnknownAttestorPubkey` | `not in the schema's attestor set` | `submit_with_unknown_pubkey_rejects` |
-| `InvalidAttestorPubkey` | `not a valid ed25519 point` | `submit_with_off_curve_pubkey_rejects` |
-| `BadSignatureLength` | `expected 64 for ed25519` | `submit_with_bad_sig_length_rejects` |
-| `InvalidSignature` | `did not verify` | `submit_with_invalid_signature_rejects` + `submit_digest_is_bound_to_submitter` |
-| `BelowThreshold` | `quorum not met` | `submit_below_threshold_rejects` + `submit_attestation_rejects_empty_signatures` |
-| `MissingAttestorSet` | n/a (unreachable in v0) | see "Unreachable variants" below |
-| `ChainNotConfigured` | n/a (unreachable in tests) | see "Unreachable variants" below |
+| Variant | Phrase pinned | Discriminant | Test |
+|---|---|---|---|
+| `ThresholdExceedsMembers` | `exceeds member count` | `threshold_exceeds_members` | `register_attestor_set_rejects_threshold_above_members` |
+| `ZeroThreshold` | `must be at least 1` | `zero_threshold` | `register_attestor_set_rejects_zero_threshold` |
+| `EmptyAttestorSet` | `must have at least one member` | `empty_attestor_set` | `register_attestor_set_rejects_empty_members` |
+| `DuplicateAttestorSet` | `attestor set already registered` | `duplicate_attestor_set` | `register_attestor_set_rejects_duplicate` |
+| `DuplicateSchema` | `schema already registered` | `duplicate_schema` | `register_schema_rejects_duplicate` |
+| `UnknownAttestorSet` | `unregistered attestor set` | `unknown_attestor_set` | `register_schema_requires_existing_attestor_set` |
+| `FeeRoutingExceedsCap` | `exceeds protocol cap` | `fee_routing_exceeds_cap` | `register_schema_rejects_over_cap_fee_routing` + `register_schema_rejects_above_custom_cap` |
+| `OrphanFeeRouting` | `fee routing misconfigured` | `orphan_fee_routing` | `register_schema_rejects_orphan_routing_bps_without_addr` + `register_schema_rejects_orphan_routing_addr_without_bps` |
+| `UnknownSchema` | `schema not found` | `unknown_schema` | `submit_attestation_requires_existing_schema` + `rejection_counter_bumps_on_typed_attestation_error` |
+| `DuplicateAttestation` | `attestation already exists` | `duplicate_attestation` | `full_register_register_submit_flow` (write-once branch) |
+| `DuplicateSignaturePubkey` | `duplicate attestor pubkey` | `duplicate_signature_pubkey` | `submit_with_duplicate_pubkey_rejects` |
+| `UnknownAttestorPubkey` | `not in the schema's attestor set` | `unknown_attestor_pubkey` | `submit_with_unknown_pubkey_rejects` |
+| `InvalidAttestorPubkey` | `not a valid ed25519 point` | `invalid_attestor_pubkey` | `submit_with_off_curve_pubkey_rejects` |
+| `BadSignatureLength` | `expected 64 for ed25519` | `bad_signature_length` | `submit_with_bad_sig_length_rejects` |
+| `InvalidSignature` | `did not verify` | `invalid_signature` | `submit_with_invalid_signature_rejects` + `submit_digest_is_bound_to_submitter` |
+| `BelowThreshold` | `quorum not met` | `below_threshold` | `submit_below_threshold_rejects` + `submit_attestation_rejects_empty_signatures` |
+| `MissingAttestorSet` | n/a (unreachable in v0) | `missing_attestor_set` | see "Unreachable variants" below |
+| `ChainNotConfigured` | n/a (unreachable in tests) | `chain_not_configured` | see "Unreachable variants" below |
+
+**Discriminant column** is the stable snake_case label produced by `AttestationError::discriminant()`. It's the value of the `reason` label on the Prometheus `ligate_attestations_rejected_total{reason}` counter. The `discriminant_labels_are_stable_and_unique` unit test in `tests/unit.rs` pins the mapping; renaming a label is a coordinated dashboard-update event, not a Rust-only change.
 
 ## `ligate_stf::genesis_config::GenesisError` (4 variants)
 
