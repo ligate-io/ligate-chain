@@ -142,6 +142,103 @@ pub enum GenesisError {
         /// The id derived from [`sov_bank::config_gas_token_id`].
         bank: String,
     },
+
+    /// `InitialAttestorSet.members` is empty. The runtime's
+    /// `RegisterAttestorSet` handler rejects this; the genesis loader
+    /// should fail at the same boundary so a misconfigured genesis
+    /// doesn't write garbage state.
+    #[error("initial_attestor_sets[{index}] has empty members vec")]
+    InitialAttestorSetEmpty {
+        /// Index in `attestation.initial_attestor_sets`.
+        index: usize,
+    },
+
+    /// `InitialAttestorSet.threshold` is 0 or larger than the member
+    /// count. Mirrors the `ZeroThreshold` / `ThresholdExceedsMembers`
+    /// runtime errors.
+    #[error("initial_attestor_sets[{index}] has threshold {threshold} outside 1..={count}")]
+    InitialAttestorSetInvalidThreshold {
+        /// Index in `attestation.initial_attestor_sets`.
+        index: usize,
+        /// Supplied threshold.
+        threshold: u8,
+        /// Number of members supplied.
+        count: usize,
+    },
+
+    /// Two `InitialAttestorSet` entries derive to the same
+    /// `AttestorSetId`. Pointless duplication; the runtime's
+    /// `DuplicateAttestorSet` rejection would fire on the second
+    /// genesis-time registration.
+    #[error("initial_attestor_sets[{index}] duplicates the id derived from index {first}")]
+    InitialAttestorSetDuplicate {
+        /// First index that produced the colliding id.
+        first: usize,
+        /// Second (rejected) index.
+        index: usize,
+    },
+
+    /// `InitialSchema.attestor_set` references an `AttestorSetId`
+    /// that no `InitialAttestorSet` entry derives to. The schema
+    /// would be unverifiable from genesis (no attestors registered
+    /// for it).
+    #[error(
+        "initial_schemas[{index}] (name={name:?}) references attestor_set {attestor_set} \
+         which is not registered by any initial_attestor_sets entry"
+    )]
+    InitialSchemaUnknownAttestorSet {
+        /// Index in `attestation.initial_schemas`.
+        index: usize,
+        /// Schema name (for operator triage).
+        name: String,
+        /// The `AttestorSetId` that didn't resolve.
+        attestor_set: String,
+    },
+
+    /// Two `InitialSchema` entries derive to the same `SchemaId`.
+    /// Same `(owner, name, version)` tuple. The runtime's
+    /// `DuplicateSchema` rejection would fire on the second
+    /// genesis-time registration.
+    #[error("initial_schemas[{index}] duplicates the id derived from index {first}")]
+    InitialSchemaDuplicate {
+        /// First index that produced the colliding id.
+        first: usize,
+        /// Second (rejected) index.
+        index: usize,
+    },
+
+    /// `InitialSchema.fee_routing_bps` is non-zero with no
+    /// `fee_routing_addr`, or vice versa. Mirrors the runtime's
+    /// `OrphanFeeRouting` rejection.
+    #[error(
+        "initial_schemas[{index}] (name={name:?}) has orphan fee routing: \
+         bps={bps}, addr={has_addr}"
+    )]
+    InitialSchemaOrphanRouting {
+        /// Index in `attestation.initial_schemas`.
+        index: usize,
+        /// Schema name (for operator triage).
+        name: String,
+        /// Configured basis points.
+        bps: u16,
+        /// Whether `fee_routing_addr` was set.
+        has_addr: bool,
+    },
+
+    /// `InitialSchema.fee_routing_bps` exceeds the genesis-configured
+    /// `max_builder_bps` cap. Mirrors the runtime's
+    /// `FeeRoutingExceedsCap` rejection.
+    #[error("initial_schemas[{index}] (name={name:?}) fee_routing_bps {bps} exceeds cap {cap}")]
+    InitialSchemaFeeRoutingExceedsCap {
+        /// Index in `attestation.initial_schemas`.
+        index: usize,
+        /// Schema name (for operator triage).
+        name: String,
+        /// Supplied basis points.
+        bps: u16,
+        /// Genesis-configured cap (`max_builder_bps`).
+        cap: u16,
+    },
 }
 
 /// Read each module's JSON from `paths`, assemble the runtime's
@@ -193,6 +290,90 @@ where
             attestation: cfg.attestation.lgt_token_id.to_string(),
             bank: bank_token.to_string(),
         });
+    }
+
+    validate_attestation_config(&cfg.attestation)?;
+
+    Ok(())
+}
+
+/// Per-attestation-module invariants. Mirrors the runtime checks
+/// that the `RegisterAttestorSet` and `RegisterSchema` handlers run
+/// at submission time, applied at genesis-load time so a
+/// misconfigured `AttestationConfig` fails fast instead of writing
+/// state that later handlers reject.
+///
+/// Tracking issue: ligate-io/ligate-chain#175.
+fn validate_attestation_config<S: Spec>(
+    cfg: &attestation::AttestationConfig<S>,
+) -> Result<(), GenesisError> {
+    use std::collections::HashMap;
+
+    // Pass 1: validate each `InitialAttestorSet` and collect derived
+    // ids for the dedup + cross-reference checks below.
+    let mut set_first_seen: HashMap<attestation::AttestorSetId, usize> = HashMap::new();
+    for (index, set) in cfg.initial_attestor_sets.iter().enumerate() {
+        if set.members.is_empty() {
+            return Err(GenesisError::InitialAttestorSetEmpty { index });
+        }
+        let count = set.members.len();
+        if set.threshold == 0 || usize::from(set.threshold) > count {
+            return Err(GenesisError::InitialAttestorSetInvalidThreshold {
+                index,
+                threshold: set.threshold,
+                count,
+            });
+        }
+
+        // The runtime sorts members on registration; the derived id
+        // collapses any caller-supplied ordering. Mirror that here so
+        // genesis dedup catches "same set written in two orders".
+        let mut sorted = set.members.clone();
+        sorted.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
+        let id = attestation::AttestorSet::derive_id(&sorted, set.threshold);
+
+        if let Some(&first) = set_first_seen.get(&id) {
+            return Err(GenesisError::InitialAttestorSetDuplicate { first, index });
+        }
+        set_first_seen.insert(id, index);
+    }
+
+    // Pass 2: validate each `InitialSchema` against the cap, against
+    // the orphan-routing rule, against the set we just collected,
+    // and dedup against earlier schema entries.
+    let cap = cfg.max_builder_bps;
+    let mut schema_first_seen: HashMap<attestation::SchemaId, usize> = HashMap::new();
+    for (index, schema) in cfg.initial_schemas.iter().enumerate() {
+        if schema.fee_routing_bps > cap {
+            return Err(GenesisError::InitialSchemaFeeRoutingExceedsCap {
+                index,
+                name: schema.name.clone(),
+                bps: schema.fee_routing_bps,
+                cap,
+            });
+        }
+        let has_addr = schema.fee_routing_addr.is_some();
+        if (schema.fee_routing_bps > 0) != has_addr {
+            return Err(GenesisError::InitialSchemaOrphanRouting {
+                index,
+                name: schema.name.clone(),
+                bps: schema.fee_routing_bps,
+                has_addr,
+            });
+        }
+        if !set_first_seen.contains_key(&schema.attestor_set) {
+            return Err(GenesisError::InitialSchemaUnknownAttestorSet {
+                index,
+                name: schema.name.clone(),
+                attestor_set: schema.attestor_set.to_string(),
+            });
+        }
+
+        let id = attestation::Schema::<S>::derive_id(&schema.owner, &schema.name, schema.version);
+        if let Some(&first) = schema_first_seen.get(&id) {
+            return Err(GenesisError::InitialSchemaDuplicate { first, index });
+        }
+        schema_first_seen.insert(id, index);
     }
 
     Ok(())

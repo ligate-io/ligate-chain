@@ -31,7 +31,7 @@ All in `crates/modules/attestation/src/lib.rs`. Tests in `crates/modules/attesta
 
 **Discriminant column** is the stable snake_case label produced by `AttestationError::discriminant()`. It's the value of the `reason` label on the Prometheus `ligate_attestations_rejected_total{reason}` counter. The `discriminant_labels_are_stable_and_unique` unit test in `tests/unit.rs` pins the mapping; renaming a label is a coordinated dashboard-update event, not a Rust-only change.
 
-## `ligate_stf::genesis_config::GenesisError` (4 variants)
+## `ligate_stf::genesis_config::GenesisError` (11 variants)
 
 All in `crates/stf/src/genesis_config.rs`. Tests in `crates/stf/src/tests.rs::genesis_loader`.
 
@@ -41,6 +41,13 @@ All in `crates/stf/src/genesis_config.rs`. Tests in `crates/stf/src/tests.rs::ge
 | `ParseJson` | `create_genesis_config_surfaces_parse_error_with_path` |
 | `MissingGasToken` | `validate_rejects_missing_gas_token` |
 | `LgtTokenIdMismatch` | `validate_rejects_lgt_token_id_mismatch` |
+| `InitialAttestorSetEmpty` | `validate_rejects_initial_attestor_set_empty_members` |
+| `InitialAttestorSetInvalidThreshold` | `validate_rejects_initial_attestor_set_zero_threshold` + `validate_rejects_initial_attestor_set_threshold_above_members` |
+| `InitialAttestorSetDuplicate` | `validate_rejects_initial_attestor_set_duplicate` |
+| `InitialSchemaUnknownAttestorSet` | `validate_rejects_initial_schema_unknown_attestor_set` |
+| `InitialSchemaDuplicate` | `validate_rejects_initial_schema_duplicate` |
+| `InitialSchemaOrphanRouting` | `validate_rejects_initial_schema_orphan_routing_bps_without_addr` + `validate_rejects_initial_schema_orphan_routing_addr_without_bps` |
+| `InitialSchemaFeeRoutingExceedsCap` | `validate_rejects_initial_schema_fee_routing_exceeds_cap` |
 
 ## `ligate_client::ClientError` (4 variants)
 
