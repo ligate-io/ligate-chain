@@ -372,3 +372,66 @@ fn default_max_builder_bps_is_half() {
 // reduction of the cap below ed25519's 64 fails the build.
 const _: () = assert!(MAX_ATTESTOR_SIGNATURE_BYTES >= 64);
 const _: () = assert!(MAX_ATTESTOR_SIGNATURE_BYTES >= 48);
+
+#[test]
+fn discriminant_labels_are_stable_and_unique() {
+    // Pins the snake_case mapping in `AttestationError::discriminant`.
+    // The discriminant strings ARE wire format for the Prometheus
+    // `ligate_attestations_rejected_total{reason}` label; renaming
+    // breaks every operator's saved Grafana queries. Treat any diff
+    // here as a coordinated change with the dashboard.
+    //
+    // The exhaustive match in `discriminant()` itself catches "added
+    // a variant, forgot to map it" at compile time. This test catches
+    // "renamed a label" or "two variants collapsed to the same label".
+    use std::collections::HashSet;
+
+    use attestation::AttestationError;
+
+    let variants: Vec<AttestationError> = vec![
+        AttestationError::ThresholdExceedsMembers { threshold: 0, count: 0 },
+        AttestationError::ZeroThreshold,
+        AttestationError::EmptyAttestorSet,
+        AttestationError::DuplicateAttestorSet,
+        AttestationError::DuplicateSchema,
+        AttestationError::UnknownAttestorSet,
+        AttestationError::FeeRoutingExceedsCap { bps: 0, cap: 0 },
+        AttestationError::OrphanFeeRouting,
+        AttestationError::UnknownSchema,
+        AttestationError::DuplicateAttestation,
+        AttestationError::DuplicateSignaturePubkey,
+        AttestationError::UnknownAttestorPubkey,
+        AttestationError::InvalidAttestorPubkey,
+        AttestationError::BadSignatureLength { actual: 0 },
+        AttestationError::InvalidSignature,
+        AttestationError::BelowThreshold { provided: 0, required: 0 },
+        AttestationError::MissingAttestorSet,
+        AttestationError::ChainNotConfigured,
+    ];
+
+    // Tripwire for new variants. Bumping this is the cue to add a
+    // row + check the dashboards.
+    assert_eq!(
+        variants.len(),
+        18,
+        "update this test when AttestationError gains a variant; \
+         also update docs/development/error-coverage.md"
+    );
+
+    let mut seen: HashSet<&'static str> = HashSet::new();
+    for variant in &variants {
+        let label = variant.discriminant();
+
+        assert!(!label.is_empty(), "discriminant for {variant:?} is empty");
+
+        assert!(
+            label.bytes().all(|b| b.is_ascii_lowercase() || b == b'_' || b.is_ascii_digit()),
+            "discriminant '{label}' for {variant:?} is not snake_case ASCII"
+        );
+
+        assert!(
+            seen.insert(label),
+            "discriminant '{label}' is shared across variants; metrics break"
+        );
+    }
+}

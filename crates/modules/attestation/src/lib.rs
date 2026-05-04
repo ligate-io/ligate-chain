@@ -778,6 +778,46 @@ pub enum AttestationError {
     ChainNotConfigured,
 }
 
+impl AttestationError {
+    /// Stable snake_case label for this variant. Used as the `reason`
+    /// label on the `ligate_attestations_rejected_total` Prometheus
+    /// counter so dashboards can aggregate by failure category
+    /// without parsing the rendered error message.
+    ///
+    /// **Stability guarantee:** these strings are part of the
+    /// observability surface. Renaming a variant is a non-breaking
+    /// change (Rust-side); changing the discriminant string here is
+    /// a dashboard-breaking change and needs a coordinated update
+    /// to any operator's saved queries. Treat the mapping as wire
+    /// format for the metrics layer.
+    ///
+    /// Pinned by `discriminant_is_stable_per_variant` in
+    /// `tests/unit.rs` so adding a new variant without extending
+    /// this match fails CI.
+    pub fn discriminant(&self) -> &'static str {
+        match self {
+            Self::ThresholdExceedsMembers { .. } => "threshold_exceeds_members",
+            Self::ZeroThreshold => "zero_threshold",
+            Self::EmptyAttestorSet => "empty_attestor_set",
+            Self::DuplicateAttestorSet => "duplicate_attestor_set",
+            Self::DuplicateSchema => "duplicate_schema",
+            Self::UnknownAttestorSet => "unknown_attestor_set",
+            Self::FeeRoutingExceedsCap { .. } => "fee_routing_exceeds_cap",
+            Self::OrphanFeeRouting => "orphan_fee_routing",
+            Self::UnknownSchema => "unknown_schema",
+            Self::DuplicateAttestation => "duplicate_attestation",
+            Self::DuplicateSignaturePubkey => "duplicate_signature_pubkey",
+            Self::UnknownAttestorPubkey => "unknown_attestor_pubkey",
+            Self::InvalidAttestorPubkey => "invalid_attestor_pubkey",
+            Self::BadSignatureLength { .. } => "bad_signature_length",
+            Self::InvalidSignature => "invalid_signature",
+            Self::BelowThreshold { .. } => "below_threshold",
+            Self::MissingAttestorSet => "missing_attestor_set",
+            Self::ChainNotConfigured => "chain_not_configured",
+        }
+    }
+}
+
 // ============================================================================
 // Module implementation
 // ============================================================================
@@ -838,7 +878,7 @@ impl<S: Spec> Module for AttestationModule<S> {
         // boundary so the per-handler signatures stay in terms of
         // unbounded `String` / `Vec<T>`. Borsh round-trips through
         // SafeString/SafeVec preserve content losslessly.
-        match msg {
+        let result = match msg {
             CallMessage::RegisterAttestorSet { members, threshold } => {
                 let members: Vec<PubKey> = members.into_iter().collect();
                 self.handle_register_attestor_set(members, threshold, context, state)
@@ -862,7 +902,23 @@ impl<S: Spec> Module for AttestationModule<S> {
                 let signatures: Vec<AttestorSignature> = signatures.into_iter().collect();
                 self.handle_submit_attestation(schema_id, payload_hash, signatures, context, state)
             }
+        };
+
+        // Phase 2 of #110: bump `ligate_attestations_rejected_total`
+        // when the handler returned a typed `AttestationError`.
+        // Non-`AttestationError` rejections (e.g. bank `transfer`
+        // failures from insufficient balance) are intentionally not
+        // counted here; they belong to the bank module's own metric
+        // surface and would dilute the {reason} cardinality of this
+        // counter.
+        #[cfg(feature = "native")]
+        if let Err(e) = &result {
+            if let Some(typed) = e.downcast_ref::<AttestationError>() {
+                metrics::record_rejected(typed);
+            }
         }
+
+        result
     }
 }
 

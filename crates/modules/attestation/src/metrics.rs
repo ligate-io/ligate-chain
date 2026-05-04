@@ -24,13 +24,14 @@
 
 use std::sync::OnceLock;
 
-use prometheus::{register_int_counter, IntCounter};
+use prometheus::{register_int_counter, register_int_counter_vec, IntCounter, IntCounterVec};
+
+use crate::AttestationError;
 
 /// Counter incremented once per `RegisterAttestorSet` handler
 /// invocation that returns `Ok(())`. A failed registration (e.g.
-/// `ZeroThreshold`, `DuplicateAttestorSet`) does NOT increment.
-/// Failure breakdown by reason lands in Phase 2 via a labelled
-/// counter vector; see #110 follow-up.
+/// `ZeroThreshold`, `DuplicateAttestorSet`) does NOT increment;
+/// failures bump `attestations_rejected_total{reason}` instead.
 fn attestor_sets_registered() -> &'static IntCounter {
     static M: OnceLock<IntCounter> = OnceLock::new();
     M.get_or_init(|| {
@@ -67,6 +68,30 @@ fn attestations_submitted() -> &'static IntCounter {
     })
 }
 
+/// Vector counter labelled by `reason`. Bumps once per call-handler
+/// invocation that returns an [`AttestationError`]. The label value
+/// comes from [`AttestationError::discriminant`] and is part of the
+/// observability wire format: stable across Rust-side variant
+/// renames, only changes via a coordinated dashboard update.
+///
+/// Per-handler kind isn't broken out (no separate counter for
+/// "register-attestor-set rejects" vs "submit-attestation rejects")
+/// because the failure space across handlers is mostly disjoint
+/// (`zero_threshold` only fires from `RegisterAttestorSet`,
+/// `unknown_schema` only from `SubmitAttestation`). Adding a `kind`
+/// label later if dashboards need it is a non-breaking change.
+fn attestations_rejected() -> &'static IntCounterVec {
+    static M: OnceLock<IntCounterVec> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter_vec!(
+            "ligate_attestations_rejected_total",
+            "Number of attestation-module call handler invocations rejected with a typed AttestationError, by reason.",
+            &["reason"]
+        )
+        .expect("counter vec registers once")
+    })
+}
+
 // ----- Public API ------------------------------------------------------------
 
 /// Bump the attestor-set-registered counter. Called after a
@@ -87,12 +112,25 @@ pub fn record_attestation_submitted() {
     attestations_submitted().inc();
 }
 
+/// Bump the rejection counter under the variant's stable
+/// discriminant string. Called from the call dispatcher when a
+/// handler returns an [`AttestationError`].
+pub fn record_rejected(err: &AttestationError) {
+    attestations_rejected().with_label_values(&[err.discriminant()]).inc();
+}
+
 /// Touch every metric so they show up in the registry at startup
 /// even before any handler fires. Without this, a brand-new node
 /// returns an empty `/metrics` response until the first tx lands,
 /// which trips alerting rules that expect a known metric set.
+///
+/// The labelled rejection vector doesn't pre-emit per-label series
+/// (Prometheus aggregates 0 across unseen labels), but its `HELP`
+/// and `TYPE` lines are emitted so the metric is discoverable via
+/// `/metrics` even before a rejection happens.
 pub fn init() {
     let _ = attestor_sets_registered();
     let _ = schemas_registered();
     let _ = attestations_submitted();
+    let _ = attestations_rejected();
 }
