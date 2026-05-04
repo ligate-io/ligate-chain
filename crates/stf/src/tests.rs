@@ -238,4 +238,252 @@ mod genesis_loader {
             other => panic!("expected ParseJson error, got {other:?}"),
         }
     }
+
+    // ============================================================
+    // Attestation-config cross-module validation (#175)
+    // ============================================================
+    //
+    // Per-attestation invariants checked at genesis-load time. Each
+    // test here builds a deliberately-bad `AttestationConfig` and
+    // asserts the right typed `GenesisError` variant fires before
+    // any state would be written.
+
+    use attestation::{InitialAttestorSet, InitialSchema, PubKey};
+    use sov_address::MultiAddress;
+    use sov_modules_api::{Address, Spec};
+
+    fn pk(byte: u8) -> PubKey {
+        PubKey::from([byte; 32])
+    }
+
+    fn addr(byte: u8) -> <TestSpec as Spec>::Address {
+        MultiAddress::Standard(Address::from([byte; 28]))
+    }
+
+    #[test]
+    fn validate_rejects_initial_attestor_set_empty_members() {
+        let mut cfg = happy_config();
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: vec![], threshold: 1 }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialAttestorSetEmpty { index }) => assert_eq!(index, 0),
+            other => panic!("expected InitialAttestorSetEmpty, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_attestor_set_zero_threshold() {
+        let mut cfg = happy_config();
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: vec![pk(1), pk(2), pk(3)], threshold: 0 }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialAttestorSetInvalidThreshold { index, threshold, count }) => {
+                assert_eq!(index, 0);
+                assert_eq!(threshold, 0);
+                assert_eq!(count, 3);
+            }
+            other => panic!("expected InitialAttestorSetInvalidThreshold, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_attestor_set_threshold_above_members() {
+        let mut cfg = happy_config();
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: vec![pk(1), pk(2)], threshold: 5 }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialAttestorSetInvalidThreshold { index, threshold, count }) => {
+                assert_eq!(index, 0);
+                assert_eq!(threshold, 5);
+                assert_eq!(count, 2);
+            }
+            other => panic!("expected InitialAttestorSetInvalidThreshold, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_attestor_set_duplicate() {
+        let mut cfg = happy_config();
+        // Two entries with the same (sorted_members, threshold) tuple.
+        // The second entry orders members differently to confirm
+        // dedup is sort-aware, matching the runtime's behaviour.
+        cfg.attestation.initial_attestor_sets = vec![
+            InitialAttestorSet { members: vec![pk(1), pk(2), pk(3)], threshold: 2 },
+            InitialAttestorSet { members: vec![pk(3), pk(1), pk(2)], threshold: 2 },
+        ];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialAttestorSetDuplicate { first, index }) => {
+                assert_eq!(first, 0);
+                assert_eq!(index, 1);
+            }
+            other => panic!("expected InitialAttestorSetDuplicate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_schema_unknown_attestor_set() {
+        let mut cfg = happy_config();
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: vec![pk(1), pk(2)], threshold: 2 }];
+        // Reference an attestor-set id that doesn't match any
+        // initial_attestor_sets entry.
+        let bogus_set = attestation::AttestorSet::derive_id(&[pk(99)], 1);
+        cfg.attestation.initial_schemas = vec![InitialSchema {
+            owner: addr(7),
+            name: "themisra.proof-of-prompt".to_string(),
+            version: 1,
+            attestor_set: bogus_set,
+            fee_routing_bps: 0,
+            fee_routing_addr: None,
+        }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialSchemaUnknownAttestorSet { index, name, .. }) => {
+                assert_eq!(index, 0);
+                assert_eq!(name, "themisra.proof-of-prompt");
+            }
+            other => panic!("expected InitialSchemaUnknownAttestorSet, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_schema_duplicate() {
+        let mut cfg = happy_config();
+        let pubs = vec![pk(1), pk(2)];
+        let set_id = attestation::AttestorSet::derive_id(&pubs, 2);
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: pubs, threshold: 2 }];
+        // Same (owner, name, version) twice.
+        cfg.attestation.initial_schemas = vec![
+            InitialSchema {
+                owner: addr(7),
+                name: "duped".to_string(),
+                version: 1,
+                attestor_set: set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+            InitialSchema {
+                owner: addr(7),
+                name: "duped".to_string(),
+                version: 1,
+                attestor_set: set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+            },
+        ];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialSchemaDuplicate { first, index }) => {
+                assert_eq!(first, 0);
+                assert_eq!(index, 1);
+            }
+            other => panic!("expected InitialSchemaDuplicate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_schema_orphan_routing_bps_without_addr() {
+        let mut cfg = happy_config();
+        let pubs = vec![pk(1), pk(2)];
+        let set_id = attestation::AttestorSet::derive_id(&pubs, 2);
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: pubs, threshold: 2 }];
+        cfg.attestation.initial_schemas = vec![InitialSchema {
+            owner: addr(7),
+            name: "orphan-bps".to_string(),
+            version: 1,
+            attestor_set: set_id,
+            fee_routing_bps: 1500,
+            fee_routing_addr: None,
+        }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialSchemaOrphanRouting { index, bps, has_addr, .. }) => {
+                assert_eq!(index, 0);
+                assert_eq!(bps, 1500);
+                assert!(!has_addr);
+            }
+            other => panic!("expected InitialSchemaOrphanRouting, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_schema_orphan_routing_addr_without_bps() {
+        let mut cfg = happy_config();
+        let pubs = vec![pk(1), pk(2)];
+        let set_id = attestation::AttestorSet::derive_id(&pubs, 2);
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: pubs, threshold: 2 }];
+        cfg.attestation.initial_schemas = vec![InitialSchema {
+            owner: addr(7),
+            name: "orphan-addr".to_string(),
+            version: 1,
+            attestor_set: set_id,
+            fee_routing_bps: 0,
+            fee_routing_addr: Some(addr(8)),
+        }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialSchemaOrphanRouting { index, bps, has_addr, .. }) => {
+                assert_eq!(index, 0);
+                assert_eq!(bps, 0);
+                assert!(has_addr);
+            }
+            other => panic!("expected InitialSchemaOrphanRouting, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_rejects_initial_schema_fee_routing_exceeds_cap() {
+        let mut cfg = happy_config();
+        let pubs = vec![pk(1), pk(2)];
+        let set_id = attestation::AttestorSet::derive_id(&pubs, 2);
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: pubs, threshold: 2 }];
+        // bps just above the default cap (5000).
+        cfg.attestation.initial_schemas = vec![InitialSchema {
+            owner: addr(7),
+            name: "over-cap".to_string(),
+            version: 1,
+            attestor_set: set_id,
+            fee_routing_bps: 5001,
+            fee_routing_addr: Some(addr(8)),
+        }];
+
+        match validate_config(&cfg) {
+            Err(GenesisError::InitialSchemaFeeRoutingExceedsCap { index, bps, cap, .. }) => {
+                assert_eq!(index, 0);
+                assert_eq!(bps, 5001);
+                assert_eq!(cap, 5000);
+            }
+            other => panic!("expected InitialSchemaFeeRoutingExceedsCap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_accepts_well_formed_initial_attestor_sets_and_schemas() {
+        // Sanity-check the happy path: a valid initial set + schema
+        // pair flows through `validate_config` without firing any of
+        // the new variants. Catches over-eager validation.
+        let mut cfg = happy_config();
+        let pubs = vec![pk(1), pk(2), pk(3)];
+        let set_id = attestation::AttestorSet::derive_id(&pubs, 2);
+        cfg.attestation.initial_attestor_sets =
+            vec![InitialAttestorSet { members: pubs, threshold: 2 }];
+        cfg.attestation.initial_schemas = vec![InitialSchema {
+            owner: addr(7),
+            name: "themisra.proof-of-prompt".to_string(),
+            version: 1,
+            attestor_set: set_id,
+            fee_routing_bps: 2500,
+            fee_routing_addr: Some(addr(8)),
+        }];
+
+        validate_config(&cfg).expect("well-formed initial sets + schemas should validate");
+    }
 }
