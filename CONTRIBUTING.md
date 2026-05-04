@@ -164,6 +164,7 @@ For module-internal helpers, doc comments are encouraged but not enforced.
 ## Pull request conventions
 
 - **One concern per PR.** Reviewers should be able to summarise your PR in one sentence. If they can't, split it.
+- **CHANGELOG entry.** Add a one-line entry under the `## [Unreleased]` heading in [`CHANGELOG.md`](CHANGELOG.md), in the appropriate bucket (Added / Changed / Fixed / Security / Deps). Reference the PR number; releases bump the unreleased entries into a versioned section.
 - **Test plan in the description.** Use the `.github/PULL_REQUEST_TEMPLATE.md` checkboxes — it forces you to think through what you've actually verified.
 - **CI must be green.** The required check is `CI pass` (a summary that aggregates `fmt`, `clippy`, `check`, `test`, `doc`, `audit`). Docs-only PRs skip the heavy gates via `paths-filter`; that's intentional.
 - **Reviews.** One approving review required (currently bypassed for the founder; this changes when a second engineer joins). For external contributors, expect a review turnaround of 1-3 business days.
