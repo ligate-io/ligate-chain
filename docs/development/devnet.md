@@ -378,6 +378,7 @@ operator should watch:
 **Gauges:**
 
 - `ligate_state_db_size_bytes` — total on-disk size of the rollup's storage directory, sampled every 30 seconds. Captures RocksDB SST files, WAL, manifest, and the ledger DB.
+- `ligate_block_height` — current rollup head slot number observed by this node, sampled every 2 seconds via the SDK's `LedgerDb::get_head_slot_number`. Sequencers report what they're producing; followers report what they've replayed from DA. Lag between two nodes scraping the same chain is the follower-vs-sequencer sync gap.
 
 **Process metrics** (Linux only): `process_cpu_seconds_total`, `process_resident_memory_bytes`, `process_open_fds`, `process_max_fds`, `process_start_time_seconds`, `process_virtual_memory_bytes`. Auto-registered by the `prometheus` crate's `process` feature; macOS and Windows builds skip them.
 

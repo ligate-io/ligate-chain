@@ -118,9 +118,17 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         _da_service: &Self::DaService,
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
     ) -> anyhow::Result<NodeEndpoints> {
+        // Phase 2 of #110: spawn the block-height polling task here
+        // because `LedgerDb` is only handed to us via this hook.
+        // The task lives until the tokio runtime tears down.
+        crate::metrics::spawn_block_height_task(
+            ledger_db.clone(),
+            crate::metrics::DEFAULT_BLOCK_HEIGHT_POLL_INTERVAL,
+        );
+
         // Stock SDK helper. Wires the standard sequencer + ledger
         // RPCs and the runtime's per-module REST routers (currently
-        // empty — see `ligate_stf::runtime_capabilities`).
+        // empty, see `ligate_stf::runtime_capabilities`).
         sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
             state_update_receiver,
             sync_status_receiver,

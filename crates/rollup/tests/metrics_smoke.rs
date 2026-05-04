@@ -138,3 +138,33 @@ async fn state_db_size_gauge_reflects_disk_usage() {
         "expected gauge to read 6 bytes after sampling 3 x 2-byte files, got:\n{body}",
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn block_height_gauge_renders_sample_value() {
+    // Phase 2 of #110. Drives `sample_block_height` directly with a
+    // known SlotNumber and asserts `/metrics` reflects it. Skips the
+    // polling task + LedgerDb (testing both end-to-end requires a
+    // booted node, which is the Tier 2 manual-verification surface).
+    use sov_rollup_interface::common::SlotNumber;
+
+    metrics::sample_block_height(SlotNumber::new(1234));
+
+    let addr = spawn_metrics_server().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("reqwest client builds");
+    let body = client
+        .get(format!("http://{addr}/metrics"))
+        .send()
+        .await
+        .expect("metrics endpoint responds")
+        .text()
+        .await
+        .expect("body is utf-8");
+
+    assert!(
+        body.contains("ligate_block_height 1234"),
+        "expected `ligate_block_height 1234` after sampling slot 1234, got:\n{body}",
+    );
+}

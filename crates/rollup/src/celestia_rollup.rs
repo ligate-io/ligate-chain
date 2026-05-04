@@ -129,6 +129,14 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         _da_service: &Self::DaService,
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
     ) -> anyhow::Result<NodeEndpoints> {
+        // Phase 2 of #110: same hook the mock-DA blueprint uses to
+        // spawn the block-height polling task. `LedgerDb` is only
+        // handed to us here.
+        crate::metrics::spawn_block_height_task(
+            ledger_db.clone(),
+            crate::metrics::DEFAULT_BLOCK_HEIGHT_POLL_INTERVAL,
+        );
+
         sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
             state_update_receiver,
             sync_status_receiver,
