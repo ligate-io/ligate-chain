@@ -133,18 +133,35 @@ pub fn init_state_db_size() {
     let _ = state_db_size_bytes();
 }
 
-/// Walk `path` recursively and sum every file's `len()`. Symlinks
-/// are followed only one level deep (the default for `read_dir`)
-/// to avoid loops; broken symlinks and unreadable entries are
-/// silently skipped so a transient mid-compaction view doesn't
-/// crash the sampler.
+/// Walk `path` recursively and sum the **on-disk** size of every
+/// file (allocated 512-byte blocks, not nominal length).
 ///
-/// Returns `0` for paths that don't exist, can't be read, or are
-/// empty.  That's intentional: the alternative (returning `Result`)
-/// would force the polling task to choose between propagating
-/// errors (kills the gauge) or swallowing them (loses signal).
-/// Returning a number that's "low or zero" lets dashboards show
-/// the regression as a graph dip and alerts catch it.
+/// `meta.len()` would return the file's logical size, which is
+/// wrong for the sparse-allocated files that NOMT and RocksDB
+/// produce: a 1M-bucket NOMT hash table reports its nominal
+/// preallocation (tens of GB) even when only a few MB of blocks
+/// are actually committed to disk. `du -sh` matches
+/// `meta.blocks() * 512`, and that's the value operators care
+/// about for capacity planning and what dashboards graph as
+/// "storage growth".
+///
+/// On non-Unix targets we fall back to `meta.len()` because the
+/// `MetadataExt::blocks` API is Unix-only. Production deployment is
+/// Linux; macOS dev gets the correct value too via the same code
+/// path. Windows would over-report on sparse files but isn't a
+/// supported target.
+///
+/// Symlinks are followed only one level deep (the default for
+/// `read_dir`) to avoid loops; broken symlinks and unreadable
+/// entries are silently skipped so a transient mid-compaction view
+/// doesn't crash the sampler.
+///
+/// Returns `0` for paths that don't exist or can't be read. The
+/// alternative (returning `Result`) would force the polling task to
+/// choose between propagating errors (kills the gauge) or
+/// swallowing them (loses signal). Returning a number that's "low
+/// or zero" lets dashboards show the regression as a graph dip and
+/// alerts catch it.
 fn directory_size_bytes(path: &Path) -> u64 {
     let mut total = 0u64;
     let Ok(entries) = std::fs::read_dir(path) else {
@@ -155,10 +172,23 @@ fn directory_size_bytes(path: &Path) -> u64 {
         if meta.is_dir() {
             total = total.saturating_add(directory_size_bytes(&entry.path()));
         } else {
-            total = total.saturating_add(meta.len());
+            total = total.saturating_add(file_disk_bytes(&meta));
         }
     }
     total
+}
+
+/// On-disk byte count for a single file. Unix: blocks * 512.
+/// Non-Unix: `len()` (over-reports on sparse files).
+#[cfg(unix)]
+fn file_disk_bytes(meta: &std::fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt;
+    meta.blocks().saturating_mul(512)
+}
+
+#[cfg(not(unix))]
+fn file_disk_bytes(meta: &std::fs::Metadata) -> u64 {
+    meta.len()
 }
 
 /// Sample the storage directory once and update the gauge. Pulled

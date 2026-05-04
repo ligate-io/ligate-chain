@@ -94,26 +94,35 @@ async fn metrics_endpoint_serves_attestation_counters_at_zero() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn state_db_size_gauge_reflects_disk_usage() {
-    // Phase 2 of #110. Builds a tempdir with a known total file
-    // size, drives `sample_state_db_size` once, and asserts the
-    // `ligate_state_db_size_bytes` gauge in `/metrics` matches the
-    // sampled value. Catches:
+    // Phase 2 of #110. Builds a tempdir with a 1 MB file, drives
+    // `sample_state_db_size` once, and asserts the
+    // `ligate_state_db_size_bytes` gauge in `/metrics` reflects
+    // the real on-disk allocation. Catches:
     //
-    // 1. The directory walker (recursive, follows symlinks one
-    //    level, skips unreadable entries).
+    // 1. The directory walker (recursive, skips unreadable entries).
     // 2. The Prometheus gauge wiring (`IntGauge::set` + Prometheus
     //    text-format encoding).
-    // 3. End-to-end /metrics rendering for a numeric metric (the
-    //    rest of the smoke test only exercises counters).
+    // 3. End-to-end /metrics rendering for a numeric metric.
+    // 4. The on-disk-vs-nominal semantics: we use `blocks() * 512`
+    //    (matches `du`), not `len()` (which over-reports on the
+    //    sparse-allocated files NOMT and RocksDB produce).
+    //
+    // 1 MB rather than a few bytes so filesystem block-size noise
+    // (4 KB on most setups) doesn't dominate the assertion.
+    use std::ops::RangeInclusive;
+
+    // A non-sparse 1 MiB file uses ~1 MiB of blocks. Allow a 5%
+    // over-allocation slack to absorb filesystem block sizing
+    // differences (ext4 / APFS / ZFS / tmpfs all behave a bit
+    // differently). Sparse files would trip a much smaller value;
+    // a `len()`-based regression would trip a much larger one.
+    const FILE_SIZE: usize = 1_048_576;
+    let acceptable: RangeInclusive<u64> = (FILE_SIZE as u64)..=(FILE_SIZE as u64 * 105 / 100);
 
     let dir = tempfile::tempdir().expect("tempdir");
-
-    // Write three files at different depths totalling 6 bytes.
     let nested = dir.path().join("nested");
     std::fs::create_dir(&nested).unwrap();
-    std::fs::write(dir.path().join("a.bin"), b"AA").unwrap();
-    std::fs::write(dir.path().join("b.bin"), b"BB").unwrap();
-    std::fs::write(nested.join("c.bin"), b"CC").unwrap();
+    std::fs::write(nested.join("blob.bin"), vec![0xABu8; FILE_SIZE]).unwrap();
 
     metrics::sample_state_db_size(dir.path());
 
@@ -131,11 +140,24 @@ async fn state_db_size_gauge_reflects_disk_usage() {
         .await
         .expect("body is utf-8");
 
-    // Substring match: `ligate_state_db_size_bytes 6` is the
-    // canonical Prometheus text-format line for our gauge.
+    // Extract the numeric value from the gauge line.
+    let line = body
+        .lines()
+        .find(|l| l.starts_with("ligate_state_db_size_bytes "))
+        .unwrap_or_else(|| panic!("ligate_state_db_size_bytes missing from /metrics:\n{body}"));
+    let value: u64 = line
+        .split_whitespace()
+        .nth(1)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or_else(|| panic!("could not parse value from line: {line}"));
+
     assert!(
-        body.contains("ligate_state_db_size_bytes 6"),
-        "expected gauge to read 6 bytes after sampling 3 x 2-byte files, got:\n{body}",
+        acceptable.contains(&value),
+        "expected gauge in {:?} after writing a 1 MiB file, got {} (bug regression: \
+         over-reports indicate `len()` semantics; under-reports indicate sparse-file \
+         under-counting)",
+        acceptable,
+        value,
     );
 }
 
