@@ -1,0 +1,50 @@
+# CODEOWNERS for ligate-io/ligate-chain.
+#
+# Per-path review routing. GitHub auto-requests review from the listed
+# teams when a PR touches matching files. Last-match wins (CODEOWNERS
+# uses last-match, not first-match like .gitignore).
+#
+# Add patterns sparingly. Better to leave routing to default reviewers
+# than to spread ownership thin across files.
+#
+# Teams referenced here:
+# - @ligate-io/maintainers       repo-wide default reviewers
+# - @ligate-io/protocol-reviewers wire-format-adjacent changes
+#
+# Tracking issue: ligate-io/ligate-chain#113
+
+# Default fallback: maintainers
+*                                       @ligate-io/maintainers
+
+# Protocol module: data shapes, state layout, call handlers, fees,
+# signature validation. Every change here is wire-format adjacent.
+crates/modules/attestation/             @ligate-io/protocol-reviewers
+
+# Runtime composition: STF, genesis loader, CHAIN_HASH derivation.
+# State-shape changes here are hard forks per docs/protocol/upgrades.md.
+crates/stf/                             @ligate-io/protocol-reviewers
+crates/stf-declaration/                 @ligate-io/protocol-reviewers
+
+# Devnet config. Genesis JSON changes implicitly bump the chain id
+# trailing number (see docs/protocol/upgrades.md), so reviewer set
+# overlaps with protocol.
+devnet/                                 @ligate-io/protocol-reviewers
+
+# Protocol specification + upgrade story. Edits here often tighten or
+# loosen what's actually a hard fork; protocol-reviewers triple-check.
+docs/protocol/                          @ligate-io/protocol-reviewers
+
+# CI workflows + audit / supply-chain ignore lists. Security-sensitive:
+# an unjustified advisory ignore is the kind of thing a careful reviewer
+# should catch.
+.github/workflows/                      @ligate-io/maintainers
+audit.toml                              @ligate-io/maintainers
+deny.toml                               @ligate-io/maintainers
+
+# Top-level repo files. Maintainer-level review.
+/Cargo.toml                             @ligate-io/maintainers
+/README.md                              @ligate-io/maintainers
+/SECURITY.md                            @ligate-io/maintainers
+/CONTRIBUTING.md                        @ligate-io/maintainers
+/CODE_OF_CONDUCT.md                     @ligate-io/maintainers
+/.github/CODEOWNERS                     @ligate-io/maintainers
