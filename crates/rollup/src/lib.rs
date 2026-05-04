@@ -29,6 +29,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod celestia_rollup;
+pub mod metrics;
 mod mock_rollup;
 
 pub use celestia_rollup::{CelestiaLigateRollup, CelestiaRollupSpec};
