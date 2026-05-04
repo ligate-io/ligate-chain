@@ -138,6 +138,8 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         );
         crate::metrics::init_rpc_metrics();
 
+        let sync_status_for_health = sync_status_receiver.clone();
+
         let mut endpoints = sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
             state_update_receiver,
             sync_status_receiver,
@@ -150,6 +152,13 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
 
         endpoints.axum_router = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router)
             .layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+
+        // #176: mount /health + /ready on the chain's REST surface.
+        let health_state = crate::health::HealthState::new(sync_status_for_health);
+        endpoints.axum_router = crate::health::add_routes(
+            std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router),
+            health_state,
+        );
 
         Ok(endpoints)
     }

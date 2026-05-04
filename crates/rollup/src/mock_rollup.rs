@@ -130,6 +130,11 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         // lines appear from the first /metrics scrape.
         crate::metrics::init_rpc_metrics();
 
+        // Clone sync_status_receiver before passing it into the SDK
+        // helper. The clone is a watch::Receiver alias to the same
+        // channel and is what feeds the /ready endpoint below.
+        let sync_status_for_health = sync_status_receiver.clone();
+
         // Stock SDK helper. Wires the standard sequencer + ledger
         // RPCs and the runtime's per-module REST routers (currently
         // empty, see `ligate_stf::runtime_capabilities`).
@@ -149,6 +154,15 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         // bounded cardinality.
         endpoints.axum_router = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router)
             .layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+
+        // #176: mount /health + /ready on the chain's REST surface.
+        // /health is liveness (always 200), /ready is readiness
+        // (200 if synced, 503 with sync info while catching up).
+        let health_state = crate::health::HealthState::new(sync_status_for_health);
+        endpoints.axum_router = crate::health::add_routes(
+            std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router),
+            health_state,
+        );
 
         Ok(endpoints)
     }

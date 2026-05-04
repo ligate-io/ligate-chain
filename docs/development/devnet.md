@@ -389,6 +389,20 @@ operator should watch:
 
 **Process metrics** (Linux only): `process_cpu_seconds_total`, `process_resident_memory_bytes`, `process_open_fds`, `process_max_fds`, `process_start_time_seconds`, `process_virtual_memory_bytes`. Auto-registered by the `prometheus` crate's `process` feature; macOS and Windows builds skip them.
 
+### Liveness + readiness probes
+
+Two cheap endpoints for orchestrators (k8s probes, systemd watchdogs, load balancer health checks):
+
+- **`GET /health`** on the chain's REST port (default `127.0.0.1:12346`). Always 200 with `{"status":"ok"}` if the binary is alive. Wire into k8s `livenessProbe` and systemd `WatchdogSec`.
+- **`GET /ready`** on the same port. Returns 200 with `{"status":"synced","synced_da_height":N}` once the node has caught up to DA tip, 503 with `{"status":"syncing","synced_da_height":N,"target_da_height":M}` while still syncing. Wire into k8s `readinessProbe` and load balancer health checks so traffic only routes to nodes that have caught up.
+
+```bash
+curl -s http://127.0.0.1:12346/health   # always 200 unless the process is gone
+curl -s http://127.0.0.1:12346/ready    # 200 if synced, 503 if catching up
+```
+
+The SDK exposes more granular surfaces under `/sequencer/*` and `/rollup/*` (per-component readiness, sync details). `/health` and `/ready` are the unified-probe convention layered on top.
+
 ```bash
 # Default bind (localhost-only, safe for direct scraping in dev).
 curl http://127.0.0.1:9100/metrics
