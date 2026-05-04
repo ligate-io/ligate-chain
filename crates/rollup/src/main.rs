@@ -193,6 +193,11 @@ async fn run_with_mock(
         )
     })?;
 
+    metrics::spawn_state_db_size_task(
+        rollup_config.storage.path.clone(),
+        metrics::DEFAULT_STATE_DB_SIZE_POLL_INTERVAL,
+    );
+
     let rollup = MockLigateRollup::<Native>::default()
         .create_new_rollup(
             genesis_paths,
@@ -223,6 +228,11 @@ async fn run_with_celestia(
             rollup_config.storage.path.display()
         )
     })?;
+
+    metrics::spawn_state_db_size_task(
+        rollup_config.storage.path.clone(),
+        metrics::DEFAULT_STATE_DB_SIZE_POLL_INTERVAL,
+    );
 
     let rollup = CelestiaLigateRollup::<Native>::default()
         .create_new_rollup(

@@ -363,16 +363,23 @@ operator should watch:
 ### Prometheus `/metrics` endpoint
 
 `ligate-node` exposes a Prometheus text-format `/metrics` endpoint at
-`http://127.0.0.1:9100/metrics` by default. Phase 1 of [#110](https://github.com/ligate-io/ligate-chain/issues/110)
-ships three counters:
+`http://127.0.0.1:9100/metrics` by default.
+
+**Counters** (all cold-start zero, each increments per successful handler call):
 
 - `ligate_attestor_sets_registered_total`
 - `ligate_schemas_registered_total`
 - `ligate_attestations_submitted_total`
 
-Cold-start values are zero; each counter increments on a successful call
-to the corresponding `RegisterAttestorSet` / `RegisterSchema` /
-`SubmitAttestation` handler.
+**Rejection counter** (Phase 2 chunk in [#167](https://github.com/ligate-io/ligate-chain/pull/167)):
+
+- `ligate_attestations_rejected_total{reason}` — bumps on any handler that returns an `AttestationError`. The `reason` label is the variant's stable snake_case discriminant (e.g. `unknown_schema`, `below_threshold`, `invalid_signature`); the full mapping is in [`error-coverage.md`](error-coverage.md).
+
+**Gauges:**
+
+- `ligate_state_db_size_bytes` — total on-disk size of the rollup's storage directory, sampled every 30 seconds. Captures RocksDB SST files, WAL, manifest, and the ledger DB.
+
+**Process metrics** (Linux only): `process_cpu_seconds_total`, `process_resident_memory_bytes`, `process_open_fds`, `process_max_fds`, `process_start_time_seconds`, `process_virtual_memory_bytes`. Auto-registered by the `prometheus` crate's `process` feature; macOS and Windows builds skip them.
 
 ```bash
 # Default bind (localhost-only, safe for direct scraping in dev).

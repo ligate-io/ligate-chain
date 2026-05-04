@@ -27,15 +27,18 @@
 //! who know what they're doing.
 
 use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
-use prometheus::{Encoder, TextEncoder};
+use prometheus::{register_int_gauge, Encoder, IntGauge, TextEncoder};
 use tokio::net::TcpListener;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Build the axum router with a single `/metrics` GET route.
 ///
@@ -83,4 +86,98 @@ pub async fn serve(listener: TcpListener) -> anyhow::Result<()> {
     axum::serve(listener, app)
         .await
         .with_context(|| format!("metrics server crashed (was bound to {actual})"))
+}
+
+// ============================================================================
+// State DB size gauge (#110 Phase 2)
+// ============================================================================
+
+/// Default polling interval for the state-DB-size sampler.
+///
+/// Operators trade off between staleness and disk I/O: walking a
+/// RocksDB directory hits stat(2) on every file, which on a hot
+/// node with thousands of SST files is non-trivial. 30 seconds is
+/// the SDK demo's default and is fine for capacity planning; alert
+/// rules with 5-minute windows comfortably absorb the resolution.
+pub const DEFAULT_STATE_DB_SIZE_POLL_INTERVAL: Duration = Duration::from_secs(30);
+
+/// `ligate_state_db_size_bytes` gauge. Total on-disk size of the
+/// rollup's storage directory in bytes, updated periodically by
+/// [`spawn_state_db_size_task`]. Filesystem-level walk: includes
+/// RocksDB SST + WAL + manifest, ledger DB, and any sibling files
+/// the SDK plants under the same path.
+fn state_db_size_bytes() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_state_db_size_bytes",
+            "Total on-disk size of the rollup's storage directory, in bytes. Sampled periodically."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+/// Touch the gauge so its `HELP` and `TYPE` lines show up in
+/// `/metrics` from the very first scrape. Without this, a node
+/// scraped before the first poll completes returns no series for
+/// this metric and trips alerting rules that expect it.
+pub fn init_state_db_size() {
+    let _ = state_db_size_bytes();
+}
+
+/// Walk `path` recursively and sum every file's `len()`. Symlinks
+/// are followed only one level deep (the default for `read_dir`)
+/// to avoid loops; broken symlinks and unreadable entries are
+/// silently skipped so a transient mid-compaction view doesn't
+/// crash the sampler.
+///
+/// Returns `0` for paths that don't exist, can't be read, or are
+/// empty.  That's intentional: the alternative (returning `Result`)
+/// would force the polling task to choose between propagating
+/// errors (kills the gauge) or swallowing them (loses signal).
+/// Returning a number that's "low or zero" lets dashboards show
+/// the regression as a graph dip and alerts catch it.
+fn directory_size_bytes(path: &Path) -> u64 {
+    let mut total = 0u64;
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return 0;
+    };
+    for entry in entries.flatten() {
+        let Ok(meta) = entry.metadata() else { continue };
+        if meta.is_dir() {
+            total = total.saturating_add(directory_size_bytes(&entry.path()));
+        } else {
+            total = total.saturating_add(meta.len());
+        }
+    }
+    total
+}
+
+/// Sample the storage directory once and update the gauge. Pulled
+/// out of the polling loop so tests can drive a single sample
+/// against a temp dir without spinning a tokio interval.
+pub fn sample_state_db_size(path: &Path) {
+    init_state_db_size();
+    let bytes = directory_size_bytes(path);
+    state_db_size_bytes().set(bytes as i64);
+    debug!(path = %path.display(), bytes, "state db size sampled");
+}
+
+/// Spawn a tokio task that polls the storage directory's total size
+/// every `interval` (default 30s) and updates
+/// `ligate_state_db_size_bytes`. Runs until the runtime drops.
+///
+/// The task is fire-and-forget; if the storage path becomes
+/// unreadable mid-flight (e.g. operator wiped the directory) the
+/// gauge falls to 0, which is the right signal for dashboards.
+pub fn spawn_state_db_size_task(storage_path: PathBuf, interval: Duration) {
+    init_state_db_size();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            sample_state_db_size(&storage_path);
+        }
+    });
 }
