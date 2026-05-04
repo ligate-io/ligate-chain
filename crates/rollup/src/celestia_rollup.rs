@@ -150,15 +150,17 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         )
         .await?;
 
-        endpoints.axum_router = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router)
-            .layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+        // #149: nest chain API under /v1/. #176: /health + /ready
+        // at root. #110: metrics middleware on the outer router.
+        let chain_api = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router);
+        let mut router = axum::Router::new().nest("/v1", chain_api);
 
-        // #176: mount /health + /ready on the chain's REST surface.
         let health_state = crate::health::HealthState::new(sync_status_for_health);
-        endpoints.axum_router = crate::health::add_routes(
-            std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router),
-            health_state,
-        );
+        router = crate::health::add_routes(router, health_state);
+
+        router = router.layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+
+        endpoints.axum_router = router;
 
         Ok(endpoints)
     }

@@ -2,9 +2,22 @@
 
 The full reference for every REST endpoint exposed by `ligate-node`. Audience: external integrators verifying attestations, querying balances, submitting transactions, watching block production.
 
-The chain mounts **114 endpoints** on a default v0 devnet runtime, all auto-discovered from the runtime composition by the Sovereign SDK. This document organizes them by use case with curl examples for the most-hit ones.
+The chain mounts **114 endpoints** on a default v0 devnet runtime, all auto-discovered from the runtime composition by the Sovereign SDK. Every chain-API path is **mounted under the `/v1/` prefix** ([#149](https://github.com/ligate-io/ligate-chain/issues/149)) so future breaking schema changes can land at `/v2/...` without colliding with existing clients. Operator-facing paths (`/health`, `/ready`, and `/metrics` on its own port) stay unversioned because they don't change schema across API revisions.
 
-For the canonical machine-readable surface on any running node, the OpenAPI 3 spec is at `/openapi-v3.json` and an interactive Swagger UI is at `/swagger-ui`. If this document drifts from a running node, those two are the source of truth.
+This document organizes the chain API by use case with curl examples for the most-hit endpoints. For the canonical machine-readable surface on any running node, the OpenAPI 3 spec is at `/v1/openapi-v3.json` and an interactive Swagger UI is at `/v1/swagger-ui`. If this document drifts from a running node, those two are the source of truth.
+
+## URL versioning policy
+
+| Surface | Path | Versioned? |
+|---|---|---|
+| Chain API (ledger / sequencer / rollup / modules / openapi spec) | `/v1/...` | yes |
+| Liveness probe | `/health` | no (always 200) |
+| Readiness probe | `/ready` | no (always `SyncStatus`-shaped) |
+| Prometheus metrics | `:9100/metrics` (separate port) | no (Prometheus convention) |
+
+Pre-public-devnet, breaking changes inside `/v1/` are coordinated by chat between Ligate Labs and design partners. Post-public-devnet, breaking changes bump to `/v2/` and the previous version stays mounted for one ladder rung (see [`upgrades.md`](upgrades.md) for the chain-id ladder + deprecation policy).
+
+> **Note for tests.** The SDK's `sov_test_utils::TestRunner` mounts the chain API at unprefixed paths (`/modules/...`, `/ledger/...`, `/sequencer/...`). The `/v1/` prefix is applied by the production blueprint (`crates/rollup/src/{mock_rollup,celestia_rollup}.rs`'s `create_endpoints`). Integration tests that use TestRunner reflect the test-runner shape; the production binary reflects the versioned shape.
 
 ## Overview
 
@@ -40,26 +53,26 @@ cargo run --bin ligate-node
 The REST API binds to `127.0.0.1:12346` per [`devnet/rollup.toml`](../../devnet/rollup.toml). Verify it is up:
 
 ```bash
-curl http://127.0.0.1:12346/rollup/sync-status
+curl http://127.0.0.1:12346/v1/rollup/sync-status
 ```
 
-Browse the live OpenAPI surface in your browser at `http://127.0.0.1:12346/swagger-ui`, or pull the JSON spec at `http://127.0.0.1:12346/openapi-v3.json`.
+Browse the live OpenAPI surface in your browser at `http://127.0.0.1:12346/v1/swagger-ui`, or pull the JSON spec at `http://127.0.0.1:12346/v1/openapi-v3.json`.
 
 ## Top-level path map
 
 | Prefix | Count | Purpose | Source |
 |---|---|---|---|
-| `/ledger/...` | 17 | Block, batch, transaction, event queries | `sov-ledger-apis` |
-| `/sequencer/...` | 6 | Transaction submission, sequencer status, mempool events | `sov-sequencer` |
-| `/rollup/...` | 6 | Chain meta: sync status, gas price, dedup, schema, simulation | `sov-rollup-apis` |
-| `/modules/...` | 85 | Per-module state and custom queries (auto-mounted plus `HasCustomRestApi`) | each module |
+| `/v1/ledger/...` | 17 | Block, batch, transaction, event queries | `sov-ledger-apis` |
+| `/v1/sequencer/...` | 6 | Transaction submission, sequencer status, mempool events | `sov-sequencer` |
+| `/v1/rollup/...` | 6 | Chain meta: sync status, gas price, dedup, schema, simulation | `sov-rollup-apis` |
+| `/v1/modules/...` | 85 | Per-module state and custom queries (auto-mounted plus `HasCustomRestApi`) | each module |
 
 Every path is GET unless explicitly marked POST.
 
 The four module-related paths outside the per-module breakdown:
 
-- `GET /modules`: list every mounted module
-- `GET /modules/{moduleName}`: metadata for one mounted module
+- `GET /v1/modules`: list every mounted module
+- `GET /v1/modules/{moduleName}`: metadata for one mounted module
 - The remaining 83 are per-module endpoints listed in §5.
 
 ## 1. Ledger queries
@@ -68,13 +81,13 @@ The four module-related paths outside the per-module breakdown:
 
 | Path | Returns |
 |---|---|
-| `GET /ledger/slots/latest` | The latest slot |
-| `GET /ledger/slots/finalized` | The latest finalized slot |
-| `GET /ledger/slots/{slotId}` | A slot by id (height or hash) |
-| `GET /ledger/slots/{slotId}/events` | Events emitted in a slot |
-| `GET /ledger/slots/{slotId}/batches/{batchOffset}` | The Nth batch in the named slot |
-| `GET /ledger/slots/{slotId}/batches/{batchOffset}/txs/{txOffset}` | The Mth transaction of the Nth batch |
-| `GET /ledger/slots/{slotId}/batches/{batchOffset}/txs/{txOffset}/events/{eventOffset}` | One event of one tx of one batch of one slot |
+| `GET /v1/ledger/slots/latest` | The latest slot |
+| `GET /v1/ledger/slots/finalized` | The latest finalized slot |
+| `GET /v1/ledger/slots/{slotId}` | A slot by id (height or hash) |
+| `GET /v1/ledger/slots/{slotId}/events` | Events emitted in a slot |
+| `GET /v1/ledger/slots/{slotId}/batches/{batchOffset}` | The Nth batch in the named slot |
+| `GET /v1/ledger/slots/{slotId}/batches/{batchOffset}/txs/{txOffset}` | The Mth transaction of the Nth batch |
+| `GET /v1/ledger/slots/{slotId}/batches/{batchOffset}/txs/{txOffset}/events/{eventOffset}` | One event of one tx of one batch of one slot |
 
 `{slotId}` accepts a height (e.g. `123`), a hash (`0x...`), or the literals `latest` and `finalized`.
 
@@ -82,116 +95,116 @@ The four module-related paths outside the per-module breakdown:
 
 | Path | Returns |
 |---|---|
-| `GET /ledger/batches/{batchId}` | A batch by id |
-| `GET /ledger/batches/{batchId}/txs/{txOffset}` | The Mth transaction of a batch |
-| `GET /ledger/batches/{batchId}/txs/{txOffset}/events/{eventOffset}` | One event of one tx of one batch |
-| `GET /ledger/txs/{txId}` | A transaction by id |
-| `GET /ledger/txs/{txId}/events/{eventOffset}` | The nth event emitted by this transaction |
+| `GET /v1/ledger/batches/{batchId}` | A batch by id |
+| `GET /v1/ledger/batches/{batchId}/txs/{txOffset}` | The Mth transaction of a batch |
+| `GET /v1/ledger/batches/{batchId}/txs/{txOffset}/events/{eventOffset}` | One event of one tx of one batch |
+| `GET /v1/ledger/txs/{txId}` | A transaction by id |
+| `GET /v1/ledger/txs/{txId}/events/{eventOffset}` | The nth event emitted by this transaction |
 
 ### Events
 
 | Path | Returns |
 |---|---|
-| `GET /ledger/events` | The event index, paginated |
-| `GET /ledger/events/latest` | The most recent event |
-| `GET /ledger/events/counts` | Per-key event counts |
-| `GET /ledger/events/{eventId}` | A single event by id |
+| `GET /v1/ledger/events` | The event index, paginated |
+| `GET /v1/ledger/events/latest` | The most recent event |
+| `GET /v1/ledger/events/counts` | Per-key event counts |
+| `GET /v1/ledger/events/{eventId}` | A single event by id |
 
 ### Aggregated proofs
 
 | Path | Returns |
 |---|---|
-| `GET /ledger/aggregated-proofs/latest` | The latest aggregated zk proof |
+| `GET /v1/ledger/aggregated-proofs/latest` | The latest aggregated zk proof |
 
 ### Examples
 
 Latest slot:
 
 ```bash
-curl http://127.0.0.1:12346/ledger/slots/latest
+curl http://127.0.0.1:12346/v1/ledger/slots/latest
 ```
 
 Slot by height:
 
 ```bash
-curl http://127.0.0.1:12346/ledger/slots/42
+curl http://127.0.0.1:12346/v1/ledger/slots/42
 ```
 
 Last 10 events:
 
 ```bash
-curl 'http://127.0.0.1:12346/ledger/events?limit=10'
+curl 'http://127.0.0.1:12346/v1/ledger/events?limit=10'
 ```
 
-A general-purpose live event firehose for arbitrary subscriptions is tracked in [#92](https://github.com/ligate-io/ligate-chain/issues/92). Until that ships, polling `/ledger/events` is the supported path for "what just happened on chain".
+A general-purpose live event firehose for arbitrary subscriptions is tracked in [#92](https://github.com/ligate-io/ligate-chain/issues/92). Until that ships, polling `/v1/ledger/events` is the supported path for "what just happened on chain".
 
 ## 2. Sequencer (transaction submission, mempool)
 
 | Path | Method | Purpose |
 |---|---|---|
-| `/sequencer/txs` | POST | Submit a transaction. Body is a hex-encoded signed tx. |
-| `/sequencer/txs/{txHash}` | GET | Look up a submitted transaction by its hash |
-| `/sequencer/txs/{txHash}/status` | GET | Inclusion status of a submitted transaction |
-| `/sequencer/ready` | GET | 200 if ready, 503 with details if not |
-| `/sequencer/unstable/events` | GET | Stream of mempool / sequencer events. **Unstable**: shape may change without notice. |
-| `/sequencer/unstable/events/{eventOffset}` | GET | One unstable event by offset |
+| `/v1/sequencer/txs` | POST | Submit a transaction. Body is a hex-encoded signed tx. |
+| `/v1/sequencer/txs/{txHash}` | GET | Look up a submitted transaction by its hash |
+| `/v1/sequencer/txs/{txHash}/status` | GET | Inclusion status of a submitted transaction |
+| `/v1/sequencer/ready` | GET | 200 if ready, 503 with details if not |
+| `/v1/sequencer/unstable/events` | GET | Stream of mempool / sequencer events. **Unstable**: shape may change without notice. |
+| `/v1/sequencer/unstable/events/{eventOffset}` | GET | One unstable event by offset |
 
 Submitting a transaction:
 
 ```bash
-curl -X POST http://127.0.0.1:12346/sequencer/txs \
+curl -X POST http://127.0.0.1:12346/v1/sequencer/txs \
   -H 'content-type: application/json' \
   -d '{"body":"0xa1b2c3..."}'
 ```
 
-The response is a tx hash (queue receipt, not finality). To check inclusion, poll `/sequencer/txs/{txHash}/status` for sequencer-side status, or `/ledger/txs/{txHash}` for ledger-side inclusion.
+The response is a tx hash (queue receipt, not finality). To check inclusion, poll `/v1/sequencer/txs/{txHash}/status` for sequencer-side status, or `/v1/ledger/txs/{txHash}` for ledger-side inclusion.
 
-The `/sequencer/unstable/events` surface is **unstable by design**: it is the in-process queue of sequencer events (admit, reject, include) and shape changes are routine. Production integrations should use `/ledger/events` once a transaction lands on chain.
+The `/v1/sequencer/unstable/events` surface is **unstable by design**: it is the in-process queue of sequencer events (admit, reject, include) and shape changes are routine. Production integrations should use `/v1/ledger/events` once a transaction lands on chain.
 
 ## 3. Rollup meta
 
 | Path | Method | Returns |
 |---|---|---|
-| `/rollup/sync-status` | GET | Whether the node is caught up to the DA layer |
-| `/rollup/base-fee-per-gas/latest` | GET | The current per-gas base fee, denominated in `$LGT` |
-| `/rollup/constants` | GET | Governance-tunable constants (current values; see [#40](https://github.com/ligate-io/ligate-chain/issues/40) for the constants-to-state migration) |
-| `/rollup/schema` | GET | **Universal-wallet TX schema**: type/template metadata for canonical Borsh encoding of every `CallMessage` variant. Not the OpenAPI spec; that is at `/openapi-v3.json`. |
-| `/rollup/addresses/{credential_id}/dedup` | GET | Account dedup state for a given credential id (multi-credential accounts) |
-| `/rollup/simulate` | POST | Dry-run a transaction. Returns the result without committing state. |
+| `/v1/rollup/sync-status` | GET | Whether the node is caught up to the DA layer |
+| `/v1/rollup/base-fee-per-gas/latest` | GET | The current per-gas base fee, denominated in `$LGT` |
+| `/v1/rollup/constants` | GET | Governance-tunable constants (current values; see [#40](https://github.com/ligate-io/ligate-chain/issues/40) for the constants-to-state migration) |
+| `/v1/rollup/schema` | GET | **Universal-wallet TX schema**: type/template metadata for canonical Borsh encoding of every `CallMessage` variant. Not the OpenAPI spec; that is at `/v1/openapi-v3.json`. |
+| `/v1/rollup/addresses/{credential_id}/dedup` | GET | Account dedup state for a given credential id (multi-credential accounts) |
+| `/v1/rollup/simulate` | POST | Dry-run a transaction. Returns the result without committing state. |
 
-`/rollup/schema` is **not** the OpenAPI document despite the name. It is the universal-wallet schema that wallets and SDKs consume to encode transactions in a forward-compatible way: `chain_hash` plus a typed list of every `CallMessage` and its Borsh layout. The OpenAPI 3 description of every REST endpoint is at `/openapi-v3.json` (see Quick start).
+`/v1/rollup/schema` is **not** the OpenAPI document despite the name. It is the universal-wallet schema that wallets and SDKs consume to encode transactions in a forward-compatible way: `chain_hash` plus a typed list of every `CallMessage` and its Borsh layout. The OpenAPI 3 description of every REST endpoint is at `/v1/openapi-v3.json` (see Quick start).
 
 ### Examples
 
 Sync status:
 
 ```bash
-curl http://127.0.0.1:12346/rollup/sync-status
+curl http://127.0.0.1:12346/v1/rollup/sync-status
 ```
 
 Current base fee:
 
 ```bash
-curl http://127.0.0.1:12346/rollup/base-fee-per-gas/latest
+curl http://127.0.0.1:12346/v1/rollup/base-fee-per-gas/latest
 ```
 
 Universal-wallet TX schema (large; pipe through `jq` for readability):
 
 ```bash
-curl -s http://127.0.0.1:12346/rollup/schema | jq '.chain_hash, (.schema.types | keys | .[0:5])'
+curl -s http://127.0.0.1:12346/v1/rollup/schema | jq '.chain_hash, (.schema.types | keys | .[0:5])'
 ```
 
 ## 4. `attestation` module
 
-Mounted at `/modules/attestation`. Three custom point-lookup routes wired in [PR #93](https://github.com/ligate-io/ligate-chain/pull/93), plus 11 auto-mounted state endpoints.
+Mounted at `/v1/modules/attestation`. Three custom point-lookup routes wired in [PR #93](https://github.com/ligate-io/ligate-chain/pull/93), plus 11 auto-mounted state endpoints.
 
 ### Custom routes
 
 | Path | Returns | Status codes |
 |---|---|---|
-| `GET /modules/attestation/schemas/{schemaId}` | One schema by Bech32 id (`lsc1...`) | 200, 400, 404 |
-| `GET /modules/attestation/attestor-sets/{attestorSetId}` | One attestor set by Bech32 id (`las1...`) | 200, 400, 404 |
-| `GET /modules/attestation/attestations/{schemaId}:{payloadHash}` | One attestation by compound id | 200, 400, 404 |
+| `GET /v1/modules/attestation/schemas/{schemaId}` | One schema by Bech32 id (`lsc1...`) | 200, 400, 404 |
+| `GET /v1/modules/attestation/attestor-sets/{attestorSetId}` | One attestor set by Bech32 id (`las1...`) | 200, 400, 404 |
+| `GET /v1/modules/attestation/attestations/{schemaId}:{payloadHash}` | One attestation by compound id | 200, 400, 404 |
 
 Status code semantics:
 
@@ -202,7 +215,7 @@ Status code semantics:
 ### Custom-route response types
 
 ```typescript
-// GET /modules/attestation/schemas/{schemaId}
+// GET /v1/modules/attestation/schemas/{schemaId}
 type SchemaResponse = {
   schema: {
     id:               string;          // "lsc1..." Bech32m
@@ -215,7 +228,7 @@ type SchemaResponse = {
   };
 };
 
-// GET /modules/attestation/attestor-sets/{attestorSetId}
+// GET /v1/modules/attestation/attestor-sets/{attestorSetId}
 type AttestorSetResponse = {
   attestor_set: {
     id:        string;          // "las1..." Bech32m
@@ -224,7 +237,7 @@ type AttestorSetResponse = {
   };
 };
 
-// GET /modules/attestation/attestations/{schemaId}:{payloadHash}
+// GET /v1/modules/attestation/attestations/{schemaId}:{payloadHash}
 type AttestationResponse = {
   attestation: {
     schema_id:    string;       // "lsc1..." Bech32m
@@ -244,33 +257,33 @@ type AttestationResponse = {
 Schema by id:
 
 ```bash
-curl http://127.0.0.1:12346/modules/attestation/schemas/lsc1...
+curl http://127.0.0.1:12346/v1/modules/attestation/schemas/lsc1...
 ```
 
 Attestation by compound id (`schemaId:payloadHash`, both Bech32m):
 
 ```bash
-curl 'http://127.0.0.1:12346/modules/attestation/attestations/lsc1...:lph1...'
+curl 'http://127.0.0.1:12346/v1/modules/attestation/attestations/lsc1...:lph1...'
 ```
 
 ### Auto-mounted state endpoints
 
 | Path | Returns |
 |---|---|
-| `GET /modules/attestation/state/attestation-fee` | Current per-attestation fee in `$LGT` nanos |
-| `GET /modules/attestation/state/schema-registration-fee` | One-time fee to register a schema |
-| `GET /modules/attestation/state/attestor-set-fee` | One-time fee to register an attestor set |
-| `GET /modules/attestation/state/treasury` | Treasury address that receives non-routed fees |
-| `GET /modules/attestation/state/lgt-token-id` | The token id used for fees |
-| `GET /modules/attestation/state/total-treasury-collected` | Cumulative `$LGT` to treasury |
-| `GET /modules/attestation/state/schemas` | Schemas state-map metadata |
-| `GET /modules/attestation/state/schemas/items/{key}` | A schema by raw state-map key |
-| `GET /modules/attestation/state/attestor-sets` | Attestor-sets state-map metadata |
-| `GET /modules/attestation/state/attestor-sets/items/{key}` | An attestor set by raw key |
-| `GET /modules/attestation/state/attestations` | Attestations state-map metadata |
-| `GET /modules/attestation/state/attestations/items/{key}` | An attestation by raw compound key |
-| `GET /modules/attestation/state/builder-fees-collected` | Builder-fee tally state-map |
-| `GET /modules/attestation/state/builder-fees-collected/items/{key}` | Builder fees collected by one schema-routing address |
+| `GET /v1/modules/attestation/state/attestation-fee` | Current per-attestation fee in `$LGT` nanos |
+| `GET /v1/modules/attestation/state/schema-registration-fee` | One-time fee to register a schema |
+| `GET /v1/modules/attestation/state/attestor-set-fee` | One-time fee to register an attestor set |
+| `GET /v1/modules/attestation/state/treasury` | Treasury address that receives non-routed fees |
+| `GET /v1/modules/attestation/state/lgt-token-id` | The token id used for fees |
+| `GET /v1/modules/attestation/state/total-treasury-collected` | Cumulative `$LGT` to treasury |
+| `GET /v1/modules/attestation/state/schemas` | Schemas state-map metadata |
+| `GET /v1/modules/attestation/state/schemas/items/{key}` | A schema by raw state-map key |
+| `GET /v1/modules/attestation/state/attestor-sets` | Attestor-sets state-map metadata |
+| `GET /v1/modules/attestation/state/attestor-sets/items/{key}` | An attestor set by raw key |
+| `GET /v1/modules/attestation/state/attestations` | Attestations state-map metadata |
+| `GET /v1/modules/attestation/state/attestations/items/{key}` | An attestation by raw compound key |
+| `GET /v1/modules/attestation/state/builder-fees-collected` | Builder-fee tally state-map |
+| `GET /v1/modules/attestation/state/builder-fees-collected/items/{key}` | Builder fees collected by one schema-routing address |
 
 Prefer the custom routes (above) over the auto-mounted `state/{name}/items/{key}` routes for schema, attestor-set, and attestation lookups. The custom routes accept Bech32m ids directly; the auto-mounted routes need raw state-map keys.
 
@@ -282,17 +295,17 @@ The full list of derived queries (by schema, by submitter, by time range, top-N,
 
 ## 5. `sov-bank` module (`$LGT` and other tokens)
 
-Mounted at `/modules/bank`. Five custom routes plus four auto-mounted state endpoints.
+Mounted at `/v1/modules/bank`. Five custom routes plus four auto-mounted state endpoints.
 
 ### Custom routes
 
 | Path | Returns |
 |---|---|
-| `GET /modules/bank/tokens` | Find a token id by name (query param `?name=...`) |
-| `GET /modules/bank/tokens/gas_token` | The chain's gas token (`$LGT`) metadata |
-| `GET /modules/bank/tokens/gas_token/balances/{address}` | A specific holder's `$LGT` balance |
-| `GET /modules/bank/tokens/{token_id}/balances/{address}` | A specific holder's balance for a non-gas token |
-| `GET /modules/bank/tokens/{token_id}/total-supply` | Total supply of a token |
+| `GET /v1/modules/bank/tokens` | Find a token id by name (query param `?name=...`) |
+| `GET /v1/modules/bank/tokens/gas_token` | The chain's gas token (`$LGT`) metadata |
+| `GET /v1/modules/bank/tokens/gas_token/balances/{address}` | A specific holder's `$LGT` balance |
+| `GET /v1/modules/bank/tokens/{token_id}/balances/{address}` | A specific holder's balance for a non-gas token |
+| `GET /v1/modules/bank/tokens/{token_id}/total-supply` | Total supply of a token |
 
 `$LGT` uses 9 decimals on the wire (smallest unit = `1 nano = 0.000000001 $LGT`). All amounts in this API are base units (`u64` nanos).
 
@@ -300,17 +313,17 @@ Mounted at `/modules/bank`. Five custom routes plus four auto-mounted state endp
 
 | Path | Returns |
 |---|---|
-| `GET /modules/bank/state/balances` | Balances state-map metadata |
-| `GET /modules/bank/state/balances/items/{key}` | Balance by raw key |
-| `GET /modules/bank/state/tokens` | Tokens state-map metadata |
-| `GET /modules/bank/state/tokens/items/{key}` | Token metadata by raw key |
+| `GET /v1/modules/bank/state/balances` | Balances state-map metadata |
+| `GET /v1/modules/bank/state/balances/items/{key}` | Balance by raw key |
+| `GET /v1/modules/bank/state/tokens` | Tokens state-map metadata |
+| `GET /v1/modules/bank/state/tokens/items/{key}` | Token metadata by raw key |
 
 ### Examples
 
 `$LGT` balance:
 
 ```bash
-curl http://127.0.0.1:12346/modules/bank/tokens/gas_token/balances/lig1...
+curl http://127.0.0.1:12346/v1/modules/bank/tokens/gas_token/balances/lig1...
 ```
 
 ```json
@@ -325,7 +338,7 @@ curl http://127.0.0.1:12346/modules/bank/tokens/gas_token/balances/lig1...
 Total supply:
 
 ```bash
-curl http://127.0.0.1:12346/modules/bank/tokens/{tokenId}/total-supply
+curl http://127.0.0.1:12346/v1/modules/bank/tokens/{tokenId}/total-supply
 ```
 
 ## 6. Other modules
@@ -334,9 +347,9 @@ curl http://127.0.0.1:12346/modules/bank/tokens/{tokenId}/total-supply
 
 | Path | Returns |
 |---|---|
-| `GET /modules/accounts/state/accounts` | Accounts state-map metadata |
-| `GET /modules/accounts/state/accounts/items/{key}` | An account by raw key |
-| `GET /modules/accounts/state/enable-custom-account-mappings` | Whether custom account mappings are enabled |
+| `GET /v1/modules/accounts/state/accounts` | Accounts state-map metadata |
+| `GET /v1/modules/accounts/state/accounts/items/{key}` | An account by raw key |
+| `GET /v1/modules/accounts/state/enable-custom-account-mappings` | Whether custom account mappings are enabled |
 
 ### `attester-incentives` (12 endpoints)
 
@@ -344,43 +357,43 @@ Bonded attesters, bonded challengers, finality params, slashing pools.
 
 | Path | Returns |
 |---|---|
-| `GET /modules/attester-incentives/state/bonded-attesters` | Bonded attesters state-map |
-| `GET /modules/attester-incentives/state/bonded-attesters/items/{key}` | One bonded attester by address |
-| `GET /modules/attester-incentives/state/bonded-challengers` | Bonded challengers state-map |
-| `GET /modules/attester-incentives/state/bonded-challengers/items/{key}` | One bonded challenger by address |
-| `GET /modules/attester-incentives/state/bad-transition-pool` | Bad-transition slashing pool |
-| `GET /modules/attester-incentives/state/bad-transition-pool/items/{key}` | One slashable transition by key |
-| `GET /modules/attester-incentives/state/light-client-finalized-height` | Last height the light client finalized |
-| `GET /modules/attester-incentives/state/maximum-attested-height` | Highest height attested by anyone |
-| `GET /modules/attester-incentives/state/minimum-attester-bond` | Minimum `$LGT` bond required to attest |
-| `GET /modules/attester-incentives/state/minimum-challenger-bond` | Minimum `$LGT` bond required to challenge |
-| `GET /modules/attester-incentives/state/reward-burn-rate` | Fraction of rewards burned vs paid |
-| `GET /modules/attester-incentives/state/rollup-finality-period` | Finality window in slots |
+| `GET /v1/modules/attester-incentives/state/bonded-attesters` | Bonded attesters state-map |
+| `GET /v1/modules/attester-incentives/state/bonded-attesters/items/{key}` | One bonded attester by address |
+| `GET /v1/modules/attester-incentives/state/bonded-challengers` | Bonded challengers state-map |
+| `GET /v1/modules/attester-incentives/state/bonded-challengers/items/{key}` | One bonded challenger by address |
+| `GET /v1/modules/attester-incentives/state/bad-transition-pool` | Bad-transition slashing pool |
+| `GET /v1/modules/attester-incentives/state/bad-transition-pool/items/{key}` | One slashable transition by key |
+| `GET /v1/modules/attester-incentives/state/light-client-finalized-height` | Last height the light client finalized |
+| `GET /v1/modules/attester-incentives/state/maximum-attested-height` | Highest height attested by anyone |
+| `GET /v1/modules/attester-incentives/state/minimum-attester-bond` | Minimum `$LGT` bond required to attest |
+| `GET /v1/modules/attester-incentives/state/minimum-challenger-bond` | Minimum `$LGT` bond required to challenge |
+| `GET /v1/modules/attester-incentives/state/reward-burn-rate` | Fraction of rewards burned vs paid |
+| `GET /v1/modules/attester-incentives/state/rollup-finality-period` | Finality window in slots |
 
 ### `prover-incentives` (5 endpoints)
 
 | Path | Returns |
 |---|---|
-| `GET /modules/prover-incentives/state/bonded-provers` | Bonded provers state-map |
-| `GET /modules/prover-incentives/state/bonded-provers/items/{key}` | One bonded prover by address |
-| `GET /modules/prover-incentives/state/last-claimed-reward` | Most recent claimed prover reward |
-| `GET /modules/prover-incentives/state/minimum-bond` | Minimum `$LGT` bond required to prove |
-| `GET /modules/prover-incentives/state/proving-penalty` | Penalty applied for late or missing proofs |
+| `GET /v1/modules/prover-incentives/state/bonded-provers` | Bonded provers state-map |
+| `GET /v1/modules/prover-incentives/state/bonded-provers/items/{key}` | One bonded prover by address |
+| `GET /v1/modules/prover-incentives/state/last-claimed-reward` | Most recent claimed prover reward |
+| `GET /v1/modules/prover-incentives/state/minimum-bond` | Minimum `$LGT` bond required to prove |
+| `GET /v1/modules/prover-incentives/state/proving-penalty` | Penalty applied for late or missing proofs |
 
 ### `operator-incentives` (1 endpoint)
 
 | Path | Returns |
 |---|---|
-| `GET /modules/operator-incentives/state/reward-address` | The address receiving operator rewards |
+| `GET /v1/modules/operator-incentives/state/reward-address` | The address receiving operator rewards |
 
 ### `sequencer-registry` (4 endpoints)
 
 | Path | Returns |
 |---|---|
-| `GET /modules/sequencer-registry/state/known-sequencers` | Registered sequencers state-map |
-| `GET /modules/sequencer-registry/state/known-sequencers/items/{key}` | One sequencer's record |
-| `GET /modules/sequencer-registry/state/minimum-bond` | Minimum `$LGT` bond to register as sequencer |
-| `GET /modules/sequencer-registry/state/preferred-sequencer` | Genesis-preferred sequencer address |
+| `GET /v1/modules/sequencer-registry/state/known-sequencers` | Registered sequencers state-map |
+| `GET /v1/modules/sequencer-registry/state/known-sequencers/items/{key}` | One sequencer's record |
+| `GET /v1/modules/sequencer-registry/state/minimum-bond` | Minimum `$LGT` bond to register as sequencer |
+| `GET /v1/modules/sequencer-registry/state/preferred-sequencer` | Genesis-preferred sequencer address |
 
 ### `uniqueness` (4 endpoints)
 
@@ -388,16 +401,16 @@ Tx replay protection.
 
 | Path | Returns |
 |---|---|
-| `GET /modules/uniqueness/state/nonces` | Nonces state-map |
-| `GET /modules/uniqueness/state/nonces/items/{key}` | The nonce for one address |
-| `GET /modules/uniqueness/state/generations` | Generations state-map (nonce-window epochs) |
-| `GET /modules/uniqueness/state/generations/items/{key}` | Generation for one address |
+| `GET /v1/modules/uniqueness/state/nonces` | Nonces state-map |
+| `GET /v1/modules/uniqueness/state/nonces/items/{key}` | The nonce for one address |
+| `GET /v1/modules/uniqueness/state/generations` | Generations state-map (nonce-window epochs) |
+| `GET /v1/modules/uniqueness/state/generations/items/{key}` | Generation for one address |
 
 ### `chain-state` (31 endpoints)
 
 The largest auto-mount surface. Holds the kernel's view of slot history, rollup heights, code commitments, and oracle time. Useful for debugging consensus and reproducing historical state queries; rarely needed by application integrations.
 
-The full list is in `/openapi-v3.json`; categories:
+The full list is in `/v1/openapi-v3.json`; categories:
 
 - Slot bookkeeping: `slots`, `current-heights`, `next-visible-slot-number`, `slot-number-history`, `true-slot-number`, `true-slot-number-history`, `true-slot-number-to-rollup-height`, `true-to-visible-slot-number-history`
 - State roots: `genesis-root`, `past-user-state-roots`, `accessory-pre-state-roots`, `accessory-past-user-state-roots`
@@ -405,7 +418,7 @@ The full list is in `/openapi-v3.json`; categories:
 - Time and gas: `time`, `oracle-time`, `oracle-time-nanos`, `gas-info`
 - Setup mode and admin: `admin-address`, `operating-mode`, `setup-mode-termination-height`, `genesis-da-height`
 
-Each lives at `/modules/chain-state/state/{name}` (state values) or `/modules/chain-state/state/{name}/items/{key}` (state maps).
+Each lives at `/v1/modules/chain-state/state/{name}` (state values) or `/v1/modules/chain-state/state/{name}/items/{key}` (state maps).
 
 ## 7. State auto-mount pattern
 
@@ -413,11 +426,11 @@ Every module that derives `ModuleRestApi` gets auto-mounted state routes for eac
 
 | State item | Route pattern |
 |---|---|
-| `StateMap<K, V>` named `foo` | `GET /modules/{module}/state/foo/items/{key}` (point lookup), `GET /modules/{module}/state/foo` (metadata only) |
-| `StateValue<V>` named `foo` | `GET /modules/{module}/state/foo` |
-| `StateVec<V>` named `foo` | `GET /modules/{module}/state/foo/items/{index}` |
+| `StateMap<K, V>` named `foo` | `GET /v1/modules/{module}/state/foo/items/{key}` (point lookup), `GET /v1/modules/{module}/state/foo` (metadata only) |
+| `StateValue<V>` named `foo` | `GET /v1/modules/{module}/state/foo` |
+| `StateVec<V>` named `foo` | `GET /v1/modules/{module}/state/foo/items/{index}` |
 
-The `state/` segment is part of the auto-mount convention. Custom routes added via `HasCustomRestApi` are mounted at the module root without `state/`. The attestation module's `/modules/attestation/schemas/{schemaId}` (custom) coexists with `/modules/attestation/state/schemas/items/{key}` (auto-mounted) precisely because the prefixes differ.
+The `state/` segment is part of the auto-mount convention. Custom routes added via `HasCustomRestApi` are mounted at the module root without `state/`. The attestation module's `/v1/modules/attestation/schemas/{schemaId}` (custom) coexists with `/v1/modules/attestation/state/schemas/items/{key}` (auto-mounted) precisely because the prefixes differ.
 
 ### Historical state queries
 
@@ -429,7 +442,7 @@ All auto-mounted state endpoints accept two optional query parameters for histor
 Defaults to the head if neither is set. Mutually exclusive: pass one or the other, not both.
 
 ```bash
-curl 'http://127.0.0.1:12346/modules/attestation/state/attestation-fee?rollup_height=100'
+curl 'http://127.0.0.1:12346/v1/modules/attestation/state/attestation-fee?rollup_height=100'
 ```
 
 Custom routes do not currently support historical queries; they always read the head.
@@ -439,9 +452,9 @@ Custom routes do not currently support historical queries; they always read the 
 | Path | Returns |
 |---|---|
 | `GET /modules` | A list of every mounted module |
-| `GET /modules/{moduleName}` | Metadata for one module: state-item names, custom-route paths |
+| `GET /v1/modules/{moduleName}` | Metadata for one module: state-item names, custom-route paths |
 
-Use `/modules/{moduleName}` to inspect a module's state surface without grepping the runtime composition by hand.
+Use `/v1/modules/{moduleName}` to inspect a module's state surface without grepping the runtime composition by hand.
 
 ## What lives in the indexer instead
 
@@ -463,19 +476,19 @@ WebSocket subscriptions today are limited to four ledger streams. They are GET u
 
 | Path | Streams |
 |---|---|
-| `GET /ledger/slots/latest/ws` | New slots as they arrive |
-| `GET /ledger/slots/finalized/ws` | Slots as they finalize |
-| `GET /ledger/slots/latest/events/ws` | Events from the head |
-| `GET /ledger/aggregated-proofs/latest/ws` | New aggregated proofs |
+| `GET /v1/ledger/slots/latest/ws` | New slots as they arrive |
+| `GET /v1/ledger/slots/finalized/ws` | Slots as they finalize |
+| `GET /v1/ledger/slots/latest/events/ws` | Events from the head |
+| `GET /v1/ledger/aggregated-proofs/latest/ws` | New aggregated proofs |
 
 Connect from a JS client:
 
 ```javascript
-const ws = new WebSocket('ws://127.0.0.1:12346/ledger/slots/latest/ws');
+const ws = new WebSocket('ws://127.0.0.1:12346/v1/ledger/slots/latest/ws');
 ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
 
-A general-purpose live event firehose with arbitrary subscription predicates is tracked in [#92](https://github.com/ligate-io/ligate-chain/issues/92). Until that ships, polling `/ledger/events` is the supported path for arbitrary on-chain event watching.
+A general-purpose live event firehose with arbitrary subscription predicates is tracked in [#92](https://github.com/ligate-io/ligate-chain/issues/92). Until that ships, polling `/v1/ledger/events` is the supported path for arbitrary on-chain event watching.
 
 ## Authentication and rate limits
 
@@ -483,13 +496,13 @@ The chain does not authenticate read queries. Anyone can hit any GET endpoint wi
 
 Devnet is fully open. Public devnet, when it ships ([#79](https://github.com/ligate-io/ligate-chain/issues/79)), may layer per-IP rate limits at the reverse-proxy layer. Those limits are operational, not protocol-level. The chain itself stays open.
 
-For transaction submission, the authentication that matters happens inside the transaction body (the signature), not at the transport layer. Anyone can `POST /sequencer/txs` with a transaction signed by any account. The sequencer accepts or rejects based on signature validity, nonce, and fee.
+For transaction submission, the authentication that matters happens inside the transaction body (the signature), not at the transport layer. Anyone can `POST /v1/sequencer/txs` with a transaction signed by any account. The sequencer accepts or rejects based on signature validity, nonce, and fee.
 
 ## Pagination
 
 The chain's REST surface does not paginate, because the chain does not list. Every endpoint is a single-key lookup. Listing, range, and pagination patterns are an indexer concern.
 
-The one near-exception is `/ledger/events`, which accepts a `?limit=N` query parameter to bound the response. This is a recency cap, not pagination over arbitrary criteria.
+The one near-exception is `/v1/ledger/events`, which accepts a `?limit=N` query parameter to bound the response. This is a recency cap, not pagination over arbitrary criteria.
 
 ## Error envelope
 
@@ -511,7 +524,7 @@ Status codes:
 - **200 OK**: success, body matches the documented type
 - **400 Bad Request**: input parsing failed (malformed Bech32m id, malformed JSON body, unknown query param)
 - **404 Not Found**: input parsed cleanly but no record exists at the given key
-- **503 Service Unavailable**: returned by `/sequencer/ready` when the sequencer has not finished accepting state. Body details what is pending.
+- **503 Service Unavailable**: returned by `/v1/sequencer/ready` when the sequencer has not finished accepting state. Body details what is pending.
 - **500 Internal Server Error**: storage error or internal panic. File a bug.
 
 ## Versioning

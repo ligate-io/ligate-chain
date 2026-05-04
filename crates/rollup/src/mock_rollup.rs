@@ -148,21 +148,30 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         )
         .await?;
 
-        // Phase 2 of #110: layer the Prometheus middleware over the
-        // SDK-built router. Captures every matched REST route with
-        // {endpoint, status} labels using axum's `MatchedPath` for
-        // bounded cardinality.
-        endpoints.axum_router = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router)
-            .layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+        // #149: nest the SDK-mounted chain API under `/v1/` so
+        // future breaking changes can land at `/v2/...` without
+        // colliding with the existing surface. Pre-public-devnet
+        // is the right time to lock the URL convention; post-
+        // mainnet a rename costs migration windows.
+        let chain_api = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router);
+        let mut router = axum::Router::new().nest("/v1", chain_api);
 
-        // #176: mount /health + /ready on the chain's REST surface.
-        // /health is liveness (always 200), /ready is readiness
-        // (200 if synced, 503 with sync info while catching up).
+        // #176: mount /health + /ready at root, NOT under /v1.
+        // Operator probes don't change schema across API versions
+        // and load balancers / k8s expect them at conventional
+        // unversioned paths.
         let health_state = crate::health::HealthState::new(sync_status_for_health);
-        endpoints.axum_router = crate::health::add_routes(
-            std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router),
-            health_state,
-        );
+        router = crate::health::add_routes(router, health_state);
+
+        // Phase 2 of #110: layer the Prometheus middleware over the
+        // outer router (after /v1 nest + health routes) so metric
+        // labels see the full path. /v1/* routes show with the
+        // version prefix; /health and /ready show unprefixed.
+        // `MatchedPath::as_str()` keeps cardinality bounded by
+        // route template, not concrete `:id`.
+        router = router.layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+
+        endpoints.axum_router = router;
 
         Ok(endpoints)
     }
