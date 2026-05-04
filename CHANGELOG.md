@@ -33,6 +33,7 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ### Changed
 
+- Chain REST API now mounts under a `/v1/` prefix. All 114 auto-discovered endpoints move from `/...` to `/v1/...` so future breaking schema changes can land at `/v2/...` without colliding with existing clients. Operator probes (`/health`, `/ready`) and Prometheus `/metrics` (separate port) stay unversioned by convention. Pre-public-devnet timing means no client migration cost. Closes [#149](https://github.com/ligate-io/ligate-chain/issues/149).
 - `attestation::max_builder_bps` migrated from a compile-time const to runtime state, governance-tunable per [#40](https://github.com/ligate-io/ligate-chain/issues/40)'s constants-to-state path. Default still `5000` (50%) for genesis-omitting configs. ([#152](https://github.com/ligate-io/ligate-chain/pull/152)).
 - Devnet runbook (`docs/development/devnet.md`) refreshed to reflect post-Phase-A reality: actual binary, real config flags, current limitations table ([#107](https://github.com/ligate-io/ligate-chain/pull/107), closes [#84](https://github.com/ligate-io/ligate-chain/issues/84)).
 - README Labs wordmark goes fully sage in the brand lockup, drops the 0.65-opacity treatment ([#106](https://github.com/ligate-io/ligate-chain/pull/106)).
