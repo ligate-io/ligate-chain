@@ -136,8 +136,9 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
             ledger_db.clone(),
             crate::metrics::DEFAULT_BLOCK_HEIGHT_POLL_INTERVAL,
         );
+        crate::metrics::init_rpc_metrics();
 
-        sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
+        let mut endpoints = sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
             state_update_receiver,
             sync_status_receiver,
             shutdown_receiver,
@@ -145,7 +146,12 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
             sequencer,
             rollup_config,
         )
-        .await
+        .await?;
+
+        endpoints.axum_router = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router)
+            .layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+
+        Ok(endpoints)
     }
 
     async fn create_da_service(

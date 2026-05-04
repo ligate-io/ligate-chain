@@ -32,11 +32,16 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::Context as _;
+use axum::extract::{MatchedPath, Request};
 use axum::http::{header, HeaderValue, StatusCode};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
-use prometheus::{register_int_gauge, Encoder, IntGauge, TextEncoder};
+use prometheus::{
+    register_histogram_vec, register_int_counter_vec, register_int_gauge, Encoder, HistogramVec,
+    IntCounterVec, IntGauge, TextEncoder,
+};
 use sov_db::ledger_db::LedgerDb;
 use sov_rollup_interface::common::SlotNumber;
 use sov_rollup_interface::node::ledger_api::LedgerStateProvider;
@@ -226,6 +231,88 @@ pub fn sample_block_height(slot: SlotNumber) {
     init_block_height();
     block_height().set(slot.get() as i64);
 }
+
+// ============================================================================
+// RPC histograms (#110 Phase 2)
+// ============================================================================
+
+/// `ligate_rpc_requests_total{endpoint,status}` counter. One bump
+/// per request that hits a matched route. Unmatched routes (404s on
+/// arbitrary paths) are skipped to keep the `endpoint` label
+/// cardinality bounded by the actual route surface.
+fn rpc_requests() -> &'static IntCounterVec {
+    static M: OnceLock<IntCounterVec> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter_vec!(
+            "ligate_rpc_requests_total",
+            "Number of REST requests received, labelled by route template and HTTP status.",
+            &["endpoint", "status"]
+        )
+        .expect("counter vec registers once")
+    })
+}
+
+/// `ligate_rpc_request_duration_seconds{endpoint}` histogram. One
+/// observation per request, in seconds. Default Prometheus buckets
+/// (0.005s through 10s) cover the realistic latency range for our
+/// REST surface (state lookups in milliseconds, slow queries up to
+/// a few seconds under load).
+fn rpc_request_duration() -> &'static HistogramVec {
+    static M: OnceLock<HistogramVec> = OnceLock::new();
+    M.get_or_init(|| {
+        register_histogram_vec!(
+            "ligate_rpc_request_duration_seconds",
+            "Duration of REST request handling in seconds, labelled by route template.",
+            &["endpoint"]
+        )
+        .expect("histogram vec registers once")
+    })
+}
+
+/// Touch both vectors so their `HELP` and `TYPE` lines appear in
+/// `/metrics` from the very first scrape, before the first request
+/// lands.
+pub fn init_rpc_metrics() {
+    let _ = rpc_requests();
+    let _ = rpc_request_duration();
+}
+
+/// Axum middleware: record one `rpc_requests_total` increment + one
+/// `rpc_request_duration_seconds` observation per matched route.
+///
+/// Mirrors the pattern in `sov-stf-runner/src/http/mod.rs:189-222`
+/// (`measure_time`): use `MatchedPath::as_str()` for the label so
+/// concrete `:id` values don't blow up the cardinality, skip
+/// unmatched routes entirely.
+///
+/// Wire via `endpoints.axum_router.layer(axum::middleware::from_fn(record_rpc_request))`
+/// inside `create_endpoints` so all SDK-mounted routes (sequencer,
+/// ledger, runtime modules) get the same instrumentation.
+pub async fn record_rpc_request(
+    matched_path: Option<MatchedPath>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let start = std::time::Instant::now();
+    let response = next.run(req).await;
+    let duration = start.elapsed();
+
+    // Unmatched routes (404s on arbitrary paths) are skipped.
+    // Otherwise an attacker could pump the cardinality of the
+    // `endpoint` label by hitting random URLs.
+    if let Some(path) = matched_path {
+        let endpoint = path.as_str();
+        let status = response.status().as_str().to_owned();
+        rpc_requests().with_label_values(&[endpoint, &status]).inc();
+        rpc_request_duration().with_label_values(&[endpoint]).observe(duration.as_secs_f64());
+    }
+
+    response
+}
+
+// ============================================================================
+// Block height gauge (#110 Phase 2)
+// ============================================================================
 
 /// Spawn a tokio task that polls `ledger_db.get_head_slot_number()`
 /// every `interval` and updates `ligate_block_height`. Runs until

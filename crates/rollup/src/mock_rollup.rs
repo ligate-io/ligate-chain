@@ -126,10 +126,14 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
             crate::metrics::DEFAULT_BLOCK_HEIGHT_POLL_INTERVAL,
         );
 
+        // Pre-touch the RPC counter + histogram so their HELP/TYPE
+        // lines appear from the first /metrics scrape.
+        crate::metrics::init_rpc_metrics();
+
         // Stock SDK helper. Wires the standard sequencer + ledger
         // RPCs and the runtime's per-module REST routers (currently
         // empty, see `ligate_stf::runtime_capabilities`).
-        sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
+        let mut endpoints = sov_modules_rollup_blueprint::register_endpoints::<Self, Native>(
             state_update_receiver,
             sync_status_receiver,
             shutdown_receiver,
@@ -137,7 +141,16 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
             sequencer,
             rollup_config,
         )
-        .await
+        .await?;
+
+        // Phase 2 of #110: layer the Prometheus middleware over the
+        // SDK-built router. Captures every matched REST route with
+        // {endpoint, status} labels using axum's `MatchedPath` for
+        // bounded cardinality.
+        endpoints.axum_router = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router)
+            .layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
+
+        Ok(endpoints)
     }
 
     async fn create_da_service(
