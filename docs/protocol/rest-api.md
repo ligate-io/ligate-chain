@@ -2,7 +2,7 @@
 
 The full reference for every REST endpoint exposed by `ligate-node`. Audience: external integrators verifying attestations, querying balances, submitting transactions, watching block production.
 
-The chain mounts **114 endpoints** on a default v0 devnet runtime, all auto-discovered from the runtime composition by the Sovereign SDK. Every chain-API path is **mounted under the `/v1/` prefix** ([#149](https://github.com/ligate-io/ligate-chain/issues/149)) so future breaking schema changes can land at `/v2/...` without colliding with existing clients. Operator-facing paths (`/health`, `/ready`, and `/metrics` on its own port) stay unversioned because they don't change schema across API revisions.
+The chain mounts **115 endpoints** on a default v0 devnet runtime, all auto-discovered from the runtime composition by the Sovereign SDK. Every chain-API path is **mounted under the `/v1/` prefix** ([#149](https://github.com/ligate-io/ligate-chain/issues/149)) so future breaking schema changes can land at `/v2/...` without colliding with existing clients. Operator-facing paths (`/health`, `/ready`, and `/metrics` on its own port) stay unversioned because they don't change schema across API revisions.
 
 This document organizes the chain API by use case with curl examples for the most-hit endpoints. For the canonical machine-readable surface on any running node, the OpenAPI 3 spec is at `/v1/openapi-v3.json` and an interactive Swagger UI is at `/v1/swagger-ui`. If this document drifts from a running node, those two are the source of truth.
 
@@ -34,7 +34,7 @@ If a query can be answered with a single direct lookup against existing state, i
 ```mermaid
 graph LR
     Client[External client]
-    Node[ligate-node<br/>REST API<br/>114 endpoints]
+    Node[ligate-node<br/>REST API<br/>115 endpoints]
     Indexer[Indexer service<br/>Postgres-backed<br/>#91]
 
     Client -->|point lookup| Node
@@ -64,7 +64,7 @@ Browse the live OpenAPI surface in your browser at `http://127.0.0.1:12346/v1/sw
 |---|---|---|---|
 | `/v1/ledger/...` | 17 | Block, batch, transaction, event queries | `sov-ledger-apis` |
 | `/v1/sequencer/...` | 6 | Transaction submission, sequencer status, mempool events | `sov-sequencer` |
-| `/v1/rollup/...` | 6 | Chain meta: sync status, gas price, dedup, schema, simulation | `sov-rollup-apis` |
+| `/v1/rollup/...` | 7 | Chain meta: identity (`info`), sync status, gas price, dedup, schema, simulation | `sov-rollup-apis` + `ligate-rollup` |
 | `/v1/modules/...` | 85 | Per-module state and custom queries (auto-mounted plus `HasCustomRestApi`) | each module |
 
 Every path is GET unless explicitly marked POST.
@@ -165,6 +165,7 @@ The `/v1/sequencer/unstable/events` surface is **unstable by design**: it is the
 
 | Path | Method | Returns |
 |---|---|---|
+| `/v1/rollup/info` | GET | Chain identity: `chain_id` (Cosmos-style ladder string), `chain_hash` (hex, 64 chars), and `version` (binary `CARGO_PKG_VERSION`). See [#181](https://github.com/ligate-io/ligate-chain/issues/181). |
 | `/v1/rollup/sync-status` | GET | Whether the node is caught up to the DA layer |
 | `/v1/rollup/base-fee-per-gas/latest` | GET | The current per-gas base fee, denominated in `$LGT` |
 | `/v1/rollup/constants` | GET | Governance-tunable constants (current values; see [#40](https://github.com/ligate-io/ligate-chain/issues/40) for the constants-to-state migration) |
@@ -174,7 +175,16 @@ The `/v1/sequencer/unstable/events` surface is **unstable by design**: it is the
 
 `/v1/rollup/schema` is **not** the OpenAPI document despite the name. It is the universal-wallet schema that wallets and SDKs consume to encode transactions in a forward-compatible way: `chain_hash` plus a typed list of every `CallMessage` and its Borsh layout. The OpenAPI 3 description of every REST endpoint is at `/v1/openapi-v3.json` (see Quick start).
 
+`/v1/rollup/info` returns three identifiers that play different roles. `chain_id` is the wallet- and explorer-facing ladder string (`ligate-localnet`, `ligate-devnet-N`, `ligate-testnet-N`, `ligate-N`); it bumps only on a state-breaking restart. `chain_hash` is the build-time fingerprint of the runtime composition; it bumps on every STF change and pins the tx-signing domain. `version` is the binary semver. Wallets pin `chain_hash` for replay protection, display `chain_id` to users, and surface `version` for ops debugging.
+
 ### Examples
+
+Chain identity:
+
+```bash
+curl http://127.0.0.1:12346/v1/rollup/info
+# {"chain_id":"ligate-localnet","chain_hash":"abcd...64chars","version":"0.0.1"}
+```
 
 Sync status:
 

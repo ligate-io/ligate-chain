@@ -44,12 +44,39 @@ use sov_state::{DefaultStorageSpec, Storage};
 use sov_stf_runner::processes::{ParallelProverService, ProverService, RollupProverConfig};
 use sov_stf_runner::RollupConfig;
 
-/// Marker type for the mock-DA / mock-zkVM rollup. Carries no state;
-/// the [`Default`] / [`Clone`] / [`Copy`] impls let the blueprint
-/// machinery construct it however it wants.
-#[derive(Default, Clone, Copy, Debug)]
+/// Marker type for the mock-DA / mock-zkVM rollup.
+///
+/// Holds the configured `chain_id` so [`create_endpoints`] can mount
+/// `/v1/rollup/info` with the operator-supplied identifier (#181). The
+/// [`Default`] impl is kept so existing tests can construct the type
+/// without plumbing chain config; production code paths (`main.rs`)
+/// pass the loaded id via [`MockLigateRollup::new`].
+///
+/// [`create_endpoints`]: <Self as FullNodeBlueprint<Native>>::create_endpoints
+#[derive(Clone, Debug)]
 pub struct MockLigateRollup<M> {
+    chain_id: std::sync::Arc<str>,
     phantom: std::marker::PhantomData<M>,
+}
+
+impl<M> Default for MockLigateRollup<M> {
+    fn default() -> Self {
+        // Empty-string default is intentional. Tests using
+        // [`MockLigateRollup::default`] don't exercise
+        // `create_endpoints`, and a panicky `unwrap` in `Default`
+        // would surface during macro-generated test compilation
+        // before any meaningful diagnostic.
+        Self { chain_id: std::sync::Arc::from(""), phantom: std::marker::PhantomData }
+    }
+}
+
+impl<M> MockLigateRollup<M> {
+    /// Build a blueprint with the configured chain id. Used by
+    /// `main.rs` after [`crate::chain_config::load_split_config`]
+    /// reads + validates the `[chain]` section.
+    pub fn new(chain_id: impl Into<std::sync::Arc<str>>) -> Self {
+        Self { chain_id: chain_id.into(), phantom: std::marker::PhantomData }
+    }
 }
 
 type Hasher = <MockZkvmCryptoSpec as CryptoSpec>::Hasher;
@@ -153,7 +180,18 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         // colliding with the existing surface. Pre-public-devnet
         // is the right time to lock the URL convention; post-
         // mainnet a rename costs migration windows.
+        //
+        // #181: merge `/rollup/info` into the same `/v1` group so it
+        // sits next to the SDK's `/rollup/sync-status`,
+        // `/rollup/constants`, etc. The handler reads
+        // `chain_id` from the blueprint's stored value (loaded from
+        // `[chain]`) and the runtime's build-time `CHAIN_HASH`.
         let chain_api = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router);
+        let info_state = crate::info::InfoState::new(
+            self.chain_id.clone(),
+            <Self::Runtime as sov_modules_api::Runtime<Self::Spec>>::CHAIN_HASH,
+        );
+        let chain_api = crate::info::add_routes(chain_api, info_state);
         let mut router = axum::Router::new().nest("/v1", chain_api);
 
         // #176: mount /health + /ready at root, NOT under /v1.
