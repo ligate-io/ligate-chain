@@ -13,6 +13,13 @@
 # All paths relative to wherever the node is invoked from. The
 # defaults below assume you run from the repo root.
 
+# Chain identity. Locked ladder per docs/protocol/attestation-v0.md
+# `Chain id` section: `ligate-localnet` (this file), `ligate-devnet-1`
+# (public devnet), `ligate-testnet-1` (later), `ligate-1` (mainnet).
+# The node refuses to boot with a value outside the ladder; see #181.
+[chain]
+chain_id = "ligate-localnet"
+
 [da]
 # In-process MockDa backed by SQLite. Use `mode=memory` if you want
 # an ephemeral chain that resets on every restart.

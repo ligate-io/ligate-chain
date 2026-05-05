@@ -41,12 +41,33 @@ use sov_state::{DefaultStorageSpec, Storage};
 use sov_stf_runner::processes::{ParallelProverService, ProverService, RollupProverConfig};
 use sov_stf_runner::RollupConfig;
 
-/// Marker type for the Celestia / mock-zkVM rollup. Carries no
-/// state; the [`Default`] / [`Clone`] / [`Copy`] impls let the
-/// blueprint machinery construct it however it wants.
-#[derive(Default, Clone, Copy, Debug)]
+/// Marker type for the Celestia / mock-zkVM rollup.
+///
+/// Same shape as [`crate::MockLigateRollup`] (#181): holds the
+/// configured `chain_id` so `create_endpoints` can mount
+/// `/v1/rollup/info` with the operator-supplied identifier. The
+/// [`Default`] impl is preserved for tests; production
+/// (`main.rs`) uses [`CelestiaLigateRollup::new`] after
+/// [`crate::chain_config::load_split_config`] reads the `[chain]`
+/// section.
+#[derive(Clone, Debug)]
 pub struct CelestiaLigateRollup<M> {
+    chain_id: std::sync::Arc<str>,
     phantom: std::marker::PhantomData<M>,
+}
+
+impl<M> Default for CelestiaLigateRollup<M> {
+    fn default() -> Self {
+        Self { chain_id: std::sync::Arc::from(""), phantom: std::marker::PhantomData }
+    }
+}
+
+impl<M> CelestiaLigateRollup<M> {
+    /// Build a blueprint with the configured chain id. Used by
+    /// `main.rs` after `[chain]` is loaded and validated.
+    pub fn new(chain_id: impl Into<std::sync::Arc<str>>) -> Self {
+        Self { chain_id: chain_id.into(), phantom: std::marker::PhantomData }
+    }
 }
 
 type Hasher = <Risc0CryptoSpec as CryptoSpec>::Hasher;
@@ -152,7 +173,14 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
 
         // #149: nest chain API under /v1/. #176: /health + /ready
         // at root. #110: metrics middleware on the outer router.
+        // #181: merge /rollup/info into the /v1 group, fed by the
+        // configured chain_id and the runtime's CHAIN_HASH.
         let chain_api = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router);
+        let info_state = crate::info::InfoState::new(
+            self.chain_id.clone(),
+            <Self::Runtime as sov_modules_api::Runtime<Self::Spec>>::CHAIN_HASH,
+        );
+        let chain_api = crate::info::add_routes(chain_api, info_state);
         let mut router = axum::Router::new().nest("/v1", chain_api);
 
         let health_state = crate::health::HealthState::new(sync_status_for_health);

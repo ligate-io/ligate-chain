@@ -29,9 +29,12 @@
 #![allow(clippy::too_many_arguments)]
 
 mod celestia_rollup;
+pub mod chain_config;
 pub mod health;
+pub mod info;
 pub mod metrics;
 mod mock_rollup;
 
 pub use celestia_rollup::{CelestiaLigateRollup, CelestiaRollupSpec};
+pub use chain_config::{ChainConfig, ChainIdError};
 pub use mock_rollup::{MockLigateRollup, MockRollupSpec};

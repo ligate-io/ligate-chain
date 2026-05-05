@@ -21,7 +21,10 @@ borsh.workspace = true
 clap.workspace = true
 rustls.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
+toml = "0.8"
 tracing.workspace = true
 
 # SDK glue. All `native`-flavoured because this is a node binary,

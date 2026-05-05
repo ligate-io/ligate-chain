@@ -18,7 +18,7 @@ use std::process::exit;
 
 use anyhow::Context as _;
 use clap::Parser;
-use ligate_rollup::{metrics, CelestiaLigateRollup, MockLigateRollup};
+use ligate_rollup::{chain_config, metrics, CelestiaLigateRollup, MockLigateRollup};
 use ligate_stf::genesis_config::GenesisPaths;
 use sov_address::MultiAddressEvm;
 use sov_celestia_adapter::CelestiaService;
@@ -27,7 +27,7 @@ use sov_modules_api::execution_mode::Native;
 use sov_modules_rollup_blueprint::logging::initialize_logging;
 use sov_modules_rollup_blueprint::FullNodeBlueprint;
 use sov_stf_runner::processes::RollupProverConfig;
-use sov_stf_runner::{from_toml_path, RollupConfig};
+use sov_stf_runner::RollupConfig;
 use tracing::debug;
 
 #[derive(Parser, Debug)]
@@ -175,8 +175,14 @@ async fn run_with_mock(
     rollup_config_path: &str,
     genesis_paths: &GenesisPaths,
 ) -> anyhow::Result<()> {
+    // #181: pull `[chain]` out of the rollup TOML before handing the
+    // rest to the SDK loader. The SDK's `RollupConfig` rejects
+    // unknown fields, so the two sections can't share the same
+    // typed deserialization.
+    let (chain, residual_toml) = chain_config::load_split_config(rollup_config_path)
+        .with_context(|| format!("Failed to load chain config from {rollup_config_path}"))?;
     let rollup_config: RollupConfig<MultiAddressEvm, StorableMockDaService> =
-        from_toml_path(rollup_config_path).with_context(|| {
+        toml::from_str(&residual_toml).with_context(|| {
             format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
 
@@ -198,7 +204,7 @@ async fn run_with_mock(
         metrics::DEFAULT_STATE_DB_SIZE_POLL_INTERVAL,
     );
 
-    let rollup = MockLigateRollup::<Native>::default()
+    let rollup = MockLigateRollup::<Native>::new(chain.chain_id)
         .create_new_rollup(
             genesis_paths,
             rollup_config,
@@ -217,8 +223,12 @@ async fn run_with_celestia(
     rollup_config_path: &str,
     genesis_paths: &GenesisPaths,
 ) -> anyhow::Result<()> {
+    // #181: same two-pass split as the mock path. `[chain]` lives in
+    // the rollup TOML alongside `[da]`, `[storage]`, etc.
+    let (chain, residual_toml) = chain_config::load_split_config(rollup_config_path)
+        .with_context(|| format!("Failed to load chain config from {rollup_config_path}"))?;
     let rollup_config: RollupConfig<MultiAddressEvm, CelestiaService> =
-        from_toml_path(rollup_config_path).with_context(|| {
+        toml::from_str(&residual_toml).with_context(|| {
             format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
 
@@ -234,7 +244,7 @@ async fn run_with_celestia(
         metrics::DEFAULT_STATE_DB_SIZE_POLL_INTERVAL,
     );
 
-    let rollup = CelestiaLigateRollup::<Native>::default()
+    let rollup = CelestiaLigateRollup::<Native>::new(chain.chain_id)
         .create_new_rollup(
             genesis_paths,
             rollup_config,

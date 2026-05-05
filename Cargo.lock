@@ -4162,7 +4162,9 @@ dependencies = [
  "sov-stf-runner",
  "sov-test-utils",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
+ "toml",
  "tracing",
 ]
 
