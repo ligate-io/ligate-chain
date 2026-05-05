@@ -122,6 +122,7 @@ fn setup_with_seeded_state() -> StagedGenesis {
             attestor_set: attestor_set_id,
             fee_routing_bps: 0,
             fee_routing_addr: None,
+            payload_shape_hash: [0u8; 32],
         }],
         max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
     };

@@ -200,19 +200,21 @@ fn snapshot_schema() {
         attestor_set: AttestorSetId::from([0x22u8; 32]),
         fee_routing_bps: 0,
         fee_routing_addr: None,
+        payload_shape_hash: [0xEEu8; 32],
     };
     assert_snapshot(
         "Schema<TestSpec>",
         &schema,
         // owner (28 bytes) + name (u32 len = 11 + "ligate.test" UTF-8) +
         // version (u32 LE) + attestor_set (32 bytes) + fee_routing_bps (u16 LE) +
-        // Option<Address>::None (1 byte tag)
+        // Option<Address>::None (1 byte tag) + payload_shape_hash (32 bytes)
         "77777777777777777777777777777777777777777777777777777777\
          0b0000006c69676174652e74657374\
          01000000\
          2222222222222222222222222222222222222222222222222222222222222222\
          0000\
-         00",
+         00\
+         eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     );
 }
 
@@ -311,6 +313,7 @@ fn snapshot_call_message_register_schema() {
         attestor_set: AttestorSetId::from([0x22u8; 32]),
         fee_routing_bps: 5000,
         fee_routing_addr: Some(Address::from([0x88u8; 28])),
+        payload_shape_hash: [0x99u8; 32],
     };
     assert_snapshot(
         "CallMessage::RegisterSchema",
@@ -318,14 +321,16 @@ fn snapshot_call_message_register_schema() {
         // variant tag (0x01) + name (u32 len 11 + "ligate.test") +
         // version (u32 LE = 1) + attestor_set (32) +
         // fee_routing_bps (u16 LE = 5000 = 0x88 0x13) +
-        // Option<Address>::Some(...) (tag 0x01 + 28 bytes)
+        // Option<Address>::Some(...) (tag 0x01 + 28 bytes) +
+        // payload_shape_hash (32 bytes)
         "01\
          0b0000006c69676174652e74657374\
          01000000\
          2222222222222222222222222222222222222222222222222222222222222222\
          8813\
          01\
-         88888888888888888888888888888888888888888888888888888888",
+         88888888888888888888888888888888888888888888888888888888\
+         9999999999999999999999999999999999999999999999999999999999999999",
     );
 }
 

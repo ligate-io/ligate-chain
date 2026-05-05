@@ -76,6 +76,7 @@ fn sample_schema() -> Schema<S> {
         attestor_set: AttestorSet::derive_id(&[sample_pubkey(7)], 1),
         fee_routing_bps: 2500,
         fee_routing_addr: Some(sample_addr(99)),
+        payload_shape_hash: [0u8; 32],
     }
 }
 
@@ -151,6 +152,7 @@ fn call_message_register_schema_borsh_round_trip() {
         attestor_set: AttestorSet::derive_id(&[sample_pubkey(8)], 1),
         fee_routing_bps: 1000,
         fee_routing_addr: Some(sample_addr(10)),
+        payload_shape_hash: [0u8; 32],
     };
     round_trip_borsh(msg);
 }
@@ -214,6 +216,7 @@ fn attestation_config_json_round_trip() {
             attestor_set: AttestorSet::derive_id(&[sample_pubkey(4)], 1),
             fee_routing_bps: 1000,
             fee_routing_addr: Some(sample_addr(5)),
+            payload_shape_hash: [0u8; 32],
         }],
         max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
     };
