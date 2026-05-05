@@ -1,0 +1,146 @@
+# Ligate `ligate-devnet-1` rollup config (Celestia DA, public).
+#
+# Boots a single-sequencer node against Celestia Mocha testnet for the
+# canonical public devnet rung of the chain-id ladder. Mock zkVM still
+# at this rung; real proving lands in Phase A.4.
+#
+# Run with (from the repo root):
+#
+#   cargo run --bin ligate-node -- \
+#     --da-layer celestia \
+#     --rollup-config-path devnet-1/celestia.toml \
+#     --genesis-config-dir devnet-1/genesis
+#
+# Production deploys override sensitive values via env vars, never by
+# editing the committed file:
+#
+#   SOV_CELESTIA_RPC_URL  → [da].rpc_url
+#   SOV_CELESTIA_GRPC_URL → [da].grpc_url
+#   SOV_CELESTIA_RPC_AUTH_TOKEN → [da].rpc_auth_token (if your provider needs one)
+#   SOV_CELESTIA_SIGNER_KEY → [da].signer_private_key
+#
+# Bind addresses default to `127.0.0.1` because the deploy pattern is
+# Caddy on the same VM reverse-proxying TLS to localhost. Public
+# operators flipping to a public bind without a reverse proxy in front
+# expose the node to the internet uncomfortably; do not do that.
+#
+# Differences from `devnet/celestia.toml`:
+#
+#   - chain_id is `ligate-devnet-1` (locked ladder rung; #181)
+#   - storage.path differs so a single host can run both localnet and
+#     devnet-1 side by side
+#   - comments emphasise public-devnet hygiene (env-var overrides,
+#     reverse-proxy expectation, per-operator Celestia light node)
+#
+# See `devnet-1/README.md` for the full operator narrative and
+# `docs/development/public-devnet-deploy.md` for the deploy runbook.
+
+# Chain identity. `ligate-devnet-1` is the public-devnet rung of the
+# locked ladder per `docs/protocol/attestation-v0.md` `Chain id`. The
+# binary refuses to boot with any value outside the ladder; the
+# validator lives in `crates/rollup/src/chain_config.rs` (#181).
+[chain]
+chain_id = "ligate-devnet-1"
+
+[da]
+# Celestia RPC endpoint for reading blobs + headers.
+#
+# **Default (recommended)**: `ws://127.0.0.1:26658` against a
+# co-located Celestia light node on the same VM. Localhost talk
+# avoids public-RPC rate limits and TLS overhead.
+#
+# **Alternative**: a public Mocha endpoint (less reliable):
+# `wss://rpc-mocha.pops.one` or any provider's URL.
+#
+# Operators set this via `SOV_CELESTIA_RPC_URL` so the secret never
+# lives in the repo if the endpoint requires an auth token.
+rpc_url = "ws://127.0.0.1:26658"
+
+# Optional. JWT for the RPC endpoint (Mocha provider tokens come on
+# a per-account basis). Prefer `SOV_CELESTIA_RPC_AUTH_TOKEN`.
+#rpc_auth_token = "MY.SECRET.TOKEN"
+
+# gRPC endpoint for submitting blobs (sequencer-only path; followers
+# don't strictly need this).
+grpc_url = "http://127.0.0.1:9090"
+
+# Celestia signer private key (hex). The wallet must hold enough
+# Mocha TIA to cover blob inclusion. The Mocha faucet drips for free;
+# top up monthly. Operators inject via `SOV_CELESTIA_SIGNER_KEY`.
+# The placeholder zero key below is for `cargo check` / parse tests
+# only and intentionally cannot sign anything real.
+signer_private_key = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Conservative retry tuning. Public-devnet leans towards faster
+# failure than indefinite retry so misconfigurations surface in
+# minutes rather than hours.
+backoff_min_delay_ms = 200
+backoff_max_delay_ms = 6_000
+backoff_max_times    = 10
+
+[da.block_producing.periodic]
+# `block_producing` is unused by the Celestia adapter (Celestia
+# produces blocks itself). The TOML schema still requires the
+# section, so a placeholder is left here.
+block_time_ms = 1000
+
+[storage]
+# State + ledger DB lives here. DA blobs are not stored locally;
+# they live on Celestia. Path is repo-root-relative for `cargo run`
+# convenience; production deploys typically point at
+# `/var/lib/ligate/devnet-1` or similar via env-var override.
+path = "devnet-1/data-celestia"
+state_cache_size = 4294967296
+user_commit_concurrency = 4
+# Same hashtable sizing as `devnet/celestia.toml`; Celestia block
+# times (~12s) make rollup state grow slowly enough that a 1M-bucket
+# table stays performant for the duration of a devnet.
+user_hashtable_buckets = 1_000_000
+user_preallocate_ht = false
+kernel_commit_concurrency = 2
+pruner_block_interval = 100
+pruner_versions_to_keep = 20
+
+[runner]
+# Celestia produces ~12s blocks; polling 6× per block keeps inclusion
+# latency low without spamming the local light node.
+da_polling_interval_ms = 2_000
+
+[runner.http_config]
+# Localhost only by intent. Caddy (or your reverse proxy of choice)
+# fronts the node and serves the public TLS endpoint. Binding the
+# node directly to a public interface is only safe behind a firewall
+# rule restricting to your reverse proxy's source.
+bind_host = "127.0.0.1"
+bind_port = 12346
+
+[monitoring]
+telegraf_address = "udp://127.0.0.1:8094"
+tokio_runtime_metrics_interval_millis = 500
+
+[proof_manager]
+aggregated_proof_block_jump = 10
+prover_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
+max_number_of_transitions_in_db = 100
+max_number_of_transitions_in_memory = 30
+
+[sequencer]
+# Celestia block times mean blob inclusion can take ~minutes if the
+# network is busy. 600s gives the sequencer headroom before it
+# times out on a submitted batch.
+blob_processing_timeout_secs = 600
+max_batch_size_bytes = 1048576
+max_concurrent_blobs = 128
+max_allowed_node_distance_behind = 10
+rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
+
+[sequencer.preferred]
+disable_state_root_consistency_checks = true
+recovery_strategy = "TryToSave"
+batch_execution_time_limit_millis = 12000
+num_cache_warmup_workers = 0
+
+[sequencer.extension]
+# Required by the SDK schema even though we don't override
+# `sequencer_additional_apis`. Match the upstream demo's value.
+max_log_limit = 20000

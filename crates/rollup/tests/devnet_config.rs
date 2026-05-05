@@ -22,16 +22,24 @@ use sov_mock_da::storable::StorableMockDaService;
 use sov_modules_api::execution_mode::Native;
 use sov_stf_runner::RollupConfig;
 
-/// Path to the repo's checked-in `devnet/` directory, regardless of
-/// where `cargo test` is invoked from.
-fn devnet_dir() -> PathBuf {
-    // `CARGO_MANIFEST_DIR` is `crates/rollup/`; the devnet lives two
+/// Path to a checked-in `devnet*/` directory, regardless of where
+/// `cargo test` is invoked from.
+fn config_dir(name: &str) -> PathBuf {
+    // `CARGO_MANIFEST_DIR` is `crates/rollup/`; the configs live two
     // levels up.
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
         .expect("crates/rollup/ has a workspace-root grandparent")
-        .join("devnet")
+        .join(name)
+}
+
+fn devnet_dir() -> PathBuf {
+    config_dir("devnet")
+}
+
+fn devnet_1_dir() -> PathBuf {
+    config_dir("devnet-1")
 }
 
 #[test]
@@ -78,5 +86,43 @@ fn genesis_jsons_load_and_pass_cross_module_validation() {
     let _config = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)
         .unwrap_or_else(|e| {
             panic!("devnet/genesis/ failed to load + validate: {e:?}");
+        });
+}
+
+// ============================================================================
+// devnet-1/ public-devnet artifacts (#188)
+//
+// Same drift coverage as the localnet tests above, applied to the
+// public-devnet rung of the chain-id ladder. A typo on `chain_id` or
+// a TOML key drift in the public configs would otherwise only surface
+// at deploy time; these tests catch it at PR time.
+// ============================================================================
+
+#[test]
+fn devnet_1_celestia_toml_parses_against_celestia_blueprint_types() {
+    let path = devnet_1_dir().join("celestia.toml");
+    let (chain, residual) = load_split_config(&path)
+        .unwrap_or_else(|e| panic!("devnet-1/celestia.toml failed [chain] split: {e:?}"));
+    let _config: RollupConfig<MultiAddressEvm, CelestiaService> = toml::from_str(&residual)
+        .unwrap_or_else(|e| panic!("devnet-1/celestia.toml residual failed to parse: {e:?}"));
+    // Pin the committed chain id so a typo (e.g. bumping to
+    // `ligate-1` on the devnet-1 config) breaks here rather than at
+    // first boot.
+    assert_eq!(chain.chain_id, "ligate-devnet-1");
+}
+
+#[test]
+fn devnet_1_genesis_jsons_load_and_pass_cross_module_validation() {
+    // The committed devnet-1/genesis/ uses the same placeholder
+    // addresses as devnet/genesis/ (test fixtures, not for production
+    // deploy; the README explains the substitution path via the
+    // genesis-tool in #191). The validator runs the same cross-module
+    // checks regardless, so a schema drift in any module's JSON or a
+    // tightened invariant breaks this test.
+    type S = MockRollupSpec<Native>;
+    let paths = GenesisPaths::from_dir(devnet_1_dir().join("genesis"));
+    let _config = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)
+        .unwrap_or_else(|e| {
+            panic!("devnet-1/genesis/ failed to load + validate: {e:?}");
         });
 }
