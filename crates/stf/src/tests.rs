@@ -339,6 +339,7 @@ mod genesis_loader {
             attestor_set: bogus_set,
             fee_routing_bps: 0,
             fee_routing_addr: None,
+            payload_shape_hash: [0u8; 32],
         }];
 
         match validate_config(&cfg) {
@@ -366,6 +367,7 @@ mod genesis_loader {
                 attestor_set: set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
             InitialSchema {
                 owner: addr(7),
@@ -374,6 +376,7 @@ mod genesis_loader {
                 attestor_set: set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ];
 
@@ -400,6 +403,7 @@ mod genesis_loader {
             attestor_set: set_id,
             fee_routing_bps: 1500,
             fee_routing_addr: None,
+            payload_shape_hash: [0u8; 32],
         }];
 
         match validate_config(&cfg) {
@@ -426,6 +430,7 @@ mod genesis_loader {
             attestor_set: set_id,
             fee_routing_bps: 0,
             fee_routing_addr: Some(addr(8)),
+            payload_shape_hash: [0u8; 32],
         }];
 
         match validate_config(&cfg) {
@@ -453,6 +458,7 @@ mod genesis_loader {
             attestor_set: set_id,
             fee_routing_bps: 5001,
             fee_routing_addr: Some(addr(8)),
+            payload_shape_hash: [0u8; 32],
         }];
 
         match validate_config(&cfg) {
@@ -482,6 +488,7 @@ mod genesis_loader {
             attestor_set: set_id,
             fee_routing_bps: 2500,
             fee_routing_addr: Some(addr(8)),
+            payload_shape_hash: [0u8; 32],
         }];
 
         validate_config(&cfg).expect("well-formed initial sets + schemas should validate");

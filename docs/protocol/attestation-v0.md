@@ -49,19 +49,22 @@ Identifies an app's attestation shape and rules.
 
 ```
 Schema {
-    id:               [u8; 32]          // SHA-256(owner ‖ name ‖ version)
-    owner:            Address           // who registered it; can upgrade (new version = new id)
-    name:             String            // human-readable, e.g. "themisra.proof-of-prompt"
-    version:          u32               // monotonic; immutable per id
-    attestor_set:     AttestorSetId     // which quorum must sign under this schema
-    fee_routing_bps:  u16               // 0-5000 basis points (cap 50%)
-    fee_routing_addr: Option<Address>   // where the builder's share goes; None = 100% treasury
+    id:                  [u8; 32]          // SHA-256(owner ‖ name ‖ version)
+    owner:               Address           // who registered it; can upgrade (new version = new id)
+    name:                String            // human-readable, e.g. "themisra.proof-of-prompt"
+    version:             u32               // monotonic; immutable per id
+    attestor_set:        AttestorSetId     // which quorum must sign under this schema
+    fee_routing_bps:     u16               // 0-5000 basis points (cap 50%)
+    fee_routing_addr:    Option<Address>   // where the builder's share goes; None = 100% treasury
+    payload_shape_hash:  [u8; 32]          // off-chain payload-spec content-address; stored not verified
 }
 ```
 
 Registration is **permissionless** (anyone can register), spam mitigated by the registration fee in $LGT.
 
 **Namespace ownership:** `schema_id` is derived from `owner` too, so two different owners registering the same `name` produce different `schema_id`s. No protocol-level name squatting. Social identity (who is the "real" Themisra) is handled off-chain via owner address + verified-tag metadata in SDKs and explorers. Same model as ERC-20 token names.
+
+**`payload_shape_hash`:** 32-byte content-address of the off-chain payload spec that `payload_hash` is computed against. **The chain stores this value but does not verify it.** The shape spec lives off-chain, so the chain has no view of the relationship between `payload_hash` and `payload_shape_hash`; storing the hash without the data it refers to is documentation, not enforcement. The field exists for multi-SDK drift protection: any SDK whose computed payload-format hash differs from the registered value is non-conformant. Pass `[0u8; 32]` to opt out, the genesis loader and `RegisterSchema` handler treat that value as "no off-chain spec association". See [#151](https://github.com/ligate-io/ligate-chain/issues/151) for the rationale.
 
 ### AttestorSet
 
@@ -119,11 +122,12 @@ enum CallMessage {
         threshold: u8,
     },
     RegisterSchema {
-        name:             String,
-        version:          u32,
-        attestor_set:     AttestorSetId,
-        fee_routing_bps:  u16,
-        fee_routing_addr: Option<Address>,
+        name:               String,
+        version:            u32,
+        attestor_set:       AttestorSetId,
+        fee_routing_bps:    u16,
+        fee_routing_addr:   Option<Address>,
+        payload_shape_hash: [u8; 32],
     },
     SubmitAttestation {
         schema_id:    SchemaId,

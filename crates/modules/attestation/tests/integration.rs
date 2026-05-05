@@ -15,8 +15,8 @@
 
 use attestation::{
     AttestationConfig, AttestationModule, AttestorSet, AttestorSignature, CallMessage,
-    InitialAttestorSet, PubKey, Schema, MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS,
-    MAX_ATTESTOR_SIGNATURE_BYTES,
+    InitialAttestorSet, InitialSchema, PubKey, Schema, MAX_ATTESTATION_SIGNATURES,
+    MAX_ATTESTOR_SET_MEMBERS, MAX_ATTESTOR_SIGNATURE_BYTES,
 };
 use ed25519_dalek::{Signer, SigningKey};
 use sov_bank::{config_gas_token_id, Amount, Bank, TokenId};
@@ -293,6 +293,7 @@ fn register_schema_requires_existing_attestor_set() {
                 attestor_set: bogus_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -319,6 +320,7 @@ fn register_schema_rejects_over_cap_fee_routing() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 6000, // > DEFAULT_MAX_BUILDER_BPS (5000)
                 fee_routing_addr: Some(env.submitter.address()),
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -346,6 +348,7 @@ fn register_schema_accepts_bps_at_default_cap() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
                 fee_routing_addr: Some(env.submitter.address()),
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -373,6 +376,7 @@ fn register_schema_honours_custom_cap_at_genesis() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 2999,
                 fee_routing_addr: Some(env.submitter.address()),
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -400,6 +404,7 @@ fn register_schema_rejects_above_custom_cap() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 3001,
                 fee_routing_addr: Some(env.submitter.address()),
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -429,6 +434,7 @@ fn submit_attestation_routes_treasury_share_via_bank() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -509,6 +515,7 @@ fn register_schema_rejects_orphan_routing_bps_without_addr() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 1000,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -535,6 +542,7 @@ fn register_schema_rejects_orphan_routing_addr_without_bps() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: Some(routing_addr),
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -634,6 +642,7 @@ fn full_register_register_submit_flow() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -730,6 +739,7 @@ fn sig_test_setup(
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -901,6 +911,7 @@ fn submit_with_off_curve_pubkey_rejects() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -954,6 +965,7 @@ fn submit_digest_is_bound_to_submitter() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -1010,6 +1022,7 @@ fn genesis_seeds_initial_attestor_set() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(move |result, state| {
@@ -1050,6 +1063,7 @@ fn submit_attestation_routes_builder_share_via_bank() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 2500,
                 fee_routing_addr: Some(builder_addr),
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -1110,6 +1124,7 @@ fn submit_attestation_fails_with_insufficient_balance() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -1196,6 +1211,7 @@ fn register_schema_rejects_duplicate() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -1211,6 +1227,7 @@ fn register_schema_rejects_duplicate() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| {
@@ -1261,6 +1278,7 @@ fn submit_attestation_rejects_empty_signatures() {
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -1339,6 +1357,7 @@ fn stage_query_state(env: &mut TestEnv, signers: &[SigningKey; 3]) -> StagedQuer
                 attestor_set: attestor_set_id,
                 fee_routing_bps: 0,
                 fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
             },
         ),
         assert: Box::new(|result, _state| assert!(result.tx_receipt.is_successful())),
@@ -1473,4 +1492,146 @@ async fn query_get_schema_returns_400_for_invalid_bech32() {
     let resp = env.runner.query_api(&attestation_api_path("schemas/not-a-valid-id"), &client).await;
 
     assert_eq!(resp.status().as_u16(), 400);
+}
+
+// ============================================================================
+// payload_shape_hash storage (#151)
+//
+// The chain stores `Schema::payload_shape_hash` verbatim and never verifies
+// it. These tests pin the storage behaviour: a non-zero hash registered by
+// runtime tx survives in state, the explicit zero opt-out also persists, and
+// genesis-seeded `InitialSchema` entries write the hash through to the same
+// state map.
+// ============================================================================
+
+#[test]
+fn register_schema_persists_payload_shape_hash() {
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let submitter_addr = env.submitter.address();
+
+    // Pin a recognisable, non-zero shape hash. The chain stores the
+    // bytes opaquely; the value here is arbitrary.
+    let shape_hash: [u8; 32] = [0xC4u8; 32];
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("shape-hash-test"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+                payload_shape_hash: shape_hash,
+            },
+        ),
+        assert: Box::new(move |result, state| {
+            assert!(result.tx_receipt.is_successful());
+            let module = AttestationModule::<S>::default();
+            let schema_id = Schema::<S>::derive_id(&submitter_addr, "shape-hash-test", 1);
+            let stored = module
+                .schemas
+                .get(&schema_id, state)
+                .unwrap_infallible()
+                .expect("schema written by RegisterSchema handler");
+            assert_eq!(
+                stored.payload_shape_hash, shape_hash,
+                "payload_shape_hash round-trips through state verbatim"
+            );
+        }),
+    });
+}
+
+#[test]
+fn register_schema_with_zero_payload_shape_hash_persists() {
+    // Explicit `[0u8; 32]` is the documented opt-out. The chain
+    // stores it the same as any other value; downstream consumers
+    // interpret zero as "no off-chain spec association".
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let initial = vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }];
+    let mut env = setup_with_initial(Amount::ZERO, Amount::ZERO, Amount::ZERO, initial);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+    let submitter_addr = env.submitter.address();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
+            CallMessage::RegisterSchema {
+                name: safe_name("opt-out-shape"),
+                version: 1,
+                attestor_set: attestor_set_id,
+                fee_routing_bps: 0,
+                fee_routing_addr: None,
+                payload_shape_hash: [0u8; 32],
+            },
+        ),
+        assert: Box::new(move |result, state| {
+            assert!(result.tx_receipt.is_successful());
+            let module = AttestationModule::<S>::default();
+            let schema_id = Schema::<S>::derive_id(&submitter_addr, "opt-out-shape", 1);
+            let stored = module
+                .schemas
+                .get(&schema_id, state)
+                .unwrap_infallible()
+                .expect("schema written by RegisterSchema handler");
+            assert_eq!(stored.payload_shape_hash, [0u8; 32]);
+        }),
+    });
+}
+
+#[test]
+fn genesis_initial_schema_persists_payload_shape_hash() {
+    // Build a genesis that pre-registers a schema via `InitialSchema`
+    // carrying a non-zero `payload_shape_hash`. After boot, the
+    // schema must be in state with the field intact.
+    let signers = sample_signers();
+    let pubs = pubkeys_of(&signers);
+    let attestor_set_id = AttestorSet::derive_id(&pubs, 2);
+
+    let genesis_config =
+        HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(2);
+    let owner = genesis_config.additional_accounts()[0].address();
+    let treasury = genesis_config.additional_accounts()[1].address();
+    let lgt_token_id = config_gas_token_id();
+    let shape_hash: [u8; 32] = [0xA7u8; 32];
+
+    let attestation_config = AttestationConfig::<S> {
+        treasury,
+        lgt_token_id,
+        attestation_fee: Amount::ZERO,
+        schema_registration_fee: Amount::ZERO,
+        attestor_set_fee: Amount::ZERO,
+        initial_attestor_sets: vec![InitialAttestorSet { members: pubs.clone(), threshold: 2 }],
+        initial_schemas: vec![InitialSchema {
+            owner,
+            name: "themisra.proof-of-prompt".to_string(),
+            version: 1,
+            attestor_set: attestor_set_id,
+            fee_routing_bps: 0,
+            fee_routing_addr: None,
+            payload_shape_hash: shape_hash,
+        }],
+        max_builder_bps: attestation::DEFAULT_MAX_BUILDER_BPS,
+    };
+
+    let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), attestation_config);
+    let runner: TestRunner<RT, S> =
+        TestRunner::new_with_genesis(genesis.into_genesis_params(), RT::default());
+
+    runner.query_state(|state| {
+        let module = AttestationModule::<S>::default();
+        let schema_id = Schema::<S>::derive_id(&owner, "themisra.proof-of-prompt", 1);
+        let stored = module
+            .schemas
+            .get(&schema_id, state)
+            .unwrap_infallible()
+            .expect("schema seeded at genesis must be in state");
+        assert_eq!(
+            stored.payload_shape_hash, shape_hash,
+            "genesis-seeded payload_shape_hash round-trips through state verbatim"
+        );
+    });
 }

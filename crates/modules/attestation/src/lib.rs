@@ -262,6 +262,24 @@ pub struct Schema<S: Spec> {
     /// `fee_routing_bps == 0`, the state transition rejects dangling
     /// routing and orphan addresses at registration time.
     pub fee_routing_addr: Option<S::Address>,
+    /// 32-byte content-address of the off-chain payload spec that
+    /// `payload_hash` is computed against.
+    ///
+    /// **The chain stores this value but does not verify it.** Two
+    /// SDKs claiming to implement the same `(name, version)` schema
+    /// may compute `payload_hash` differently if their canonical-form
+    /// rules drift; pinning a `payload_shape_hash` makes that drift
+    /// detectable off-chain. The chain has no view of the spec the
+    /// hash refers to, so it cannot enforce the relationship.
+    ///
+    /// Genesis and runtime callers may pass `[0u8; 32]` to opt out;
+    /// the field is stored verbatim and `[0u8; 32]` is reserved as
+    /// "no off-chain spec association".
+    ///
+    /// See [#151](https://github.com/ligate-io/ligate-chain/issues/151)
+    /// for the rationale and the multi-SDK drift-protection design
+    /// note.
+    pub payload_shape_hash: Hash32,
 }
 
 impl<S: Spec> Schema<S> {
@@ -417,6 +435,10 @@ pub enum CallMessage<S: Spec> {
         fee_routing_bps: u16,
         /// See [`Schema::fee_routing_addr`].
         fee_routing_addr: Option<S::Address>,
+        /// See [`Schema::payload_shape_hash`]. Pass `[0u8; 32]` to
+        /// opt out; the chain stores the value verbatim and never
+        /// verifies it.
+        payload_shape_hash: Hash32,
     },
 
     /// Submit a new [`Attestation`] under an existing schema.
@@ -617,6 +639,11 @@ pub struct InitialSchema<S: Spec> {
     pub fee_routing_bps: u16,
     /// Fee routing address; required iff `fee_routing_bps > 0`.
     pub fee_routing_addr: Option<S::Address>,
+    /// See [`Schema::payload_shape_hash`]. Defaults to `[0u8; 32]`
+    /// when omitted from the genesis JSON, which is the same opt-out
+    /// the runtime `RegisterSchema` handler accepts.
+    #[serde(default)]
+    pub payload_shape_hash: Hash32,
 }
 
 /// Genesis configuration loaded once at chain launch.
@@ -889,12 +916,14 @@ impl<S: Spec> Module for AttestationModule<S> {
                 attestor_set,
                 fee_routing_bps,
                 fee_routing_addr,
+                payload_shape_hash,
             } => self.handle_register_schema(
                 name.to_string(),
                 version,
                 attestor_set,
                 fee_routing_bps,
                 fee_routing_addr,
+                payload_shape_hash,
                 context,
                 state,
             ),
@@ -1002,6 +1031,7 @@ impl<S: Spec> AttestationModule<S> {
                     attestor_set: schema.attestor_set,
                     fee_routing_bps: schema.fee_routing_bps,
                     fee_routing_addr: schema.fee_routing_addr,
+                    payload_shape_hash: schema.payload_shape_hash,
                 },
                 state,
             )?;
@@ -1065,6 +1095,7 @@ impl<S: Spec> AttestationModule<S> {
         attestor_set: AttestorSetId,
         fee_routing_bps: u16,
         fee_routing_addr: Option<S::Address>,
+        payload_shape_hash: Hash32,
         context: &Context<S>,
         state: &mut impl TxState<S>,
     ) -> anyhow::Result<()> {
@@ -1100,7 +1131,15 @@ impl<S: Spec> AttestationModule<S> {
 
         self.schemas.set(
             &id,
-            &Schema { owner, name, version, attestor_set, fee_routing_bps, fee_routing_addr },
+            &Schema {
+                owner,
+                name,
+                version,
+                attestor_set,
+                fee_routing_bps,
+                fee_routing_addr,
+                payload_shape_hash,
+            },
             state,
         )?;
 

@@ -57,7 +57,8 @@
 //! // 1. Build a RegisterAttestorSet message.
 //! let _msg = register_attestor_set::<S>(members.clone(), 2).expect("members under cap");
 //!
-//! // 2. Build a RegisterSchema message (fee routing omitted).
+//! // 2. Build a RegisterSchema message (fee routing omitted, no
+//! //    off-chain payload shape pinned).
 //! let attestor_set_id = AttestorSet::derive_id(&members, 2);
 //! let _msg = register_schema::<S>(
 //!     "themisra.proof-of-prompt".into(),
@@ -65,6 +66,7 @@
 //!     attestor_set_id,
 //!     0,
 //!     None,
+//!     [0u8; 32],
 //! )
 //! .expect("name under cap");
 //!
@@ -159,8 +161,11 @@ pub fn register_attestor_set<S: Spec>(
 /// `fee_routing_addr` must be `Some` iff `fee_routing_bps > 0`, and
 /// `fee_routing_bps` must be `<= attestation::DEFAULT_MAX_BUILDER_BPS`
 /// (5000 in v0; the runtime cap lives in module state and is
-/// governance-tunable). The state transition enforces these invariants; this
-/// builder is a thin typed wrapper around the enum variant. Returns
+/// governance-tunable). `payload_shape_hash` is a 32-byte off-chain
+/// content-address that the chain stores verbatim and never verifies;
+/// pass `[0u8; 32]` to opt out of multi-SDK drift protection. The
+/// state transition enforces fee-routing invariants; this builder is
+/// a thin typed wrapper around the enum variant. Returns
 /// [`ClientError::SchemaNameOverCap`] if `name` exceeds the
 /// `SafeString` default cap.
 pub fn register_schema<S: Spec>(
@@ -169,6 +174,7 @@ pub fn register_schema<S: Spec>(
     attestor_set: AttestorSetId,
     fee_routing_bps: u16,
     fee_routing_addr: Option<S::Address>,
+    payload_shape_hash: Hash32,
 ) -> Result<CallMessage<S>, ClientError> {
     let safe_name =
         SafeString::try_from(name.clone()).map_err(|_| ClientError::SchemaNameOverCap(name))?;
@@ -178,6 +184,7 @@ pub fn register_schema<S: Spec>(
         attestor_set,
         fee_routing_bps,
         fee_routing_addr,
+        payload_shape_hash,
     })
 }
 
@@ -362,7 +369,7 @@ mod tests {
         // any plausible bump.
         let too_long = "a".repeat(1024);
         let attestor_set_id = AttestorSetId::from([1u8; 32]);
-        let result = register_schema::<S>(too_long.clone(), 1, attestor_set_id, 0, None);
+        let result = register_schema::<S>(too_long.clone(), 1, attestor_set_id, 0, None, [0u8; 32]);
         match result {
             Err(ClientError::SchemaNameOverCap(name)) => {
                 assert_eq!(name, too_long);
@@ -375,12 +382,14 @@ mod tests {
     fn register_schema_builds_correct_variant() {
         let attestor_set_id = AttestorSetId::from([7u8; 32]);
         let fee_addr = sample_address(9);
+        let shape_hash = [0xCDu8; 32];
         let msg: CallMessage<S> = register_schema::<S>(
             "themisra.proof-of-prompt".to_string(),
             3,
             attestor_set_id,
             2500,
             Some(fee_addr),
+            shape_hash,
         )
         .expect("name under cap");
         match msg {
@@ -390,12 +399,14 @@ mod tests {
                 attestor_set,
                 fee_routing_bps,
                 fee_routing_addr,
+                payload_shape_hash,
             } => {
                 assert_eq!(<SafeString as AsRef<str>>::as_ref(&name), "themisra.proof-of-prompt");
                 assert_eq!(version, 3);
                 assert_eq!(attestor_set, attestor_set_id);
                 assert_eq!(fee_routing_bps, 2500);
                 assert_eq!(fee_routing_addr, Some(fee_addr));
+                assert_eq!(payload_shape_hash, shape_hash);
             }
             other => panic!("expected RegisterSchema, got {other:?}"),
         }
