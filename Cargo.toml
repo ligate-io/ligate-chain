@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/modules/attestation",
     "crates/client-rs",
+    "crates/genesis-tool",
     "crates/rollup",
     "crates/rollup/provers/risc0",
     "crates/stf",
