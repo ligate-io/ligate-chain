@@ -145,6 +145,27 @@ pub enum ClientError {
 ///
 /// Returns [`ClientError::AttestorSetMembersOverCap`] if `members`
 /// exceeds [`MAX_ATTESTOR_SET_MEMBERS`].
+///
+/// # Example
+///
+/// ```
+/// use ligate_client::{register_attestor_set, CallMessage, ClientError, PubKey};
+///
+/// type S = sov_test_utils::TestSpec;
+///
+/// // 2-of-3 quorum.
+/// let members =
+///     vec![PubKey::from([0xAAu8; 32]), PubKey::from([0xBBu8; 32]), PubKey::from([0xCCu8; 32])];
+/// let msg: CallMessage<S> =
+///     register_attestor_set::<S>(members, 2).expect("3 members under MAX_ATTESTOR_SET_MEMBERS");
+/// matches!(msg, CallMessage::RegisterAttestorSet { .. });
+///
+/// // Builder rejects oversized inputs without burning a tx round-trip.
+/// // 65 members busts MAX_ATTESTOR_SET_MEMBERS (64).
+/// let too_many = vec![PubKey::from([0u8; 32]); 65];
+/// let err = register_attestor_set::<S>(too_many, 2).unwrap_err();
+/// matches!(err, ClientError::AttestorSetMembersOverCap { .. });
+/// ```
 pub fn register_attestor_set<S: Spec>(
     members: Vec<PubKey>,
     threshold: u8,
@@ -168,6 +189,28 @@ pub fn register_attestor_set<S: Spec>(
 /// a thin typed wrapper around the enum variant. Returns
 /// [`ClientError::SchemaNameOverCap`] if `name` exceeds the
 /// `SafeString` default cap.
+///
+/// # Example
+///
+/// ```
+/// use ligate_client::{register_schema, AttestorSet, CallMessage, PubKey};
+///
+/// type S = sov_test_utils::TestSpec;
+///
+/// // Quorum the schema binds to.
+/// let attestor_set_id = AttestorSet::derive_id(&[PubKey::from([0xAAu8; 32])], 1);
+///
+/// let msg: CallMessage<S> = register_schema::<S>(
+///     "themisra.proof-of-prompt".to_string(),
+///     1,
+///     attestor_set_id,
+///     0,         // no builder routing
+///     None,      // no routing address
+///     [0u8; 32], // opt out of payload-shape pinning
+/// )
+/// .expect("name fits SafeString cap");
+/// matches!(msg, CallMessage::RegisterSchema { .. });
+/// ```
 pub fn register_schema<S: Spec>(
     name: String,
     version: u32,
@@ -259,6 +302,29 @@ pub fn sign_attestation(signing_key: &SigningKey, digest: &Hash32) -> AttestorSi
 /// state transition. Returns
 /// [`ClientError::AttestationSignaturesOverCap`] if more than
 /// [`MAX_ATTESTATION_SIGNATURES`] keys are supplied.
+///
+/// # Example
+///
+/// ```
+/// use ed25519_dalek::SigningKey;
+/// use ligate_client::{build_signed_submit, CallMessage, PayloadHash, Schema, SchemaId};
+/// use sov_modules_api::Address;
+///
+/// type S = sov_test_utils::TestSpec;
+///
+/// // Two attestors out of an underlying 2-of-N quorum.
+/// let signers: Vec<SigningKey> =
+///     (1u8..=2).map(|i| SigningKey::from_bytes(&[i; 32])).collect();
+/// let key_refs: Vec<&SigningKey> = signers.iter().collect();
+///
+/// let submitter: <S as sov_modules_api::Spec>::Address = Address::from([0x77u8; 28]);
+/// let schema_id: SchemaId = Schema::<S>::derive_id(&submitter, "themisra.proof-of-prompt", 1);
+/// let payload_hash = PayloadHash::from([0x42u8; 32]);
+///
+/// let msg = build_signed_submit::<S>(&key_refs, schema_id, payload_hash, submitter, 0)
+///     .expect("2 signatures fits MAX_ATTESTATION_SIGNATURES");
+/// matches!(msg, CallMessage::SubmitAttestation { .. });
+/// ```
 pub fn build_signed_submit<S: Spec>(
     signing_keys: &[&SigningKey],
     schema_id: SchemaId,

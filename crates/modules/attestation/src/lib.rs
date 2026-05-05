@@ -25,6 +25,60 @@
 //! state layout wired to the real `sov_modules_api::StateMap`. State
 //! transition implementations (`call`), genesis config, RPC endpoints,
 //! and fee-split enforcement land in sibling issues (#7, #8, #20-#22).
+//!
+//! # End-to-end: build the three call messages
+//!
+//! Typical wallet / SDK flow walks the three protocol entities. The
+//! example below builds each [`CallMessage`] variant the chain accepts;
+//! actual signing and submission is the `ligate-client` crate's job.
+//!
+//! ```
+//! use attestation::{
+//!     AttestorSet, AttestorSignature, CallMessage, PayloadHash, PubKey, Schema, SchemaId,
+//!     MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS, MAX_ATTESTOR_SIGNATURE_BYTES,
+//! };
+//! use sov_modules_api::{Address, SafeString, SafeVec};
+//!
+//! type S = sov_test_utils::TestSpec;
+//!
+//! // 1. Build a quorum and register it.
+//! let members =
+//!     vec![PubKey::from([0xAAu8; 32]), PubKey::from([0xBBu8; 32]), PubKey::from([0xCCu8; 32])];
+//! let attestor_set_id = AttestorSet::derive_id(&members, 2);
+//! let _register_set: CallMessage<S> = CallMessage::RegisterAttestorSet {
+//!     members: SafeVec::<PubKey, MAX_ATTESTOR_SET_MEMBERS>::try_from(members)
+//!         .expect("3 members fits MAX_ATTESTOR_SET_MEMBERS"),
+//!     threshold: 2,
+//! };
+//!
+//! // 2. Register a schema bound to that quorum.
+//! let owner = Address::from([0x42u8; 28]);
+//! let schema_id = Schema::<S>::derive_id(&owner, "themisra.proof-of-prompt", 1);
+//! let _register_schema: CallMessage<S> = CallMessage::RegisterSchema {
+//!     name: SafeString::try_from("themisra.proof-of-prompt".to_string()).unwrap(),
+//!     version: 1,
+//!     attestor_set: attestor_set_id,
+//!     fee_routing_bps: 0,
+//!     fee_routing_addr: None,
+//!     payload_shape_hash: [0u8; 32],
+//! };
+//!
+//! // 3. Submit an attestation. Real signature bytes come from
+//! //    `ligate_client::sign_attestation` over the canonical
+//! //    `SignedAttestationPayload::digest`.
+//! let payload_hash = PayloadHash::from([0x42u8; 32]);
+//! let sig = AttestorSignature {
+//!     pubkey: PubKey::from([0xAAu8; 32]),
+//!     sig: SafeVec::<u8, MAX_ATTESTOR_SIGNATURE_BYTES>::try_from(vec![0xCDu8; 64])
+//!         .expect("64 bytes fits MAX_ATTESTOR_SIGNATURE_BYTES"),
+//! };
+//! let _submit: CallMessage<S> = CallMessage::SubmitAttestation {
+//!     schema_id,
+//!     payload_hash,
+//!     signatures: SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(vec![sig])
+//!         .expect("1 signature fits MAX_ATTESTATION_SIGNATURES"),
+//! };
+//! ```
 
 #![deny(missing_docs)]
 
@@ -155,6 +209,27 @@ pub struct AttestationId {
 
 impl AttestationId {
     /// Build an [`AttestationId`] from its `(schema_id, payload_hash)` pair.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::str::FromStr;
+    ///
+    /// use attestation::{AttestationId, PayloadHash, SchemaId};
+    ///
+    /// let schema_id = SchemaId::from([0x11u8; 32]);
+    /// let payload_hash = PayloadHash::from([0x33u8; 32]);
+    /// let id = AttestationId::from_pair(&schema_id, &payload_hash);
+    ///
+    /// // Display-form is `<schema_id>:<payload_hash>` with both halves
+    /// // bech32-encoded, suitable for explorer URLs and CLI surfaces.
+    /// let s = id.to_string();
+    /// assert!(s.contains(':'));
+    ///
+    /// // Round-trips cleanly through FromStr.
+    /// let parsed = AttestationId::from_str(&s).expect("display form parses");
+    /// assert_eq!(parsed, id);
+    /// ```
     pub fn from_pair(schema_id: &SchemaId, payload_hash: &PayloadHash) -> Self {
         Self { schema_id: *schema_id, payload_hash: *payload_hash }
     }
@@ -194,6 +269,23 @@ impl schemars::JsonSchema for AttestationId {
 /// A quorum of signers. **Immutable once registered**, to "rotate" an
 /// attestor set, register a new one and bump any affected schema to a new
 /// version that points at the new [`AttestorSetId`].
+///
+/// # Example
+///
+/// ```
+/// use attestation::{AttestorSet, PubKey};
+///
+/// // Three attestors, 2-of-3 threshold. The on-chain set id is derived
+/// // from `(members, threshold)` and is independent of input order.
+/// let alice = PubKey::from([0xAAu8; 32]);
+/// let bob = PubKey::from([0xBBu8; 32]);
+/// let carol = PubKey::from([0xCCu8; 32]);
+/// let set = AttestorSet { members: vec![alice, bob, carol], threshold: 2 };
+///
+/// assert_eq!(set.members.len(), 3);
+/// assert_eq!(set.threshold, 2);
+/// assert!(usize::from(set.threshold) <= set.members.len());
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct AttestorSet {
     /// Ordered list of attestor public keys.
@@ -239,6 +331,37 @@ pub struct AttestorSignature {
 /// Generic over a chain `Spec` because the `owner` and `fee_routing_addr`
 /// fields are real chain account addresses (currently 28 bytes per the
 /// SDK's standard address shape) rather than 32-byte content hashes.
+///
+/// # Example
+///
+/// ```
+/// use attestation::{AttestorSet, AttestorSetId, PubKey, Schema};
+/// use sov_modules_api::Address;
+///
+/// type S = sov_test_utils::TestSpec;
+///
+/// let owner = Address::from([0x42u8; 28]);
+/// let attestor_set: AttestorSetId =
+///     AttestorSet::derive_id(&[PubKey::from([0xAAu8; 32])], 1);
+///
+/// let schema: Schema<S> = Schema {
+///     owner,
+///     name: "themisra.proof-of-prompt".to_string(),
+///     version: 1,
+///     attestor_set,
+///     fee_routing_bps: 0,
+///     fee_routing_addr: None,
+///     // `[0u8; 32]` opts out of off-chain payload-spec drift
+///     // protection (#151). Pass a real 32-byte content-address when
+///     // a multi-SDK consumer is in scope.
+///     payload_shape_hash: [0u8; 32],
+/// };
+///
+/// // The on-chain `SchemaId` is derived deterministically from the
+/// // defining tuple, downstream consumers re-compute and verify.
+/// let id = Schema::<S>::derive_id(&schema.owner, &schema.name, schema.version);
+/// assert_eq!(id, Schema::<S>::derive_id(&owner, "themisra.proof-of-prompt", 1));
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 #[serde(bound = "S::Address: Serialize + serde::de::DeserializeOwned")]
 pub struct Schema<S: Spec> {
@@ -289,6 +412,35 @@ impl<S: Spec> Schema<S> {
     /// `owner_bytes` is `S::Address::as_ref()`. The state-transition
     /// re-runs this at registration and stores the derived id on-chain,
     /// so downstream consumers never have to trust a submitter-claimed id.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use attestation::Schema;
+    /// use sov_modules_api::Address;
+    ///
+    /// type S = sov_test_utils::TestSpec;
+    ///
+    /// let owner = Address::from([0x42u8; 28]);
+    ///
+    /// // Bumping the version produces a different id, by design: schema
+    /// // versions are immutable, a payload-shape change ships as a new
+    /// // (name, version) pair.
+    /// let v1 = Schema::<S>::derive_id(&owner, "themisra.proof-of-prompt", 1);
+    /// let v2 = Schema::<S>::derive_id(&owner, "themisra.proof-of-prompt", 2);
+    /// assert_ne!(v1, v2);
+    ///
+    /// // Same inputs always produce the same id, the chain re-derives at
+    /// // registration and rejects mismatches.
+    /// let v1_again = Schema::<S>::derive_id(&owner, "themisra.proof-of-prompt", 1);
+    /// assert_eq!(v1, v1_again);
+    ///
+    /// // Different owner with the same name produces a different id, no
+    /// // protocol-level name squatting.
+    /// let other_owner = Address::from([0x11u8; 28]);
+    /// let v1_other = Schema::<S>::derive_id(&other_owner, "themisra.proof-of-prompt", 1);
+    /// assert_ne!(v1, v1_other);
+    /// ```
     pub fn derive_id(owner: &S::Address, name: &str, version: u32) -> SchemaId {
         let mut hasher = Sha256::new();
         hasher.update(owner.as_ref());
@@ -307,6 +459,26 @@ impl AttestorSet {
     /// stores members in the same sorted order it uses for derivation.
     /// Duplicate pubkeys are preserved (the state transition rejects
     /// sets with duplicates at registration).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use attestation::{AttestorSet, PubKey};
+    ///
+    /// let alice = PubKey::from([0xAAu8; 32]);
+    /// let bob = PubKey::from([0xBBu8; 32]);
+    /// let carol = PubKey::from([0xCCu8; 32]);
+    ///
+    /// // Member order doesn't matter, the derivation sorts internally.
+    /// let id_one = AttestorSet::derive_id(&[alice, bob, carol], 2);
+    /// let id_two = AttestorSet::derive_id(&[carol, alice, bob], 2);
+    /// assert_eq!(id_one, id_two);
+    ///
+    /// // Threshold is part of the id, a 2-of-3 set is a different
+    /// // attestor set than a 3-of-3 set with the same members.
+    /// let three_of_three = AttestorSet::derive_id(&[alice, bob, carol], 3);
+    /// assert_ne!(id_one, three_of_three);
+    /// ```
     pub fn derive_id(members: &[PubKey], threshold: u8) -> AttestorSetId {
         let mut sorted = members.to_vec();
         // PubKey is the macro-generated newtype around [u8; 32]; the
@@ -374,6 +546,31 @@ impl<S: Spec> SignedAttestationPayload<S> {
     /// This is the digest each attestor signs over. Exposed as a
     /// library helper so attestor quorum software and SDKs don't have
     /// to re-implement the encoding rule.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use attestation::{PayloadHash, SchemaId, SignedAttestationPayload};
+    /// use sov_modules_api::Address;
+    ///
+    /// type S = sov_test_utils::TestSpec;
+    ///
+    /// let base = SignedAttestationPayload::<S> {
+    ///     schema_id: SchemaId::from([0x11u8; 32]),
+    ///     payload_hash: PayloadHash::from([0x33u8; 32]),
+    ///     submitter: Address::from([0x77u8; 28]),
+    ///     timestamp: 1_700_000_000,
+    /// };
+    ///
+    /// // Bumping the timestamp produces a different digest, the chain
+    /// // sources timestamp from the tx's block header to prevent
+    /// // submitter-controlled signature replay across timeframes.
+    /// let later = SignedAttestationPayload::<S> { timestamp: 1_700_000_001, ..base.clone() };
+    /// assert_ne!(base.digest(), later.digest());
+    ///
+    /// // Same payload, same digest: the encoding is deterministic.
+    /// assert_eq!(base.digest(), base.clone().digest());
+    /// ```
     pub fn digest(&self) -> Hash32 {
         let bytes = borsh::to_vec(self).expect("Borsh serialization of owned data is infallible");
         Sha256::digest(&bytes).into()
@@ -408,6 +605,24 @@ pub enum CallMessage<S: Spec> {
     /// Costs `ATTESTOR_SET_FEE` $LGT (governance, default 10 $LGT).
     /// Derivation: `SHA-256(borsh(members) ‖ threshold)`. Rejected if a
     /// set with the derived id already exists.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use attestation::{CallMessage, PubKey, MAX_ATTESTOR_SET_MEMBERS};
+    /// use sov_modules_api::SafeVec;
+    ///
+    /// type S = sov_test_utils::TestSpec;
+    ///
+    /// let members = SafeVec::<PubKey, MAX_ATTESTOR_SET_MEMBERS>::try_from(vec![
+    ///     PubKey::from([0xAAu8; 32]),
+    ///     PubKey::from([0xBBu8; 32]),
+    ///     PubKey::from([0xCCu8; 32]),
+    /// ])
+    /// .expect("3 members fits MAX_ATTESTOR_SET_MEMBERS (64)");
+    ///
+    /// let _msg: CallMessage<S> = CallMessage::RegisterAttestorSet { members, threshold: 2 };
+    /// ```
     RegisterAttestorSet {
         /// See [`AttestorSet::members`]. Bounded to
         /// [`MAX_ATTESTOR_SET_MEMBERS`].
@@ -423,6 +638,28 @@ pub enum CallMessage<S: Spec> {
     /// an already-registered [`AttestorSet`]. `fee_routing_bps` must be
     /// ≤ `DEFAULT_MAX_BUILDER_BPS` (5000 in v0). `fee_routing_addr` must be
     /// `Some` iff `fee_routing_bps > 0`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use attestation::{AttestorSet, AttestorSetId, CallMessage, PubKey};
+    /// use sov_modules_api::SafeString;
+    ///
+    /// type S = sov_test_utils::TestSpec;
+    ///
+    /// let attestor_set = AttestorSet::derive_id(&[PubKey::from([0xAAu8; 32])], 1);
+    /// let _msg: CallMessage<S> = CallMessage::RegisterSchema {
+    ///     name: SafeString::try_from("themisra.proof-of-prompt".to_string())
+    ///         .expect("name fits SafeString cap"),
+    ///     version: 1,
+    ///     attestor_set,
+    ///     fee_routing_bps: 0,
+    ///     fee_routing_addr: None,
+    ///     // `[0u8; 32]` is the documented opt-out for the off-chain
+    ///     // payload-spec content-address (#151).
+    ///     payload_shape_hash: [0u8; 32],
+    /// };
+    /// ```
     RegisterSchema {
         /// See [`Schema::name`]. Bounded by [`SafeString`]'s default
         /// max length.
@@ -446,6 +683,38 @@ pub enum CallMessage<S: Spec> {
     /// Costs `ATTESTATION_FEE` $LGT (governance, default 0.001 $LGT),
     /// split per [`Schema::fee_routing_bps`]. Signatures are validated
     /// against the schema's [`AttestorSet`] at submission time.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use attestation::{
+    ///     AttestorSignature, CallMessage, PayloadHash, PubKey, SchemaId,
+    ///     MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SIGNATURE_BYTES,
+    /// };
+    /// use sov_modules_api::SafeVec;
+    ///
+    /// type S = sov_test_utils::TestSpec;
+    ///
+    /// // The signature bytes are typically produced by `ligate_client::sign_attestation`
+    /// // (or any ed25519 signer) over the canonical SignedAttestationPayload digest.
+    /// // Here we hand-build a placeholder with the right shape; the chain
+    /// // would reject this on validation, real submissions come out of
+    /// // the client SDK.
+    /// let sig_bytes = vec![0xCDu8; 64];
+    /// let sig = AttestorSignature {
+    ///     pubkey: PubKey::from([0xAAu8; 32]),
+    ///     sig: SafeVec::<u8, MAX_ATTESTOR_SIGNATURE_BYTES>::try_from(sig_bytes)
+    ///         .expect("64 bytes fits MAX_ATTESTOR_SIGNATURE_BYTES"),
+    /// };
+    /// let signatures = SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(vec![sig])
+    ///     .expect("1 signature fits MAX_ATTESTATION_SIGNATURES");
+    ///
+    /// let _msg: CallMessage<S> = CallMessage::SubmitAttestation {
+    ///     schema_id: SchemaId::from([0x11u8; 32]),
+    ///     payload_hash: PayloadHash::from([0x33u8; 32]),
+    ///     signatures,
+    /// };
+    /// ```
     SubmitAttestation {
         /// See [`Attestation::schema_id`].
         schema_id: SchemaId,
