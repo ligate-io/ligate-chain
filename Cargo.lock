@@ -4118,6 +4118,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ligate-genesis-tool"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ligate-rollup",
+ "ligate-stf",
+ "serde",
+ "serde_json",
+ "sov-modules-api",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "ligate-prover-risc0"
 version = "0.0.1"
 dependencies = [
