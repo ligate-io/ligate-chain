@@ -46,13 +46,12 @@ use sov_stf_runner::RollupConfig;
 
 /// Marker type for the mock-DA / mock-zkVM rollup.
 ///
-/// Holds the configured `chain_id` so [`create_endpoints`] can mount
-/// `/v1/rollup/info` with the operator-supplied identifier (#181). The
-/// [`Default`] impl is kept so existing tests can construct the type
-/// without plumbing chain config; production code paths (`main.rs`)
-/// pass the loaded id via [`MockLigateRollup::new`].
-///
-/// [`create_endpoints`]: <Self as FullNodeBlueprint<Native>>::create_endpoints
+/// Holds the configured `chain_id` so the blueprint's `create_endpoints`
+/// hook can mount `/v1/rollup/info` with the operator-supplied
+/// identifier (#181). The [`Default`] impl is kept so existing tests
+/// can construct the type without plumbing chain config; production
+/// code paths (`main.rs`) pass the loaded id via
+/// [`MockLigateRollup::new`].
 #[derive(Clone, Debug)]
 pub struct MockLigateRollup<M> {
     chain_id: std::sync::Arc<str>,
