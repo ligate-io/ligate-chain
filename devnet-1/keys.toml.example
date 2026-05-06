@@ -1,0 +1,105 @@
+# devnet-1 genesis substitution template
+#
+# Copy this to `keys.toml` (gitignored), fill in your operator-controlled
+# addresses, then run:
+#
+#   cargo run -p ligate-genesis-tool -- generate \
+#       --template devnet-1/genesis \
+#       --substitutions devnet-1/keys.toml \
+#       --output /tmp/ligate-devnet-1-real/genesis
+#
+#   cargo run -p ligate-genesis-tool -- verify \
+#       --dir /tmp/ligate-devnet-1-real/genesis
+#
+# Once `verify` passes, replace `devnet-1/genesis/` with the contents
+# of the output dir as a one-shot ceremony PR. Public devnet boots
+# from that commit.
+#
+# Tracking issue: #231 (operator key generation + genesis substitution).
+#
+# DO NOT COMMIT `keys.toml` (the filled-in version). It contains the
+# mapping from public placeholder addresses to your real operator
+# addresses; while only public bits live in it, the deploy ceremony
+# is cleaner if the substitution map stays out of repo.
+#
+# DO NOT PUT PRIVATE KEYS IN THIS FILE. This is the *substitution
+# map*, addresses only. Private keys live offline (cold storage,
+# hardware wallet, or `~/.ligate-keys/` with chmod 600 — never in
+# repo, never in env vars committed to repo).
+
+# ---------------------------------------------------------------------
+# [addresses]: placeholder address (left) -> real address (right)
+#
+# All three placeholders below are deterministic test fixtures derived
+# from public seeds (see `devnet/genesis/`); their private keys are
+# derivable. Anyone could impersonate them. Substitute every one.
+# ---------------------------------------------------------------------
+[addresses]
+
+# Multi-role bootstrap address. In the placeholder genesis this single
+# address fills:
+#   - sequencer registry's `seq_rollup_address`
+#   - operator-incentives `reward_address`
+#   - bank `treasury`
+#   - 100M nano-LGT initial balance
+#
+# For real devnet-1 deploy, you can either:
+#   (a) Map this single placeholder to ONE real address and reuse it
+#       across roles (simplest; one operator key fills everything)
+#   (b) Use the full schema below to split roles across multiple keys
+#       (recommended for security separation; treasury cold, sequencer
+#       hot, etc.)
+#
+# If (a): just substitute this one line. If (b): substitute this AND
+# add per-role overrides via additional substitution rounds, OR run
+# the tool then hand-edit the four JSONs that reference this address.
+"lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt" = "<YOUR_OPERATOR_ADDRESS>"
+
+# Demo wallet 1 (placeholder ships with 10M LGT). Optional; you can:
+#   - Substitute with a real demo / faucet-source address
+#   - Or set `balances` below to 0 to deactivate it without
+#     substituting
+"lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7" = "<YOUR_DEMO_WALLET_1>"
+
+# Demo wallet 2 (placeholder ships with 10M LGT). Same notes as above.
+"lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx" = "<YOUR_DEMO_WALLET_2>"
+
+# ---------------------------------------------------------------------
+# [balances]: optional override of nano-LGT balances post-substitution.
+# Key is the POST-substitution address (the value side of [addresses]).
+# Value is the new balance as a decimal string (matches `Amount` shape
+# in `bank.json`).
+#
+# Defaults from the placeholder genesis:
+#   bootstrap address: 100_000_000_000_000_000 (100M LGT)
+#   demo wallet 1:      10_000_000_000_000_000 (10M LGT)
+#   demo wallet 2:      10_000_000_000_000_000 (10M LGT)
+#
+# Bond requirements at genesis (from `sequencer_registry.json`,
+# `prover_incentives.json`, `attester_incentives.json`):
+#   sequencer bond: 1_000_000_000_000 nano-LGT (1 LGT)
+#
+# The bootstrap address must hold at least the sequencer bond + some
+# slack for fees. If you split roles, ensure each role's address holds
+# its bond requirement.
+# ---------------------------------------------------------------------
+[balances]
+# "<YOUR_OPERATOR_ADDRESS>" = "100000000000000000"   # 100M nano-LGT
+# "<YOUR_DEMO_WALLET_1>"    = "10000000000000000"    # 10M  nano-LGT
+# "<YOUR_DEMO_WALLET_2>"    = "10000000000000000"    # 10M  nano-LGT
+
+# ---------------------------------------------------------------------
+# Out of scope for this file (configured separately):
+#
+# - `SOV_CELESTIA_SIGNER_KEY`: the Celestia hot key for blob signing.
+#   Set as env var on the GCP VM (`/etc/ligate/env`, chmod 600).
+#   Funded with Mocha TIA from the Celestia Discord faucet.
+#
+# - First-party schema attestor sets (e.g. for
+#   `themisra.proof-of-prompt/v1`): registered post-genesis via
+#   `RegisterAttestorSet` calls, NOT seeded in the genesis JSONs.
+#   Each first-party schema's attestor org operates its own keys.
+#
+# - First-party schemas themselves: same — registered post-genesis
+#   via `RegisterSchema` calls.
+# ---------------------------------------------------------------------

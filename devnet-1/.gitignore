@@ -1,0 +1,4 @@
+# Filled-in operator key substitution map. Tracked as `keys.toml.example`
+# in repo; the filled-in `keys.toml` stays local to the operator
+# performing the genesis-substitution ceremony (#231).
+keys.toml
