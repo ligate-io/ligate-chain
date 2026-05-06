@@ -1,8 +1,9 @@
 name: Release
 
 # Triggered on `v*` tag pushes. Cross-compiles `ligate-node` for the
-# three target platforms operators run on (linux x86_64, linux arm64,
-# darwin arm64), packages each as a tarball with a SHA-256 checksum,
+# four target platforms operators and developers run on (linux x86_64,
+# linux arm64, darwin arm64, darwin amd64), packages each as a tarball
+# with a SHA-256 checksum,
 # and attaches them to a GitHub Release with the unreleased section
 # of `CHANGELOG.md` as release notes.
 #
@@ -59,6 +60,14 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-14
             archive_suffix: darwin-arm64
+          # Intel Mac. `macos-13` is the last GitHub-hosted Intel
+          # runner; `macos-14` and later are Apple Silicon only. Few
+          # operators run Intel Macs as servers, but contributors on
+          # 2018-2019 hardware still benefit from a downloadable
+          # binary instead of a from-source build. Tracking issue: #210.
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            archive_suffix: darwin-amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
