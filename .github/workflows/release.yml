@@ -88,6 +88,14 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # Linux runners need libclang-dev for `clang-sys` (pulled in
+      # transitively via risc0's build deps). macOS runners ship
+      # Xcode CLI tools, which provides clang already; skip there.
+      # The same install step appears in `ci.yml`.
+      - name: Install libclang (Linux only)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+
       - name: Cache cargo
         uses: actions/cache@v4
         with:
