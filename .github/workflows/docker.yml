@@ -1,0 +1,89 @@
+name: Docker
+
+# Triggered on `v*` tag pushes alongside the GitHub Releases workflow
+# (`release.yml`, #194). Builds a multi-arch container image
+# (`linux/amd64` + `linux/arm64`) and pushes to GHCR with both the
+# tag-versioned and `:latest` tags.
+#
+# Sibling distribution channel for operators who prefer containers
+# over the tarball drop. The binary inside is identical.
+#
+# Tracking issue: #195.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual dry-run trigger: builds the image but doesn't push.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build + push image
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        # Skip on dry-runs (no push, no need to authenticate).
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          # Lowercase the path; GHCR rejects upper-case in image refs.
+          IMAGE="$(echo "${IMAGE}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            TAGS="${IMAGE}:${VERSION}"
+            # Tag `latest` only on full releases (no pre-release suffix).
+            if [[ "${VERSION}" != *-* ]]; then
+              TAGS="${TAGS},${IMAGE}:latest"
+            fi
+          else
+            # workflow_dispatch dry-run: tag with the short SHA.
+            VERSION="dryrun-${{ github.sha }}"
+            VERSION="${VERSION:0:18}"
+            TAGS="${IMAGE}:${VERSION}"
+          fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "Tags: ${TAGS}"
+
+      - name: Build + (optionally) push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          # Multi-arch. The Rust compile inside the container is the
+          # heavy step; buildx caches via GHA backend across runs.
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.tags.outputs.tags }}
+          # GitHub Actions build cache for buildx. Per-platform and
+          # per-stage; first build is slow, subsequent fast.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # OCI labels populated by the Dockerfile's LABEL block; this
+          # adds the actions-context bits (build date, git ref, etc.).
+          provenance: true

@@ -322,6 +322,32 @@ curl https://rpc.ligate.io/v1/rollup/info | jq .chain_hash
 
 If the hashes diverge, the follower is on the wrong genesis bundle (the `devnet-1/genesis/` they pulled was from a different commit), the wrong binary version (different runtime composition produces a different `chain_hash`), or the wrong chain_id entirely.
 
+## Container variant (`ghcr.io/ligate-io/ligate-chain`)
+
+The default systemd-on-VM flow above ships `ligate-node` as a native binary. Operators who prefer containers can swap step 2's systemd unit for a `docker run` invocation against the published GHCR image (#195). The image is built by `.github/workflows/docker.yml` on every `v*` tag for both `linux/amd64` and `linux/arm64`.
+
+```bash
+docker run -d \
+    --name ligate-node \
+    --restart unless-stopped \
+    -v /var/lib/ligate:/var/lib/ligate \
+    -v /opt/ligate/devnet-1:/opt/ligate/devnet-1:ro \
+    -p 12346:12346 -p 9100:9100 \
+    -e SOV_CELESTIA_RPC_URL=ws://host.docker.internal:26658 \
+    -e SOV_CELESTIA_GRPC_URL=http://host.docker.internal:9090 \
+    -e SOV_CELESTIA_SIGNER_KEY="$(gcloud secrets versions access latest --secret=ligate-devnet-1-sequencer-signer)" \
+    -e RUST_LOG=info,sov=info \
+    ghcr.io/ligate-io/ligate-chain:v0.1.0-devnet \
+    --da-layer celestia \
+    --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
+    --genesis-config-dir /opt/ligate/devnet-1/genesis \
+    --metrics-bind 0.0.0.0:9100
+```
+
+Caddy still runs natively on the host (or in its own container; either is fine). The Celestia light node also runs separately, since the chain image only carries `ligate-node`.
+
+The image is unprivileged by default (UID 1000 `ligate` user) and runs `--help` if invoked without arguments. Tag `:latest` pins the most recent full release; use a specific `:vX.Y.Z` tag in production.
+
 ## What the runbook deliberately omits
 
 - **Helm charts and Kubernetes manifests.** No k8s in v0.
