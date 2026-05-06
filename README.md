@@ -11,12 +11,11 @@
   A sovereign rollup on Celestia. AI provenance is the wedge use case, not the only one.
 </p>
 
-<p align="center">
-  <a href="https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml"><img src="https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="#license"><img src="https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg" alt="License: Apache-2.0 OR MIT"></a>
-  <a href="https://docs.ligate.io"><img src="https://img.shields.io/badge/docs-docs.ligate.io-A7D28C.svg" alt="Docs"></a>
-  <a href="#development-status"><img src="https://img.shields.io/badge/status-pre--devnet-E8833A.svg" alt="Pre-devnet"></a>
-</p>
+<div align="center">
+
+[![CI](https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml/badge.svg)](https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml) [![Latest release](https://img.shields.io/github/v/release/ligate-io/ligate-chain?include_prereleases&label=release&color=A7D28C)](https://github.com/ligate-io/ligate-chain/releases) [![License: Apache-2.0 OR MIT](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](#license) [![Docs](https://img.shields.io/badge/docs-docs.ligate.io-A7D28C.svg)](https://docs.ligate.io) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ligate-io/ligate-chain) [![Pre-devnet](https://img.shields.io/badge/status-pre--devnet-E8833A.svg)](#development-status)
+
+</div>
 
 ---
 
