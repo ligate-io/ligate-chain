@@ -348,6 +348,21 @@ Caddy still runs natively on the host (or in its own container; either is fine).
 
 The image is unprivileged by default (UID 1000 `ligate` user) and runs `--help` if invoked without arguments. Tag `:latest` pins the most recent full release; use a specific `:vX.Y.Z` tag in production.
 
+### Docker Compose variant (recommended for follower operators)
+
+For the simplest "pull-and-go" experience, the chain repo ships a checked-in compose file at [`examples/docker-compose.yaml`](../../examples/docker-compose.yaml) (#221) that orchestrates `ligate-node` + a Celestia light node together. Three steps:
+
+```bash
+git clone https://github.com/ligate-io/ligate-chain
+cd ligate-chain/examples
+cp .env.example .env  # edit if running as sequencer
+docker-compose up -d
+```
+
+After ~10 minutes for Celestia to header-sync, the node is reachable on `127.0.0.1:12346`. See [`examples/README.md`](../../examples/README.md) for full instructions including sequencer-mode setup and genesis-substitution flow.
+
+The systemd-on-VM path above is preferred for the canonical Ligate Labs sequencer deploy (better journald integration, per-service restart policies, secret-store integration). The compose path is preferred for follower operators and casual one-host setups.
+
 ## What the runbook deliberately omits
 
 - **Helm charts and Kubernetes manifests.** No k8s in v0.
