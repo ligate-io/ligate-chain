@@ -61,14 +61,53 @@ The full deploy runbook lives at [`docs/development/public-devnet-deploy.md`](..
 
 The genesis JSONs in this directory carry the **same placeholder addresses as `devnet/`**, which are deterministic test fixtures derived from public string seeds. They exist so the chain boots cleanly for CI parse tests and `cargo run` smoke. **Do not deploy a public node with these addresses unchanged.** The private keys behind those addresses are derivable from a public seed; anyone could impersonate the bootstrap actor, sequencer, treasury, attester, or prover.
 
-For the real public-devnet ceremony:
+For the real public-devnet ceremony (tracked in [#231](https://github.com/ligate-io/ligate-chain/issues/231)):
 
-1. Generate operator-controlled keys offline (`ligate-cli keys generate`, [#112](https://github.com/ligate-io/ligate-chain/issues/112)).
-2. Run the genesis-generation tool ([#191](https://github.com/ligate-io/ligate-chain/issues/191)) with those keys to produce a real `genesis/` bundle.
-3. Replace the contents of `devnet-1/genesis/` with the real bundle (private keys stay offline; only the addresses go in the JSONs).
-4. Commit the real bundle as a one-shot ceremony PR. Public devnet boots from that commit.
+### 1. Generate operator-controlled keys offline
 
-Steps 2-3 are tracked in [#191](https://github.com/ligate-io/ligate-chain/issues/191); until that tool ships, the manual path is to derive addresses by hand and edit the JSONs (slow, error-prone).
+Until [`ligate-cli keys generate`](https://github.com/ligate-io/ligate-chain/issues/112) ships, derive an Ed25519 keypair via openssl or any Sovereign-SDK-compatible tool. Save private keys to `~/.ligate-keys/devnet-1/` with `chmod 600`. Never commit them.
+
+You'll want at least one operator address (covers sequencer / treasury / reward / attester / prover roles) and optionally two demo wallets pre-funded with `$LGT` for testing. For better security separation, split roles across multiple keys (treasury cold, sequencer hot, etc.).
+
+### 2. Fill in `keys.toml` from the template
+
+```sh
+cp devnet-1/keys.toml.example devnet-1/keys.toml
+$EDITOR devnet-1/keys.toml
+```
+
+`keys.toml` is gitignored. The template enumerates every placeholder address in the current `genesis/` bundle and walks through which roles each one fills.
+
+### 3. Substitute genesis
+
+```sh
+cargo run -p ligate-genesis-tool -- generate \
+    --template devnet-1/genesis \
+    --substitutions devnet-1/keys.toml \
+    --output /tmp/ligate-devnet-1-real/genesis
+
+cargo run -p ligate-genesis-tool -- verify \
+    --dir /tmp/ligate-devnet-1-real/genesis
+```
+
+`verify` runs all the cross-module invariants from [#175](https://github.com/ligate-io/ligate-chain/issues/175) (no orphan references, threshold ≤ members, fee routing addresses exist, etc.) and catches typos before the chain refuses to boot.
+
+### 4. Commit the substituted bundle as a ceremony PR
+
+```sh
+rm -rf devnet-1/genesis
+cp -r /tmp/ligate-devnet-1-real/genesis devnet-1/genesis
+git add devnet-1/genesis
+git commit -m "ceremony: substitute devnet-1 genesis with operator-controlled keys (closes #231)"
+```
+
+Public devnet boots from that commit. Private keys never leave your machine.
+
+### 5. Source Mocha TIA for the Celestia hot key
+
+The Celestia hot key (`SOV_CELESTIA_SIGNER_KEY` env var) is **separate** from the genesis substitution above. It signs blob inclusion txs and pays Mocha TIA fees. Generate a Celestia keypair, derive its address, then request ~10-50 TIA from the [Celestia Mocha faucet](https://docs.celestia.org/nodes/mocha-testnet#mocha-testnet-faucet) Discord bot.
+
+Set the env var in `/etc/ligate/env` on the GCP VM (`chmod 600`, root-readable only) per the deploy runbook.
 
 ## Mocha resets and `devnet-2/`
 
