@@ -58,6 +58,7 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ### Fixed
 
+- Codecov upload to protected `main` branch. Earlier integration ([#219](https://github.com/ligate-io/ligate-chain/issues/219)) assumed tokenless OIDC upload would work for public repos, but codecov rejects pushes to protected branches with `Token required because branch is protected`. Workflow now passes `token: ${{ secrets.CODECOV_TOKEN }}` (repo secret, not committed). PR-run uploads were unaffected; only main-branch uploads were dropped, so the badge stayed at "unknown" until this fix.
 - `ligate_state_db_size_bytes` gauge now reports actual on-disk allocation via `meta.blocks() * 512` instead of nominal logical size via `meta.len()`. Caught during Tier 1 manual verification: gauge was reading 61 GB on a node with 23 MB actual disk usage because of NOMT and RocksDB sparse-file preallocation ([#171](https://github.com/ligate-io/ligate-chain/pull/171)).
 
 ### Security

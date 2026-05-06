@@ -230,9 +230,12 @@ jobs:
   # Doctests are skipped in coverage because cargo-llvm-cov's
   # `--doctests` requires nightly.
   #
-  # `codecov-action@v5` on public repos uses GitHub OIDC; no
-  # CODECOV_TOKEN secret needed. `fail_ci_if_error: false` means
-  # codecov hiccups don't break the job.
+  # `codecov-action@v5` uploads with the `CODECOV_TOKEN` repo secret.
+  # Tokenless OIDC uploads work for PR runs but codecov rejects pushes
+  # to protected branches without a token ("Token required because
+  # branch is protected"), and `main` is protected by our branch
+  # ruleset. `fail_ci_if_error: false` means codecov hiccups don't
+  # break the job.
   #
   # Tracking issue: #219.
   coverage:
@@ -254,6 +257,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
   # Single summary check that the branch ruleset can require. By
