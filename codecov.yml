@@ -1,0 +1,43 @@
+# Codecov configuration. Documents the project's coverage targets so
+# the dashboard and PR-comment statuses match pre-mainnet maturity
+# rather than codecov's default 80% (which fails to "warning" colour
+# for any pre-mainnet Rust workspace doing real work).
+#
+# Reference: https://docs.codecov.com/docs/codecov-yaml
+#
+# Values here are intentionally generous because:
+# - Pre-mainnet, the test surface is broad but not exhaustive
+# - Sequencer-only branches, genesis-bootstrap edges, and Risc0
+#   prover scaffolding are hard to cover from unit tests alone
+# - Coverage is informational, not a gate (per `.github/workflows/ci.yml`'s
+#   `coverage` job, which is intentionally NOT in `ci-pass` needs)
+#
+# Targets will tighten as the project matures: 70% pre-mainnet, 80%
+# at testnet, 85% at mainnet.
+
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+        # Don't fail status on small fluctuations. Coverage will
+        # naturally drift +/- a percent as tests and code reshape.
+        threshold: 2%
+        # Don't post comments to PRs that would otherwise be a green
+        # status; surface only meaningful drops.
+        if_ci_failed: ignore
+    patch:
+      default:
+        # New code in a PR should be at least as covered as the
+        # project baseline. 70% is the floor.
+        target: 70%
+        threshold: 2%
+        if_ci_failed: ignore
+
+# Reduce noise: comment on PRs only when there's something to say.
+comment:
+  layout: "reach,diff,flags,tree,reach"
+  behavior: default
+  # Don't post a comment if the PR doesn't touch coverage-relevant
+  # code (docs-only, CI-only PRs, etc.).
+  require_changes: true
