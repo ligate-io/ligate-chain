@@ -154,12 +154,33 @@ For module-internal helpers, doc comments are encouraged but not enforced.
 
 ## Commit conventions
 
-- **One-line subject.** Imperative mood, ideally under 72 characters. Examples from the repo: `Add LICENSE-APACHE and LICENSE-MIT files to match workspace declaration`, `Skip code-checking jobs on docs-only PRs via paths-filter + CI summary check`.
+- **Subject prefix (preferred).** Loose [Conventional Commits](https://www.conventionalcommits.org/) prefixes scoped to a small set:
+    - `feat:` new functionality
+    - `fix:` bugfix
+    - `docs:` doc-only changes (README, docstrings, runbooks)
+    - `refactor:` behaviour-preserving code restructure
+    - `test:` test-only changes (new tests, harness work, fuzz corpus)
+    - `chore:` housekeeping that doesn't fit elsewhere (gitignore, repo metadata)
+    - `ci:` CI / GitHub Actions / build-tooling changes
+    - `deps:` dependency bumps not otherwise interesting
+  Soft convention, not CI-enforced. Reviewers nudge but don't block. Existing freeform commits in the history are fine; we're not rewriting them.
+- **One-line subject.** Imperative mood, ideally under 72 characters (50 is even better). Examples: `feat: add Codecov line-coverage integration`, `docs: lock chain-id ladder in protocol spec + README`, `ci: skip code-checking jobs on docs-only PRs`.
 - **Optional body.** Blank line then a paragraph explaining *why* the change is shaped this way, not what it does (the diff covers what).
 - **No `Co-Authored-By` trailer.** Repo-wide convention.
 - **No `Signed-off-by`.** We don't run a DCO.
-- **Reference issues** in the subject or body when relevant: `(refs #21)`, `(closes #76)`.
+- **Reference issues** in the subject or body when relevant: `(refs #21)`, `(closes #76)`. The `(closes #N)` suffix on the subject is the cleanest form for single-issue PRs because the squash-merge title becomes the merge commit and GitHub auto-closes the issue.
 - **One concern per commit.** If you're adding a feature *and* fixing an unrelated bug, that's two commits.
+
+Sample shape:
+
+```
+feat: add Codecov line-coverage integration (closes #219)
+
+Adds an informational `coverage` job that uploads lcov.info to
+codecov.io via the OIDC route (no token needed for public repos).
+Intentionally NOT in `ci-pass`'s `needs` list, so codecov outages
+don't block merges.
+```
 
 ## Pull request conventions
 
