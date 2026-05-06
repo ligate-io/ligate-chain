@@ -255,6 +255,19 @@ Open work items toward public devnet: explorer, faucet, hosted RPC endpoint, EVM
 
 v0 scope is the attestation protocol only. Identity, disputes/slashing, payments, and the agent registry are explicit v1 and v2 non-goals documented in the spec.
 
+## Security
+
+External audit reports and remediation tracking live in [`docs/audits/`](docs/audits/). Empty today, by design: no audit has been booked yet. Pre-`ligate-testnet-1` we'll scope a focused audit of the attestation module and runtime; pre-`ligate-1` mainnet a full-protocol audit. The convention for filing audit reports + paired markdown sidecars is documented in [`docs/audits/README.md`](docs/audits/README.md).
+
+In-repo security signal:
+
+- `cargo audit` runs on every PR (advisories pinned in [`audit.toml`](audit.toml)).
+- `cargo deny` enforces license, source, and duplicate-version policy on every PR ([`deny.toml`](deny.toml)).
+- Borsh wire-format snapshot tests guard against accidental hard forks ([`crates/modules/attestation/tests/borsh_snapshot.rs`](crates/modules/attestation/tests/borsh_snapshot.rs)).
+- `cargo fuzz` harnesses run nightly against the public Borsh decoders, Bech32m parsers, and AttestationId round-trip ([`.github/workflows/fuzz.yml`](.github/workflows/fuzz.yml)).
+- DA-isolation grep guard prevents Celestia coupling from leaking into DA-agnostic crates ([`scripts/check-da-isolation.sh`](scripts/check-da-isolation.sh)).
+- Threat model documented in [`docs/protocol/threat-model.md`](docs/protocol/threat-model.md).
+
 ## Contributing
 
 The full contributor guide is in [`CONTRIBUTING.md`](CONTRIBUTING.md): local dev setup (including the macOS libclang gotcha and the per-machine Risc0 workaround), code style, commit conventions, PR process, and the CI gates your branch has to pass.
