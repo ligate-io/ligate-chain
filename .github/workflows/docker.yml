@@ -9,6 +9,20 @@ name: Docker
 # over the tarball drop. The binary inside is identical.
 #
 # Tracking issue: #195.
+#
+# ## Why per-arch native runners
+#
+# v0 of this workflow used a single amd64 runner with `buildx` +
+# QEMU emulation for the arm64 leg. That worked syntactically but
+# was unusable in practice: the QEMU-emulated arm64 cargo build of
+# the full ligate-chain dep graph (rocksdb + risc0 + sov-* +
+# attestation) exceeded the GHA 6-hour job timeout on its first
+# run. Splitting per-arch on native runners (the same pattern
+# `release.yml` already uses for the cross-compile matrix) finishes
+# in ~25min cold and ~5min warm.
+#
+# The trade is two extra runner-minutes vs. an unbounded one-job
+# build. Cheap.
 
 on:
   push:
@@ -26,9 +40,22 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Per-arch build job. Each runs natively, pushes a digest-only
+  # blob (no tag) to GHCR, then exports the digest as an artifact
+  # for the manifest-list job to combine.
   build:
-    name: Build + push image
-    runs-on: ubuntu-24.04
+    name: build (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch_label: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch_label: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -37,7 +64,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GHCR
-        # Skip on dry-runs (no push, no need to authenticate).
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v3
         with:
@@ -45,45 +71,119 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute image tags
+      - name: Compute lowercase image ref
+        id: image
+        shell: bash
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          IMAGE="$(echo "${IMAGE}" | tr '[:upper:]' '[:lower:]')"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Build + push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          # Push the layer blob only (no tag). The manifest-list job
+          # downstream stitches per-arch digests into a tagged
+          # multi-arch manifest. This is the supported buildx
+          # pattern for multi-runner multi-arch builds.
+          # https://docs.docker.com/build/ci/github-actions/multi-platform/#distribute-build-across-multiple-runners
+          outputs: |
+            type=image,name=${{ steps.image.outputs.image }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+          # Per-platform GHA build cache. First build cold, subsequent
+          # tags reuse the layer + cargo target dirs.
+          cache-from: type=gha,scope=${{ matrix.arch_label }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch_label }}
+          provenance: false
+
+      - name: Export digest
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          mkdir -p /tmp/digests
+          DIGEST="${{ steps.build.outputs.digest }}"
+          echo "${DIGEST#sha256:}" > "/tmp/digests/${{ matrix.arch_label }}"
+
+      - name: Upload digest
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.arch_label }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: Publish multi-arch manifest
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags + image ref
         id: tags
         shell: bash
         run: |
           set -euo pipefail
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          # Lowercase the path; GHCR rejects upper-case in image refs.
           IMAGE="$(echo "${IMAGE}" | tr '[:upper:]' '[:lower:]')"
-          if [[ "${{ github.ref_type }}" == "tag" ]]; then
-            VERSION="${{ github.ref_name }}"
-            VERSION="${VERSION#v}"
-            TAGS="${IMAGE}:${VERSION}"
-            # Tag `latest` only on full releases (no pre-release suffix).
-            if [[ "${VERSION}" != *-* ]]; then
-              TAGS="${TAGS},${IMAGE}:latest"
-            fi
-          else
-            # workflow_dispatch dry-run: tag with the short SHA.
-            VERSION="dryrun-${{ github.sha }}"
-            VERSION="${VERSION:0:18}"
-            TAGS="${IMAGE}:${VERSION}"
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          # Always tag the version. Tag `latest` only on full
+          # releases (no hyphenated suffix).
+          TAGS=("${IMAGE}:${VERSION}")
+          if [[ "${VERSION}" != *-* ]]; then
+            TAGS+=("${IMAGE}:latest")
           fi
-          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
-          echo "Tags: ${TAGS}"
+          # Format for buildx imagetools create: -t IMAGE:TAG -t IMAGE:TAG ...
+          TAG_ARGS=""
+          for t in "${TAGS[@]}"; do
+            TAG_ARGS="${TAG_ARGS} -t ${t}"
+          done
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "tag_args=${TAG_ARGS}" >> "$GITHUB_OUTPUT"
+          echo "Tags: ${TAGS[*]}"
 
-      - name: Build + (optionally) push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          # Multi-arch. The Rust compile inside the container is the
-          # heavy step; buildx caches via GHA backend across runs.
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-          tags: ${{ steps.tags.outputs.tags }}
-          # GitHub Actions build cache for buildx. Per-platform and
-          # per-stage; first build is slow, subsequent fast.
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # OCI labels populated by the Dockerfile's LABEL block; this
-          # adds the actions-context bits (build date, git ref, etc.).
-          provenance: true
+      - name: Create + push multi-arch manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="${{ steps.tags.outputs.image }}"
+          # Build one image-ref-by-digest per arch; imagetools combines them.
+          REFS=()
+          for f in /tmp/digests/*; do
+            ARCH="$(basename "${f}")"
+            DIGEST="$(cat "${f}")"
+            REFS+=("${IMAGE}@sha256:${DIGEST}")
+            echo "Including ${ARCH}: ${IMAGE}@sha256:${DIGEST}"
+          done
+          docker buildx imagetools create \
+            ${{ steps.tags.outputs.tag_args }} \
+            "${REFS[@]}"
+
+      - name: Inspect manifest
+        shell: bash
+        run: |
+          IMAGE="${{ steps.tags.outputs.image }}"
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}"
