@@ -1,0 +1,104 @@
+# Ligate Chain devnet stack: ligate-node + Celestia light node.
+#
+# Pulls both images from their respective official registries and
+# wires them together so a follower (or sequencer) can come up with
+# one command. The two services are deliberately separate containers
+# so they can lifecycle / upgrade / scale independently; this file
+# is the orchestration layer, not a bundle.
+#
+# Quickstart:
+#   1. git clone https://github.com/ligate-io/ligate-chain
+#   2. cd ligate-chain/examples
+#   3. cp .env.example .env  # edit if running as sequencer
+#   4. docker-compose up -d
+#   5. curl http://localhost:12346/v1/rollup/info
+#
+# Operator runs the genesis-substitution flow (`ligate-genesis-tool`,
+# #191) before tagging a real public deploy. The committed
+# `devnet-1/genesis/` bundle uses placeholder addresses; do not deploy
+# unchanged for production.
+#
+# Tracking issue: #221.
+
+services:
+  # Celestia light node, sampling Mocha testnet for DA. Localhost-only
+  # RPC (inside the docker network), no external port exposure. The
+  # sequencer mode of `ligate-node` reads/writes blobs through this;
+  # follower mode only reads.
+  celestia-light:
+    image: ghcr.io/celestiaorg/celestia-node:v0.20.0
+    command:
+      - light
+      - start
+      - --core.ip=rpc-mocha.pops.one
+      - --p2p.network=mocha
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=26658
+    volumes:
+      - celestia-data:/home/celestia
+    networks:
+      - ligate
+    restart: unless-stopped
+    # Healthcheck: probe the JSON-RPC endpoint. Once the light node
+    # finishes header-sync (~5-10 minutes from cold), the endpoint
+    # returns successfully.
+    healthcheck:
+      test: ["CMD-SHELL", "celestia rpc node Info --token=$$(celestia light auth admin --p2p.network=mocha) > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+
+  # Ligate Chain rollup node. Connects to the co-located Celestia
+  # light node over the internal docker network. Exposes chain REST
+  # on 12346 and Prometheus metrics on 9100; bind to 127.0.0.1 by
+  # default so a reverse proxy (Caddy / Cloudflare) is required for
+  # public exposure.
+  ligate-node:
+    image: ghcr.io/ligate-io/ligate-chain:${LIGATE_VERSION:-latest}
+    depends_on:
+      celestia-light:
+        condition: service_started
+    environment:
+      # Localhost-equivalent inside the docker network.
+      SOV_CELESTIA_RPC_URL: ws://celestia-light:26658
+      SOV_CELESTIA_GRPC_URL: http://celestia-light:9090
+      # Sequencer mode requires a signer key with Mocha TIA. Follower
+      # mode leaves this empty; the chain only reads blobs.
+      SOV_CELESTIA_SIGNER_KEY: ${SOV_CELESTIA_SIGNER_KEY:-}
+      # Optional Mocha-provider auth tokens.
+      SOV_CELESTIA_RPC_AUTH_TOKEN: ${SOV_CELESTIA_RPC_AUTH_TOKEN:-}
+      RUST_LOG: ${RUST_LOG:-info,sov=info}
+    command:
+      - --da-layer=celestia
+      - --rollup-config-path=/opt/ligate/devnet-1/celestia.toml
+      - --genesis-config-dir=/opt/ligate/devnet-1/genesis
+      - --metrics-bind=0.0.0.0:9100
+    volumes:
+      # The devnet-1 bundle ships in the chain repo; mount read-only.
+      # Operators substituting their own keys via `ligate-genesis-tool`
+      # point this at the substituted output dir instead.
+      - ../devnet-1:/opt/ligate/devnet-1:ro
+      # Persistent chain state.
+      - ligate-data:/var/lib/ligate
+    ports:
+      - "127.0.0.1:12346:12346"  # chain REST
+      - "127.0.0.1:9100:9100"    # Prometheus metrics
+    networks:
+      - ligate
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:12346/health > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  # Celestia light node sampling state (~5-15 GB).
+  celestia-data:
+  # Ligate state (RocksDB + NOMT + ledger). Grows with chain history.
+  ligate-data:
+
+networks:
+  ligate:
