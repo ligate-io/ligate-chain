@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml"><img src="https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/ligate-io/ligate-chain/releases"><img src="https://img.shields.io/github/v/release/ligate-io/ligate-chain?include_prereleases&label=release&color=A7D28C" alt="Latest release"></a>
+  <a href="https://github.com/ligate-io/ligate-chain/releases"><img src="https://img.shields.io/github/v/release/ligate-io/ligate-chain?include_prereleases&amp;label=release&amp;color=A7D28C" alt="Latest release"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg" alt="License: Apache-2.0 OR MIT"></a>
   <a href="https://docs.ligate.io"><img src="https://img.shields.io/badge/docs-docs.ligate.io-A7D28C.svg" alt="Docs"></a>
   <a href="https://deepwiki.com/ligate-io/ligate-chain"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
