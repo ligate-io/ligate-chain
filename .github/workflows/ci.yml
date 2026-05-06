@@ -216,6 +216,46 @@ jobs:
             --ignore RUSTSEC-2023-0071 \
             --ignore RUSTSEC-2025-0055
 
+  # Line-coverage report uploaded to codecov.io for visibility into
+  # which paths the test suite actually exercises. Informational
+  # signal only — coverage is NOT a gate. The job is gated on
+  # `code == true` (docs-only PRs skip), runs in parallel with
+  # `test`, and is intentionally NOT in `ci-pass`'s `needs` list so
+  # codecov outages or transient upload failures never block a
+  # merge.
+  #
+  # `cargo llvm-cov` builds the workspace once with instrumentation
+  # and runs `--lib --tests` (matching the `test` job's constraints
+  # to avoid OOMing the runner on the binary's debug-link pass).
+  # Doctests are skipped in coverage because cargo-llvm-cov's
+  # `--doctests` requires nightly.
+  #
+  # `codecov-action@v5` on public repos uses GitHub OIDC; no
+  # CODECOV_TOKEN secret needed. `fail_ci_if_error: false` means
+  # codecov hiccups don't break the job.
+  #
+  # Tracking issue: #219.
+  coverage:
+    name: cargo llvm-cov
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.0
+          components: llvm-tools-preview
+      - name: Install libclang (librocksdb-sys build dep)
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov --workspace --lib --tests --lcov --output-path lcov.info
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+
   # Single summary check that the branch ruleset can require. By
   # gating only on `CI pass`, docs-only PRs (where fmt/clippy/check/
   # test/doc are skipped by `paths-filter`) can still merge: this job
