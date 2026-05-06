@@ -165,7 +165,7 @@ runcmd:
 
 The cloud-init does the chassis. The operator still has to:
 
-- Place the `ligate-node` binary at `/opt/ligate/bin/ligate-node` (built from source for now; binary releases tracked in [#194](https://github.com/ligate-io/ligate-chain/issues/194)).
+- Place the `ligate-node` binary at `/opt/ligate/bin/ligate-node`. From a tag onward, the canonical artifact is a GitHub Release tarball (`ligate-node-${VERSION}-linux-amd64.tar.gz` or `linux-arm64.tar.gz`); the release workflow at `.github/workflows/release.yml` produces them on every `v*` tag. Pre-tag operators build from source via `cargo build --release --bin ligate-node`.
 - Clone the chain repo's `devnet-1/` directory to `/opt/ligate/devnet-1/`.
 - Write `/etc/ligate/env` with the secrets (sequencer only):
   ```

@@ -1,0 +1,216 @@
+name: Release
+
+# Triggered on `v*` tag pushes. Cross-compiles `ligate-node` for the
+# three target platforms operators run on (linux x86_64, linux arm64,
+# darwin arm64), packages each as a tarball with a SHA-256 checksum,
+# and attaches them to a GitHub Release with the unreleased section
+# of `CHANGELOG.md` as release notes.
+#
+# This drops the "compile Rust on the VM for ~20 minutes" step from
+# the operator runbook (`docs/development/public-devnet-deploy.md`)
+# and matches the distribution shape Cosmos / Sui / Aptos / etc. use
+# at devnet.
+#
+# Tracking issue: #194.
+#
+# Tagging convention:
+#   - Pre-devnet:  `v0.0.X` per chain-side change set.
+#   - At devnet:   `v0.1.0-devnet` and freeze.
+#   - Mainnet:     `v1.0.0` and forward.
+#
+# This workflow does NOT include cosign signing for v0; add as a
+# follow-up if downstream consumers want provenance verification.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Allow a maintainer to dry-run the build path without tagging.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Same risc0-skip rationale as CI: the host binary builds cleanly
+  # without invoking the guest. Real proving lives in a separate
+  # workflow once Phase A.4 lands.
+  SKIP_GUEST_BUILD: "1"
+
+jobs:
+  # Build matrix: one job per (target, runner). We use native runners
+  # rather than cross-compiling so we don't have to manage a Docker
+  # toolchain image. GitHub's hosted arm64 runners are GA and free
+  # for public repos as of 2025.
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            archive_suffix: linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            archive_suffix: linux-arm64
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            archive_suffix: darwin-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # Need full history for the changelog excerpt step.
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        shell: bash
+        run: |
+          # Tag push: use the tag (e.g. v0.0.1) stripped of the leading 'v'.
+          # workflow_dispatch: use the short SHA so dry-runs produce a
+          # uniquely-named artifact.
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="dryrun-${{ github.sha }}"
+            VERSION="${VERSION:0:18}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-release-
+
+      - name: Build ligate-node (release)
+        shell: bash
+        run: |
+          cargo build --release --bin ligate-node --target "${{ matrix.target }}"
+
+      - name: Strip + package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          SUFFIX="${{ matrix.archive_suffix }}"
+          BIN_DIR="target/${TARGET}/release"
+          ARCHIVE_DIR="ligate-node-${VERSION}-${SUFFIX}"
+          mkdir -p "${ARCHIVE_DIR}"
+          cp "${BIN_DIR}/ligate-node" "${ARCHIVE_DIR}/"
+
+          # Strip symbols where the platform supports it. Darwin's
+          # `strip` differs from GNU; both are no-ops on a binary
+          # already built without debug info but the call is safe.
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            strip "${ARCHIVE_DIR}/ligate-node" || true
+          elif [[ "${RUNNER_OS}" == "macOS" ]]; then
+            strip "${ARCHIVE_DIR}/ligate-node" || true
+          fi
+
+          # Include LICENSE-* and a small README pointer with the
+          # checksum so the tarball is self-describing.
+          cp LICENSE-APACHE LICENSE-MIT "${ARCHIVE_DIR}/" || true
+
+          ARCHIVE="${ARCHIVE_DIR}.tar.gz"
+          tar -czf "${ARCHIVE}" "${ARCHIVE_DIR}"
+
+          # SHA-256 portable across the runners.
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          else
+            shasum -a 256 "${ARCHIVE}" > "${ARCHIVE}.sha256"
+          fi
+
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
+          ls -lh "${ARCHIVE}" "${ARCHIVE}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ligate-node-${{ matrix.archive_suffix }}
+          # Both the tarball and the .sha256, so the release job can
+          # attach both without re-globbing per matrix shape.
+          path: |
+            ligate-node-*-${{ matrix.archive_suffix }}.tar.gz
+            ligate-node-*-${{ matrix.archive_suffix }}.tar.gz.sha256
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    # Only publish on a real tag push. workflow_dispatch builds run
+    # the matrix above (smoke test) but skip the publish step.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (for CHANGELOG access)
+        uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Stage artifacts for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # Each matrix job uploads under `ligate-node-${archive_suffix}/`.
+          # Flatten into one directory the release tool can glob.
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.sha256' \) -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Extract changelog excerpt
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Read the section between `## [Unreleased]` and the next
+          # `## ` heading. That's the bucket of entries this release
+          # represents.
+          awk '
+            /^## \[Unreleased\]/ {capture=1; next}
+            /^## / {if (capture) {capture=0}}
+            capture==1 {print}
+          ' CHANGELOG.md > release-notes.md
+
+          # If empty, fall back to a one-liner.
+          if ! [[ -s release-notes.md ]]; then
+            echo "_(No changelog entries; see commit history.)_" > release-notes.md
+          fi
+
+          echo "Release notes preview:"
+          head -40 release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          files: release/*
+          # Treat tags ending in `-rc.N` / `-devnet` / `-testnet` as
+          # pre-release; full mainnet uses `vX.Y.Z` plain.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
