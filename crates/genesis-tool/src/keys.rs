@@ -108,12 +108,7 @@ pub fn generate_role(role: &str, output_dir: &Path) -> Result<GeneratedKey> {
     fs::write(&address_path, format!("{address_str}\n"))
         .with_context(|| format!("writing {}", address_path.display()))?;
 
-    Ok(GeneratedKey {
-        role: role.to_string(),
-        address: address_str,
-        key_path,
-        address_path,
-    })
+    Ok(GeneratedKey { role: role.to_string(), address: address_str, key_path, address_path })
 }
 
 #[cfg(test)]
