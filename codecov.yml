@@ -26,13 +26,13 @@ coverage:
         # Don't post comments to PRs that would otherwise be a green
         # status; surface only meaningful drops.
         if_ci_failed: ignore
-    patch:
-      default:
-        # New code in a PR should be at least as covered as the
-        # project baseline. 70% is the floor.
-        target: 70%
-        threshold: 2%
-        if_ci_failed: ignore
+    # Disable patch-coverage status entirely. Coverage is informational
+    # only — the `coverage` CI job is intentionally NOT in `ci-pass`'s
+    # `needs` list, so a patch with sub-70% coverage shouldn't block
+    # merges via codecov's separate status check either. The project-
+    # level status above still warns on meaningful regressions, which
+    # is the signal that actually matters.
+    patch: false
 
 # Reduce noise: comment on PRs only when there's something to say.
 comment:
