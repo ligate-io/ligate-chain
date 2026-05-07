@@ -1,6 +1,6 @@
 //! Genesis tool for the Ligate Chain.
 //!
-//! Two subcommands:
+//! Three subcommands:
 //!
 //! - `verify`: re-runs the on-chain genesis validator (same code path
 //!   `ligate-node` runs at startup) against a directory of genesis
@@ -26,7 +26,24 @@
 //!      strings per the substitution map, writes to the output dir.
 //!   4. Tool runs `verify` on the output before returning.
 //!
-//! Tracking issue: <https://github.com/ligate-io/ligate-chain/issues/191>.
+//! - `keys generate`: stand-in for `ligate-cli keys generate` (#112).
+//!   Generates one or more Ed25519 keypairs, derives `lig1...`
+//!   addresses (`SHA-256(pubkey)[..28]`), and persists each role's
+//!   private key + address to disk under `<output>/<role>.{key,address}`
+//!   with the private-key file mode `0600`. Prints a `keys.toml`
+//!   stub to stdout that the operator pastes into
+//!   `devnet-1/keys.toml`. Used in step 1 of the operator workflow
+//!   (#231); when `ligate-cli` ships, this subcommand is a candidate
+//!   for re-export from there.
+//!
+//! Tracking issues:
+//! - <https://github.com/ligate-io/ligate-chain/issues/191> (this tool)
+//! - <https://github.com/ligate-io/ligate-chain/issues/231> (operator
+//!   workflow that consumes `keys generate` + `generate`)
+//! - <https://github.com/ligate-io/ligate-chain/issues/112> (the
+//!   future home: `ligate-cli`)
+
+mod keys;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -100,6 +117,33 @@ enum Command {
         #[arg(long, value_name = "DIR")]
         output: PathBuf,
     },
+
+    /// Generate one or more Ed25519 keypairs and derive their
+    /// `lig1...` addresses, ready for the genesis substitution flow.
+    /// See `src/keys.rs` for the on-disk shape.
+    Keys {
+        #[command(subcommand)]
+        action: KeysAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum KeysAction {
+    /// Generate one keypair per role, persist to `<output>/<role>.key`
+    /// (chmod 600) and `<output>/<role>.address`, and print a
+    /// `devnet-1/keys.toml` stub to stdout.
+    Generate {
+        /// Comma-separated role names. Each role gets its own
+        /// keypair. Example: `--roles operator,demo1,demo2`.
+        #[arg(long, value_name = "ROLES", value_delimiter = ',', required = true)]
+        roles: Vec<String>,
+        /// Output directory for `<role>.key` and `<role>.address`.
+        /// Created if absent. The directory itself is NOT mode-
+        /// protected (only the `.key` files are 0600); use a
+        /// dedicated dir like `~/.ligate-keys/devnet-1/`.
+        #[arg(long, value_name = "DIR")]
+        output: PathBuf,
+    },
 }
 
 /// Schema of the substitution TOML.
@@ -147,7 +191,59 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Command::Keys { action } => match action {
+            KeysAction::Generate { roles, output } => match run_keys_generate(&roles, &output) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("keys generate failed: {e:#}");
+                    ExitCode::FAILURE
+                }
+            },
+        },
     }
+}
+
+/// Generate keypairs for each requested role and emit a `keys.toml`
+/// stub on stdout the operator can paste into `devnet-1/keys.toml`.
+///
+/// The stub leaves the LHS placeholder addresses unfilled — the
+/// operator chooses which placeholder maps to which generated role
+/// based on the role intent table in `devnet-1/README.md`.
+fn run_keys_generate(roles: &[String], output: &Path) -> anyhow::Result<()> {
+    if roles.is_empty() {
+        return Err(anyhow!("at least one role is required (e.g., --roles operator)"));
+    }
+
+    let mut generated = Vec::with_capacity(roles.len());
+    for role in roles {
+        let g = keys::generate_role(role, output)
+            .with_context(|| format!("generating keys for role '{role}'"))?;
+        generated.push(g);
+    }
+
+    eprintln!("keys generate: OK");
+    eprintln!("  output dir: {}", output.display());
+    for g in &generated {
+        eprintln!("  {role:>16}: {addr}", role = g.role, addr = g.address);
+    }
+    eprintln!();
+    eprintln!("Private keys are at <output>/<role>.key (chmod 600). Never commit them.");
+
+    // Stub goes to stdout (separate from the human-friendly summary
+    // on stderr above) so operators can pipe it: `... | tee -a
+    // devnet-1/keys.toml`.
+    println!();
+    println!("# Paste below into devnet-1/keys.toml. Replace each");
+    println!("# \"<placeholder-address>\" with the placeholder you want");
+    println!("# this role to substitute (see devnet-1/keys.toml.example");
+    println!("# for the role -> placeholder mapping).");
+    println!("[addresses]");
+    for g in &generated {
+        println!("# role: {}", g.role);
+        println!("\"<placeholder-address>\" = \"{}\"", g.address);
+    }
+
+    Ok(())
 }
 
 /// Re-run the genesis loader's typed validator.

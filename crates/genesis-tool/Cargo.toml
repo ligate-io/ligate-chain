@@ -28,5 +28,16 @@ ligate-rollup = { path = "../rollup" }
 ligate-stf = { path = "../stf", features = ["native"] }
 sov-modules-api = { workspace = true, features = ["native"] }
 
+# Crypto primitives for the `keys generate` subcommand. ed25519-dalek
+# and sha2 are workspace-pinned with `default-features = false`; the
+# bare API (`SigningKey::from_bytes`, `Sha256::digest`) is available
+# without enabling extra features. rand 0.8 + hex 0.4 are pulled in
+# transitively already so adding them as direct deps costs no extra
+# build time.
+ed25519-dalek.workspace = true
+sha2.workspace = true
+rand = "0.8"
+hex = "0.4"
+
 [dev-dependencies]
 tempfile.workspace = true
