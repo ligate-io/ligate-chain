@@ -251,7 +251,17 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 - Addresses: `lig1` accounts, `lpk1` pubkeys, `lsc1` schema IDs, `las1` attestor set IDs, `lph1` payload hashes (Bech32m).
 - Chain id ladder (Cosmos-style strings): `ligate-localnet` (single-node local dev), `ligate-devnet-1` (public devnet), `ligate-testnet-1` (later), `ligate-1` (mainnet). Trailing number bumps only on state-breaking restarts. Spec section [`Chain id`](docs/protocol/attestation-v0.md#chain-id).
 
-Open work items toward public devnet: explorer, faucet, hosted RPC endpoint, EVM authenticator ([#72](https://github.com/ligate-io/ligate-chain/issues/72)), and the v1 staking and disputes modules. Current tracked work lives in the [GitHub issues](https://github.com/ligate-io/ligate-chain/issues).
+Open work items toward public devnet: hosted RPC endpoint, EVM authenticator ([#72](https://github.com/ligate-io/ligate-chain/issues/72)), and the v1 staking and disputes modules. Current tracked work lives in the [GitHub issues](https://github.com/ligate-io/ligate-chain/issues).
+
+### First-party tools (own repos)
+
+Operator and builder surface lives outside this repo. Each tool is a thin consumer of `crates/client-rs`'s typed message construction + the `submit` feature's transaction pipeline:
+
+| Repo | Purpose | Tracking |
+|---|---|---|
+| [`ligate-io/ligate-cli`](https://github.com/ligate-io/ligate-cli) | Operator and builder CLI: keys, balance, transfer, faucet | [#112](https://github.com/ligate-io/ligate-chain/issues/112) |
+| [`ligate-io/faucet`](https://github.com/ligate-io/faucet) | Devnet faucet, rate-limited `$LGT` drip | [#95](https://github.com/ligate-io/ligate-chain/issues/95) |
+| [`ligate-io/ligate-explorer`](https://github.com/ligate-io/ligate-explorer) | Block explorer + indexer service | [#80](https://github.com/ligate-io/ligate-chain/issues/80) |
 
 v0 scope is the attestation protocol only. Identity, disputes/slashing, payments, and the agent registry are explicit v1 and v2 non-goals documented in the spec.
 
