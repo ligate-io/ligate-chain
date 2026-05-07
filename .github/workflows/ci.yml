@@ -61,10 +61,17 @@ jobs:
           # patterns below. Safer default than enumerating code paths
           # because anything new (a new crate, a new toml, a new
           # workflow) is gated on as code by default.
+          #
+          # `.md` files are matched both at root (`!*.md`) and nested
+          # (`!**/*.md`). picomatch's `**.md` does not reliably catch
+          # root-level files like `README.md` / `CHANGELOG.md`, and
+          # `**/*.md` requires at least one directory segment, so we
+          # need both patterns to fully exclude markdown.
           filters: |
             code:
               - '**'
-              - '!**.md'
+              - '!*.md'
+              - '!**/*.md'
               - '!docs/**'
               - '!LICENSE*'
               - '!.gitignore'
