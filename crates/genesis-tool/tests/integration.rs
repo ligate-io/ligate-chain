@@ -183,3 +183,92 @@ fn generate_substitutes_addresses_and_balances() {
         rows.iter().find(|row| row[0].as_str() == Some(bootstrap)).expect("bootstrap row exists");
     assert_eq!(bootstrap_row[1].as_str(), Some(new_balance), "balance was overridden");
 }
+
+#[test]
+fn keys_generate_writes_files_and_prints_stub() {
+    // Exercises the `keys generate` subcommand end-to-end via the
+    // binary entrypoint — covers the `Keys` / `KeysAction` dispatch
+    // arms in `main()` plus the full `run_keys_generate` body, which
+    // the unit tests in `keys.rs` don't reach (those test the
+    // `generate_role` library function directly).
+    let tmp = TempDir::new().expect("tempdir");
+    let output_dir = tmp.path().join("keys");
+
+    let result = Command::new(binary())
+        .arg("keys")
+        .arg("generate")
+        .arg("--roles")
+        .arg("operator,demo1,demo2")
+        .arg("--output")
+        .arg(&output_dir)
+        .output()
+        .expect("invoke binary");
+    assert!(
+        result.status.success(),
+        "keys generate should succeed; stderr:\n{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+
+    // Stderr: human-friendly per-role summary.
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(stderr.contains("keys generate: OK"), "missing 'keys generate: OK':\n{stderr}");
+    for role in ["operator", "demo1", "demo2"] {
+        assert!(stderr.contains(role), "stderr missing role {role}:\n{stderr}");
+    }
+    assert!(stderr.contains("chmod 600"), "stderr missing chmod 600 reminder:\n{stderr}");
+
+    // Stdout: keys.toml stub. Operators pipe this into devnet-1/keys.toml.
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(stdout.contains("[addresses]"), "stdout missing [addresses] header:\n{stdout}");
+    assert!(stdout.contains("<placeholder-address>"), "stdout missing placeholder marker:\n{stdout}");
+    // Each role gets a comment + an entry in the stub.
+    for role in ["operator", "demo1", "demo2"] {
+        assert!(stdout.contains(&format!("# role: {role}")), "stub missing role comment {role}:\n{stdout}");
+    }
+
+    // Disk: per role, two files (`<role>.key` chmod 600, `<role>.address`).
+    use std::os::unix::fs::PermissionsExt;
+    for role in ["operator", "demo1", "demo2"] {
+        let key_path = output_dir.join(format!("{role}.key"));
+        let addr_path = output_dir.join(format!("{role}.address"));
+        assert!(key_path.exists(), "{} missing", key_path.display());
+        assert!(addr_path.exists(), "{} missing", addr_path.display());
+
+        let mode = std::fs::metadata(&key_path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "{} should be chmod 600, got {:o}", key_path.display(), mode);
+
+        let addr = std::fs::read_to_string(&addr_path).unwrap();
+        assert!(addr.starts_with("lig1"), "address file {} should start with lig1: {}", addr_path.display(), addr.trim());
+    }
+}
+
+#[test]
+fn keys_generate_addresses_in_stub_match_address_files() {
+    // The keys.toml stub on stdout should reference the same lig1
+    // addresses that get written to the per-role .address files —
+    // operators paste from stdout, the corresponding key files are
+    // on disk, and the two views had better agree.
+    let tmp = TempDir::new().expect("tempdir");
+    let output_dir = tmp.path().join("keys");
+
+    let result = Command::new(binary())
+        .arg("keys")
+        .arg("generate")
+        .arg("--roles")
+        .arg("operator")
+        .arg("--output")
+        .arg(&output_dir)
+        .output()
+        .expect("invoke binary");
+    assert!(result.status.success(), "stderr: {}", String::from_utf8_lossy(&result.stderr));
+
+    let on_disk = std::fs::read_to_string(output_dir.join("operator.address"))
+        .unwrap()
+        .trim()
+        .to_string();
+    let stdout = String::from_utf8_lossy(&result.stdout);
+    assert!(
+        stdout.contains(&on_disk),
+        "stdout stub should reference the same address as operator.address ({on_disk}):\n{stdout}"
+    );
+}
