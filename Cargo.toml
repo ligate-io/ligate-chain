@@ -64,6 +64,8 @@ sov-db                     = { git = "https://github.com/Sovereign-Labs/sovereig
 sov-rollup-apis            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-rollup-full-node-interface = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-sequencer              = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-node-client            = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
+sov-api-spec               = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 sov-test-utils             = { git = "https://github.com/Sovereign-Labs/sovereign-sdk.git", rev = "f89964c66bcfb6a31712e43278378b54c33d3779" }
 
 # Shared workspace dependencies. Versions track the SDK's own

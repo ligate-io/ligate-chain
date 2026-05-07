@@ -85,6 +85,9 @@ use ed25519_dalek::{Signer, SigningKey};
 use sov_modules_api::{SafeString, SafeVec, Spec};
 use thiserror::Error as ThisError;
 
+#[cfg(feature = "submit")]
+pub mod submit;
+
 pub use attestation::{
     Attestation, AttestationConfig, AttestationId, AttestorSet, AttestorSetId, AttestorSignature,
     CallMessage, Hash32, PayloadHash, PubKey, Schema, SchemaId, SignedAttestationPayload,

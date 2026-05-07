@@ -4105,16 +4105,20 @@ dependencies = [
 name = "ligate-client"
 version = "0.0.1"
 dependencies = [
+ "anyhow",
  "attestation",
  "borsh",
  "ed25519-dalek",
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "sov-api-spec",
  "sov-bank",
  "sov-modules-api",
+ "sov-node-client",
  "sov-test-utils",
  "thiserror 2.0.18",
+ "tokio",
 ]
 
 [[package]]

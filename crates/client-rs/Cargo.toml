@@ -21,6 +21,22 @@ serde.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
+# Optional `submit` feature: HTTP transaction submission via the SDK's
+# NodeClient + receipt polling. Off by default so the in-zkVM guest
+# build (and downstream typed-message-builder consumers) don't pull
+# tokio / reqwest. Faucet, ligate-cli, and integration tests opt in
+# with `features = ["submit"]`. See `src/submit.rs` and #240.
+sov-node-client = { workspace = true, optional = true }
+sov-api-spec    = { workspace = true, optional = true }
+anyhow          = { workspace = true, optional = true }
+tokio           = { workspace = true, optional = true }
+
 [dev-dependencies]
 serde_json.workspace = true
 sov-test-utils  = { workspace = true }
+
+[features]
+default = []
+# Enables the HTTP transaction-submission pipeline. See the
+# top-of-file docs in `src/submit.rs` for the wire-format walkthrough.
+submit  = ["dep:sov-node-client", "dep:sov-api-spec", "dep:anyhow", "dep:tokio"]
