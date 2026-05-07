@@ -389,6 +389,8 @@ operator should watch:
 
 **Process metrics** (Linux only): `process_cpu_seconds_total`, `process_resident_memory_bytes`, `process_open_fds`, `process_max_fds`, `process_start_time_seconds`, `process_virtual_memory_bytes`. Auto-registered by the `prometheus` crate's `process` feature; macOS and Windows builds skip them.
 
+**Starter Grafana dashboard** at [`ops/grafana/ligate-node.json`](../../ops/grafana/ligate-node.json). Three rows (chain activity, node health, errors / rejections), eight panels. Import flow + reference Prometheus scrape config in [`ops/grafana/README.md`](../../ops/grafana/README.md). Tracking: [#165](https://github.com/ligate-io/ligate-chain/issues/165). Phase 2 metrics + dashboard rows land via [#164](https://github.com/ligate-io/ligate-chain/issues/164); public Grafana hosting at `grafana.ligate.io` lands via [#234](https://github.com/ligate-io/ligate-chain/issues/234).
+
 ### Liveness + readiness probes
 
 Two cheap endpoints for orchestrators (k8s probes, systemd watchdogs, load balancer health checks):
@@ -431,8 +433,9 @@ Tracked under follow-up issues filed alongside the Phase 1 PR.
 | Multi-sequencer / leader rotation | #82 (v1) |
 | Block indexer service (Postgres + ingest) | #91 |
 | WebSocket / SSE live event stream | #92 |
-| Full Prometheus metric set + Grafana dashboard | follow-up to #110 |
-| `ligate-cli` operator tool | not yet filed |
+| Phase 2 Prometheus metrics (DA, sequencer-specific, RPC error histograms) | #164 |
+| Public Grafana host at `grafana.ligate.io` | #234 |
+| `ligate-cli` operator tool | #112 |
 
 The chain itself is live: `Schema`, `AttestorSet`, `Attestation`, the
 `CallMessage` enum, state transitions, ed25519 signature validation,
