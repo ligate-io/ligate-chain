@@ -137,9 +137,7 @@ impl Submitter {
             .send_transactions_to_sequencer(vec![bytes], wait_for_inclusion)
             .await
             .context("submitting transaction to sequencer")?;
-        hashes
-            .pop()
-            .context("sequencer accepted the request but returned no tx hashes")
+        hashes.pop().context("sequencer accepted the request but returned no tx hashes")
     }
 
     /// Convenience: submit a batch of pre-built transactions in
