@@ -65,9 +65,20 @@ For the real public-devnet ceremony (tracked in [#231](https://github.com/ligate
 
 ### 1. Generate operator-controlled keys offline
 
-Until [`ligate-cli keys generate`](https://github.com/ligate-io/ligate-chain/issues/112) ships, derive an Ed25519 keypair via openssl or any Sovereign-SDK-compatible tool. Save private keys to `~/.ligate-keys/devnet-1/` with `chmod 600`. Never commit them.
+```sh
+cargo run -p ligate-genesis-tool -- keys generate \
+    --roles operator,demo1,demo2 \
+    --output ~/.ligate-keys/devnet-1
+```
 
-You'll want at least one operator address (covers sequencer / treasury / reward / attester / prover roles) and optionally two demo wallets pre-funded with `$LGT` for testing. For better security separation, split roles across multiple keys (treasury cold, sequencer hot, etc.).
+Each role yields one Ed25519 keypair: `<role>.key` (hex-encoded, chmod 600, **never commit**) and `<role>.address` (the `lig1...` bech32m string ready to paste into `keys.toml`). Address derivation matches the SDK's standard `Address = SHA-256(pubkey)[..28]`.
+
+Pick role labels that reflect your security model:
+
+- **Single key** (simplest): `--roles operator` covers sequencer / treasury / reward / attester / prover all from one address.
+- **Split for security separation**: `--roles sequencer,treasury,operator,demo1,demo2`. Treasury can stay cold (offline), sequencer is necessarily hot (signs continuously).
+
+This subcommand is a stand-in for [`ligate-cli keys generate`](https://github.com/ligate-io/ligate-chain/issues/112); when `ligate-cli` ships in its own repo, the same command moves there.
 
 ### 2. Fill in `keys.toml` from the template
 
