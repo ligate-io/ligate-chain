@@ -42,6 +42,31 @@ struct Args {
     #[arg(long, default_value = "mock", value_enum)]
     da_layer: SupportedDaLayer,
 
+    /// Operator role this node should run as.
+    ///
+    /// `sequencer` (default) runs the normal full-node-with-sequencer
+    /// flow: builds batches from incoming transactions and posts them
+    /// to the DA layer. Use this on the official Ligate Labs node and
+    /// any other node whose DA address is registered in
+    /// `sequencer_registry.json` and that holds the corresponding
+    /// signer key with funded TIA.
+    ///
+    /// `follower` runs the same binary but disables automatic batch
+    /// production. The node still syncs the STF from DA, serves all
+    /// read-side REST endpoints, and exposes `/health` and
+    /// `/metrics`. This is the right mode for design partners,
+    /// auditors, and anyone running their own Ligate node who isn't
+    /// the registered sequencer. Submission to a follower's
+    /// `POST /v1/sequencer/txs` is currently still accepted but will
+    /// not propagate (its blob would be filtered at the STF level
+    /// because the DA address isn't in the registry); point clients
+    /// at the upstream sequencer (`https://rpc.ligate.io` for public
+    /// devnet) for submission.
+    ///
+    /// Tracking: #243 (this flag), #82 (multi-sequencer for v1+).
+    #[arg(long, default_value = "sequencer", value_enum)]
+    mode: NodeRole,
+
     /// Path to the rollup config TOML.
     ///
     /// Format mirrors the SDK's `RollupConfig` (storage, sequencer,
@@ -77,6 +102,18 @@ enum SupportedDaLayer {
     Mock,
     /// Real Celestia DA. Requires a reachable light/bridge node.
     Celestia,
+}
+
+/// Role this node operates as. See `Args::mode` for the operator-
+/// facing semantics.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+enum NodeRole {
+    /// Normal full node: produces batches, posts to DA, accepts
+    /// submissions on `/v1/sequencer/txs`.
+    Sequencer,
+    /// Read-only follower: syncs STF from DA, serves read endpoints,
+    /// does not auto-produce batches.
+    Follower,
 }
 
 impl SupportedDaLayer {
@@ -128,11 +165,27 @@ async fn run() -> anyhow::Result<()> {
 
     debug!(
         da_layer = ?args.da_layer,
+        mode = ?args.mode,
         rollup_config_path = %rollup_config_path,
         genesis_config_dir = ?args.genesis_config_dir,
         metrics_bind = %args.metrics_bind,
         "Starting Ligate rollup",
     );
+
+    // Surface follower mode at INFO so it shows up in default-level
+    // operator logs. Followers behave very differently from
+    // sequencers in subtle ways (no batch production, submissions
+    // don't propagate); making this visible at startup avoids the
+    // "why aren't my transactions landing?" footgun.
+    if args.mode == NodeRole::Follower {
+        tracing::info!(
+            "ligate-node booting in FOLLOWER mode: this node will sync the STF \
+             from DA but will NOT produce batches. Submissions to this node's \
+             /v1/sequencer/txs endpoint do not propagate to the chain. Point \
+             clients at the upstream sequencer (e.g. https://rpc.ligate.io) for \
+             transaction submission. Tracking: #243."
+        );
+    }
 
     // Spawn the Prometheus `/metrics` server before the rollup
     // takes the foreground tokio task. If the user passed
@@ -160,8 +213,12 @@ async fn run() -> anyhow::Result<()> {
     let genesis_paths = GenesisPaths::from_dir(&args.genesis_config_dir);
 
     match args.da_layer {
-        SupportedDaLayer::Mock => run_with_mock(&rollup_config_path, &genesis_paths).await,
-        SupportedDaLayer::Celestia => run_with_celestia(&rollup_config_path, &genesis_paths).await,
+        SupportedDaLayer::Mock => {
+            run_with_mock(&rollup_config_path, &genesis_paths, args.mode).await
+        }
+        SupportedDaLayer::Celestia => {
+            run_with_celestia(&rollup_config_path, &genesis_paths, args.mode).await
+        }
     }
 }
 
@@ -174,6 +231,7 @@ fn is_metrics_disabled(value: &str) -> bool {
 async fn run_with_mock(
     rollup_config_path: &str,
     genesis_paths: &GenesisPaths,
+    mode: NodeRole,
 ) -> anyhow::Result<()> {
     // #181: pull `[chain]` out of the rollup TOML before handing the
     // rest to the SDK loader. The SDK's `RollupConfig` rejects
@@ -181,10 +239,20 @@ async fn run_with_mock(
     // typed deserialization.
     let (chain, residual_toml) = chain_config::load_split_config(rollup_config_path)
         .with_context(|| format!("Failed to load chain config from {rollup_config_path}"))?;
-    let rollup_config: RollupConfig<MultiAddressEvm, StorableMockDaService> =
+    let mut rollup_config: RollupConfig<MultiAddressEvm, StorableMockDaService> =
         toml::from_str(&residual_toml).with_context(|| {
             format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
+
+    // #243: in follower mode, disable automatic batch production. The
+    // sequencer machinery still instantiates (the SDK's blueprint
+    // requires a sequencer instance for `api_state` plumbing), but it
+    // doesn't post batches to DA, so no spam-failed blob submissions.
+    // The submission REST endpoint stays mounted; a true 503 there
+    // is a follow-up requiring an SDK override.
+    if mode == NodeRole::Follower {
+        rollup_config.sequencer.automatic_batch_production = false;
+    }
 
     // SQLite (mock DA) + RocksDB (state) both refuse to create
     // files if the parent directory is missing, and we want
@@ -222,15 +290,24 @@ async fn run_with_mock(
 async fn run_with_celestia(
     rollup_config_path: &str,
     genesis_paths: &GenesisPaths,
+    mode: NodeRole,
 ) -> anyhow::Result<()> {
     // #181: same two-pass split as the mock path. `[chain]` lives in
     // the rollup TOML alongside `[da]`, `[storage]`, etc.
     let (chain, residual_toml) = chain_config::load_split_config(rollup_config_path)
         .with_context(|| format!("Failed to load chain config from {rollup_config_path}"))?;
-    let rollup_config: RollupConfig<MultiAddressEvm, CelestiaService> =
+    let mut rollup_config: RollupConfig<MultiAddressEvm, CelestiaService> =
         toml::from_str(&residual_toml).with_context(|| {
             format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
+
+    // #243: see equivalent comment in `run_with_mock`. In follower
+    // mode we disable auto batch production so a follower never tries
+    // to post blobs to Celestia (which would burn TIA and fail at the
+    // STF level if the DA address isn't in the registry).
+    if mode == NodeRole::Follower {
+        rollup_config.sequencer.automatic_batch_production = false;
+    }
 
     std::fs::create_dir_all(&rollup_config.storage.path).with_context(|| {
         format!(
@@ -257,4 +334,40 @@ async fn run_with_celestia(
         .context("Failed to initialize Ligate rollup on Celestia DA")?;
 
     rollup.run().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    /// Default `--mode` when omitted should be `sequencer` so existing
+    /// invocations of `cargo run --bin ligate-node` keep working
+    /// without operator action.
+    #[test]
+    fn mode_defaults_to_sequencer() {
+        let args = Args::parse_from(["ligate-node"]);
+        assert_eq!(args.mode, NodeRole::Sequencer);
+    }
+
+    #[test]
+    fn mode_parses_follower() {
+        let args = Args::parse_from(["ligate-node", "--mode", "follower"]);
+        assert_eq!(args.mode, NodeRole::Follower);
+    }
+
+    #[test]
+    fn mode_parses_explicit_sequencer() {
+        let args = Args::parse_from(["ligate-node", "--mode", "sequencer"]);
+        assert_eq!(args.mode, NodeRole::Sequencer);
+    }
+
+    /// Spelling counts: clap's `value_enum` produces `kebab-case`
+    /// matching the variant names. Guard against an inadvertent
+    /// rename (e.g. `replica`) breaking external operator scripts.
+    #[test]
+    fn mode_rejects_unknown_value() {
+        let result = Args::try_parse_from(["ligate-node", "--mode", "replica"]);
+        assert!(result.is_err());
+    }
 }

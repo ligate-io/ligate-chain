@@ -53,6 +53,21 @@ cargo run --bin ligate-node -- --da-layer celestia
 
 Defaults pick up `devnet/rollup.toml` (or `devnet/celestia.toml`) and the `devnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$LGT` so you can exercise transfers without minting.
 
+### Sequencer vs follower
+
+`ligate-node` accepts a `--mode {sequencer,follower}` flag (default `sequencer`).
+
+`sequencer` is the right mode for the official Ligate Labs node and any node whose DA address is in `sequencer_registry.json` and that holds the matching DA signer key with funded TIA. The node builds batches from incoming transactions and posts them to the DA layer.
+
+`follower` is the right mode for everyone else: design partners, auditors, and anyone running their own Ligate node who isn't the registered sequencer. The node still syncs the STF from DA and serves all read-side endpoints; it just doesn't auto-produce batches.
+
+```bash
+# Read-only follower against public devnet's Celestia config.
+cargo run --bin ligate-node -- --da-layer celestia --mode follower
+```
+
+Followers' `POST /v1/sequencer/txs` endpoint is currently still mounted but submissions don't propagate (the would-be blob is filtered at the STF level because the DA address isn't in the registry). Point clients at the upstream sequencer (`https://rpc.ligate.io` for public devnet) for transaction submission. A native 503 on the follower's submission endpoint is tracked as a follow-up under [#243](https://github.com/ligate-io/ligate-chain/issues/243).
+
 A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`devnet/README.md`](devnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 
 ## What is this repo
