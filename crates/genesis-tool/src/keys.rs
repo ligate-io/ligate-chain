@@ -27,7 +27,6 @@ use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use rand::RngCore;
-use sha2::{Digest, Sha256};
 use sov_modules_api::Address;
 
 /// Result of generating one role-tagged keypair.
@@ -70,13 +69,21 @@ pub fn generate_role(role: &str, output_dir: &Path) -> Result<GeneratedKey> {
     let signing_key = SigningKey::from_bytes(&secret_bytes);
     let pubkey_bytes = signing_key.verifying_key().to_bytes();
 
-    // Address derivation: SHA-256(pubkey)[..28]. Matches the pattern
-    // used in `crates/stf/tests/devnet_addresses.rs` for deterministic
-    // devnet fixtures, but here the pubkey is the input rather than a
-    // string label.
-    let digest = Sha256::digest(pubkey_bytes);
+    // Address derivation: first 28 bytes of the public key.
+    //
+    // The chain authenticates a transaction by computing
+    // `credential_id = HexString(pubkey_bytes)` (per
+    // `MockZkvmCryptoSpec::PublicKey::credential_id`), then
+    // `Address::from(credential_id) = pubkey[..28]` (per
+    // `sov_modules_api::common::address::From<HexString<[u8;32]>>`).
+    // Operators who substitute keys into `keys.toml` need the keypair
+    // → address derivation to match what the chain re-derives at
+    // signature-verification time. Using `SHA-256(pubkey)[..28]`
+    // (which is what `crates/stf/tests/devnet_addresses.rs` does for
+    // string-label-derived devnet fixtures) produces a different
+    // address that fails the chain's lookup. See ligate-chain#245.
     let mut addr_bytes = [0u8; 28];
-    addr_bytes.copy_from_slice(&digest[..28]);
+    addr_bytes.copy_from_slice(&pubkey_bytes[..28]);
     let address = Address::from(addr_bytes);
     let address_str = address.to_string();
 
