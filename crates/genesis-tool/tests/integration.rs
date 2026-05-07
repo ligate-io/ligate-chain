@@ -220,10 +220,16 @@ fn keys_generate_writes_files_and_prints_stub() {
     // Stdout: keys.toml stub. Operators pipe this into devnet-1/keys.toml.
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(stdout.contains("[addresses]"), "stdout missing [addresses] header:\n{stdout}");
-    assert!(stdout.contains("<placeholder-address>"), "stdout missing placeholder marker:\n{stdout}");
+    assert!(
+        stdout.contains("<placeholder-address>"),
+        "stdout missing placeholder marker:\n{stdout}"
+    );
     // Each role gets a comment + an entry in the stub.
     for role in ["operator", "demo1", "demo2"] {
-        assert!(stdout.contains(&format!("# role: {role}")), "stub missing role comment {role}:\n{stdout}");
+        assert!(
+            stdout.contains(&format!("# role: {role}")),
+            "stub missing role comment {role}:\n{stdout}"
+        );
     }
 
     // Disk: per role, two files (`<role>.key` chmod 600, `<role>.address`).
@@ -238,7 +244,12 @@ fn keys_generate_writes_files_and_prints_stub() {
         assert_eq!(mode, 0o600, "{} should be chmod 600, got {:o}", key_path.display(), mode);
 
         let addr = std::fs::read_to_string(&addr_path).unwrap();
-        assert!(addr.starts_with("lig1"), "address file {} should start with lig1: {}", addr_path.display(), addr.trim());
+        assert!(
+            addr.starts_with("lig1"),
+            "address file {} should start with lig1: {}",
+            addr_path.display(),
+            addr.trim()
+        );
     }
 }
 
@@ -262,10 +273,8 @@ fn keys_generate_addresses_in_stub_match_address_files() {
         .expect("invoke binary");
     assert!(result.status.success(), "stderr: {}", String::from_utf8_lossy(&result.stderr));
 
-    let on_disk = std::fs::read_to_string(output_dir.join("operator.address"))
-        .unwrap()
-        .trim()
-        .to_string();
+    let on_disk =
+        std::fs::read_to_string(output_dir.join("operator.address")).unwrap().trim().to_string();
     let stdout = String::from_utf8_lossy(&result.stdout);
     assert!(
         stdout.contains(&on_disk),
