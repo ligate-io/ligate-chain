@@ -1,0 +1,7 @@
+{
+  "_warning": "LOCAL DEVELOPMENT KEY ONLY. DO NOT USE FOR DEVNET, TESTNET, OR MAINNET. The private key is committed to the repo so anyone can sign transactions on a localnet boot. Equivalent of Anvil's account-0 dev key for Ethereum testing. Operators deploying ligate-devnet-1 must remove this key's address from `devnet/genesis/bank.json` before generating the genesis bundle (see crates/genesis-tool).",
+  "role": "dev",
+  "private_key_hex": "0101010101010101010101010101010101010101010101010101010101010101",
+  "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+  "address": "lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u"
+}

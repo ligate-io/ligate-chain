@@ -5,7 +5,8 @@
     "address_and_balances": [
       ["lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt", "100000000000000000"],
       ["lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7", "10000000000000000"],
-      ["lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx", "10000000000000000"]
+      ["lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx", "10000000000000000"],
+      ["lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u", "10000000000000"]
     ],
     "admins": [
       "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
