@@ -50,9 +50,22 @@
 //!    the sequencer's `accept_tx` endpoint and (optionally) polls
 //!    `wait_for_tx_processing` until the chain has executed it.
 //!
+//! ## Important: do NOT pre-wrap on the client
+//!
+//! The chain's `POST /v1/sequencer/txs` handler ([`axum_accept_tx`])
+//! wraps the request body in `AuthenticatorInput::Standard(RawTx {
+//! data })` server-side. **Pass the borsh-encoded `Transaction` bytes
+//! directly to `submit_raw_tx`; do NOT call `encode_with_standard_auth`
+//! on the client.** Pre-wrapping double-wraps and the chain rejects
+//! with `signature error: Cannot decompress Edwards point`. See
+//! [`ligate-chain#245`].
+//!
 //! See the integration test in `tests/submit.rs` for a worked example
 //! (when localnet harness is available) and the faucet repo's
 //! `signer.rs` for production usage.
+//!
+//! [`axum_accept_tx`]: https://github.com/Sovereign-Labs/sovereign-sdk/blob/f89964c/crates/full-node/sov-sequencer/src/rest_api.rs
+//! [`ligate-chain#245`]: https://github.com/ligate-io/ligate-chain/issues/245
 //!
 //! # Why not a single high-level helper?
 //!
@@ -115,11 +128,16 @@ impl Submitter {
         &self.inner
     }
 
-    /// Submit a pre-built, pre-signed, Borsh-encoded transaction to
-    /// the chain's sequencer. Returns the transaction hash.
+    /// Submit a borsh-encoded signed transaction to the chain's
+    /// sequencer. Returns the transaction hash.
     ///
-    /// The `bytes` MUST be the output of step 4 in the module-level
-    /// walkthrough (Borsh-encoded `AuthenticatorInput::Standard(...)`).
+    /// `bytes` MUST be `borsh::to_vec(&signed_transaction)` where
+    /// `signed_transaction` is a `Transaction<R, S>` produced by
+    /// [`UnsignedTransaction::sign`]. The chain's
+    /// `POST /v1/sequencer/txs` handler wraps the bytes in
+    /// `AuthenticatorInput::Standard(RawTx { data })` server-side;
+    /// do NOT pre-wrap on the client (see module docs for why).
+    ///
     /// Garbage in produces a server-side `FatalError::DeserializationFailed`
     /// rather than a panic.
     ///
