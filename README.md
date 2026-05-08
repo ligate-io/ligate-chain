@@ -53,6 +53,28 @@ cargo run --bin ligate-node -- --da-layer celestia
 
 Defaults pick up `devnet/rollup.toml` (or `devnet/celestia.toml`) and the `devnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$LGT` so you can exercise transfers without minting.
 
+#### Local dev key
+
+The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`devnet/local-dev-key.json`](devnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `$LGT`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
+
+Operators deploying `ligate-devnet-1` MUST remove this address from `devnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
+
+To use the dev key with [`ligate-cli`](https://github.com/ligate-io/ligate-cli):
+
+```bash
+mkdir -p ~/.local/share/io.ligate.cli/keys
+echo '0101010101010101010101010101010101010101010101010101010101010101' \
+    > ~/.local/share/io.ligate.cli/keys/dev.key
+chmod 600 ~/.local/share/io.ligate.cli/keys/dev.key
+echo 'lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u' \
+    > ~/.local/share/io.ligate.cli/keys/dev.address
+
+# Now you can transfer from `dev`:
+ligate transfer --signer dev --to lig1xyz... --amount 1.0 \
+    --chain-id 4242 --chain-hash $(curl -s http://127.0.0.1:12346/v1/rollup/info | jq -r .chain_hash) \
+    --token-id $(...)
+```
+
 ### Sequencer vs follower
 
 `ligate-node` accepts a `--mode {sequencer,follower}` flag (default `sequencer`).
