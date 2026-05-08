@@ -112,7 +112,7 @@ impl Submitter {
     }
 
     /// Construct a [`Submitter`] and verify the target URL is alive
-    /// + serving the expected runtime schema. Fails fast if the
+    /// and serving the expected runtime schema. Fails fast if the
     /// node is unreachable.
     pub async fn new(rpc_url: &str) -> Result<Self> {
         let inner = NodeClient::new(rpc_url)
@@ -133,9 +133,9 @@ impl Submitter {
     ///
     /// `bytes` MUST be `borsh::to_vec(&signed_transaction)` where
     /// `signed_transaction` is a `Transaction<R, S>` produced by
-    /// [`UnsignedTransaction::sign`]. The chain's
-    /// `POST /v1/sequencer/txs` handler wraps the bytes in
-    /// `AuthenticatorInput::Standard(RawTx { data })` server-side;
+    /// `UnsignedTransaction::sign` (in `sov_modules_api::transaction`).
+    /// The chain's `POST /v1/sequencer/txs` handler wraps the bytes
+    /// in `AuthenticatorInput::Standard(RawTx { data })` server-side;
     /// do NOT pre-wrap on the client (see module docs for why).
     ///
     /// Garbage in produces a server-side `FatalError::DeserializationFailed`

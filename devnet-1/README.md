@@ -120,6 +120,24 @@ The Celestia hot key (`SOV_CELESTIA_SIGNER_KEY` env var) is **separate** from th
 
 Set the env var in `/etc/ligate/env` on the GCP VM (`chmod 600`, root-readable only) per the deploy runbook.
 
+### 6. Register canonical schemas (post-boot)
+
+`devnet-1/genesis/attestation.json` ships with `initial_attestor_sets: []` and `initial_schemas: []` deliberately. After the node boots and `/v1/rollup/info` returns a non-zero `chain_hash`, register the canonical Themisra schema (`themisra.proof-of-prompt/v1`) by running the `ligate-bootstrap` ceremony:
+
+```sh
+cp devnet-1/canonical-schemas.toml.example devnet-1/canonical-schemas.toml
+$EDITOR devnet-1/canonical-schemas.toml  # fill in real attestor pubkeys
+cargo run --release -p ligate-bootstrap-cli -- register-canonical-schemas \
+    --config devnet-1/canonical-schemas.toml \
+    --signer-key ~/.ligate-keys/devnet-1/operator.key \
+    --rpc http://localhost:12346 \
+    --chain-id 4321
+```
+
+Idempotent: re-runs skip already-landed registrations. Full runbook (verification, troubleshooting, adding future schemas) at [`docs/development/canonical-schema-registration.md`](../docs/development/canonical-schema-registration.md).
+
+This step is **post-genesis on purpose**: it keeps the chain's "attestation primitive is permissionless from day one" promise honest (Ligate Labs registers the same way any third-party schema would) and avoids baking a placeholder `payload_shape_hash: [0u8; 32]` into permanent chain state. The registered schema is bit-for-bit identical to a genesis-seeded one once Tx 2 lands ~24-36s after the script starts.
+
 ## Mocha resets and `devnet-2/`
 
 Mocha (Celestia's testnet) resets occasionally. When it does, the DA-layer references in our chain state become invalid; the cleanest recovery is to spin up a fresh chain id (`ligate-devnet-2`) on the new Mocha epoch with a fresh genesis bundle. The directory naming pattern this template establishes (`devnet-1/` → `devnet-2/` → ... → `ligate-1/`) supports that without touching the existing artifacts.

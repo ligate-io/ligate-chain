@@ -209,6 +209,8 @@ Cargo workspace (resolver 2). Members:
 - [`crates/rollup`](crates/rollup): the node binary (`ligate-node`). Wires the STF to the Celestia DA adapter and exposes the RPC surface.
 - [`crates/rollup/provers/risc0`](crates/rollup/provers/risc0): the Risc0 inner zkVM prover, including the Celestia guest binary that runs the full STF inside the zkVM.
 - [`crates/client-rs`](crates/client-rs): the Rust client SDK for applications talking to the chain. Typed builders and ed25519 helpers on the new SDK.
+- [`crates/genesis-tool`](crates/genesis-tool): operator-facing offline tool. `keys generate`, `verify`, `generate` (substitute keys into a template genesis bundle).
+- [`crates/bootstrap-cli`](crates/bootstrap-cli): operator-facing online tool. Runs the post-genesis canonical-schema registration ceremony — submits one `RegisterAttestorSet` + one `RegisterSchema` tx per entry in `canonical-schemas.toml`. Idempotent. See [`docs/development/canonical-schema-registration.md`](docs/development/canonical-schema-registration.md).
 
 Devnet config (genesis files, Celestia and rollup TOMLs) lives in [`devnet/`](devnet) and is checked in so anyone can boot a local devnet against Celestia mocha-testnet.
 
@@ -218,6 +220,8 @@ Protocol docs:
 - [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md): how Ligate addresses (`lig1…`) work, why MetaMask doesn't sign for the chain today, and what changes when EVM auth ([#72](https://github.com/ligate-io/ligate-chain/issues/72)) lands.
 - [`docs/protocol/rest-api.md`](docs/protocol/rest-api.md): full reference for every REST endpoint exposed by `ligate-node`.
 - [`docs/protocol/threat-model.md`](docs/protocol/threat-model.md): v0 attacker model, mitigations, and what is deliberately out of scope.
+- [`docs/protocol/schemas/`](docs/protocol/schemas/): canonical first-party schema specs (`themisra.proof-of-prompt-v1.json`, future Mneme/Iris/Kleidon schemas). Each file is the JSON Schema doc whose SHA-256 is the on-chain `payload_shape_hash`.
+- [`docs/protocol/lips/`](docs/protocol/lips/): Ligate Improvement Proposals. LIP-1 (process), LIP-5 (proof-of-prompt schema, in flight).
 
 ## Build and test
 

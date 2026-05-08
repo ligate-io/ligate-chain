@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://docs.ligate.io/schemas/themisra.proof-of-prompt-v1.json",
+  "title": "themisra.proof-of-prompt v1.0.0",
+  "description": "Canonical Themisra Proof-of-Prompt attestation payload. Binds the (prompt, response, model, time) tuple of a single human-AI interaction to the user's identity, so the user can later prove cryptographically that they prompted a specific model with specific text and received a specific response at a specific moment. The on-chain attestation stores SHA-256 of the canonical JSON form of an instance of this schema; the M-of-N attestor signatures attest that the off-chain quorum service witnessed the corresponding plaintext interaction. v1 of LIP-5; sufficient for devnet and design-partner integrations. Future revisions ship as v2 with their own schema_id rather than mutating this one.",
+  "type": "object",
+  "required": [
+    "spec_version",
+    "user_did",
+    "model_id",
+    "prompt_hash",
+    "response_hash",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "spec_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema spec version. Pinned to a single value at this revision; future revisions ship as v2 with a new schema_id."
+    },
+    "user_did": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 256,
+      "description": "Identity of the human prompter. Either a chain-native bech32m address (`lig1...`), a W3C DID URL (`did:web:...`, `did:key:...`), or the chain-native DID form (`did:lig:<address>`). The signer of the on-chain `SubmitAttestation` tx is a SEPARATE identity (typically a relayer like Mneme acting on the user's behalf) and is recorded in the tx envelope itself."
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Machine-readable identifier for the AI model. Recommended form: `<provider>/<model>:<version>`, e.g. `anthropic/claude-opus:4.7`, `openai/gpt-4o:2025-01-01`, `google/gemini-pro:2.5`. Free-form for v1; LIP-5 may pin a registry in a later revision."
+    },
+    "prompt_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the user's prompt text, hex-encoded (lowercase, no `0x` prefix). Canonicalization: NFC-normalized Unicode, no leading/trailing whitespace, LF line endings, UTF-8 bytes. Off-chain attestor services SHOULD reject payloads whose claimed `prompt_hash` does not match the canonicalized prompt they witnessed."
+    },
+    "response_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the AI model's response text, same canonicalization as `prompt_hash`."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp of when the prompt-response interaction occurred. Off-chain attestor services SHOULD reject claimed times in the future or more than 24h in the past relative to the sign request."
+    },
+    "system_prompt_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Optional. SHA-256 of the system prompt (if any), same canonicalization as `prompt_hash`. Distinct from `prompt_hash` because the system prompt is often configured by the tool (e.g. Mneme's wallet helper) and not authored by the user."
+    },
+    "provider_id": {
+      "type": "string",
+      "format": "hostname",
+      "maxLength": 253,
+      "description": "Optional. Hostname of the inference API provider (e.g. `api.anthropic.com`, `api.openai.com`). Useful for partners filtering by provider."
+    },
+    "tool_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Optional. Identifier of the user-facing tool (e.g. `mneme`, `claude.ai/web`, `gemini-app`, `chatgpt-desktop`). One provider can host many tools; this field disambiguates."
+    },
+    "prompt_uri": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048,
+      "description": "Optional. URI where the canonicalized prompt text can be retrieved (IPFS, HTTPS, signed S3, etc.). The chain stores only the hash; this field lets verifiers fetch the plaintext for re-hashing."
+    },
+    "response_uri": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 2048,
+      "description": "Optional. URI where the canonicalized response text can be retrieved."
+    }
+  }
+}

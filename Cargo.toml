@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/bootstrap-cli",
     "crates/modules/attestation",
     "crates/client-rs",
     "crates/genesis-tool",
