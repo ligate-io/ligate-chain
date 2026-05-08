@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- `docs/development/public-devnet-deploy.md` updated to the chain-only-on-GCP architecture: VM sizing dropped from `e2-standard-4` (4 vCPU / 16 GB / $100) to `e2-medium` (2 vCPU / 4 GB / $25) since the chain VM no longer co-hosts the faucet, indexer, or explorer. Step 4.5 (canonical-schema ceremony) clarified to run from a workstation rather than the VM (operator key stays off the production host). Step 4.7 (faucet deploy) replaced with a pointer at [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api), the new unified Rust HTTP service that hosts drip + indexer endpoints together on Railway, alongside a Railway-managed Postgres. The split keeps the GCP VM minimal and lets api/Postgres scale independently from the chain. Frontend split to `ligate-io/ligate-explorer` (Next.js on Vercel). Closes the architecture refactor tracked in `ligate-io/ligate-api`'s scaffold commit.
+
 ### Added
 
 - `crates/bootstrap-cli/examples/disc_probe.rs` — one-shot fixture probe that prints byte-exact `borsh(RuntimeCall::Attestation(...))` output for `RegisterAttestorSet` / `RegisterSchema` / `SubmitAttestation`, plus the deterministic `AttestorSet::derive_id` / `Schema::derive_id` outputs for known-input fixtures. Used as the source-of-truth for the `@ligate/sdk` TS-side wire-format pinning (`ligate-js/test/attestation.test.ts`); regenerate fixtures after any Sovereign SDK pin bump that touches runtime composition or `attestation::CallMessage` shape. `cargo run --example disc_probe -p ligate-bootstrap-cli`. No CI changes — this is a developer tool, not a runtime gate.
