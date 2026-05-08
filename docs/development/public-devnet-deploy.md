@@ -38,10 +38,10 @@ Tracking issue: [#189](https://github.com/ligate-io/ligate-chain/issues/189). Si
 
 | Role | GCP shape | vCPU | RAM | Disk | $/mo (sustained-use) |
 |---|---|---|---|---|---|
-| Sequencer | `e2-standard-4` | 4 | 16 GB | 150 GB SSD | ~100 USD |
+| Sequencer | `e2-medium` | 2 | 4 GB | 50 GB SSD | ~25 USD |
 | Follower | `e2-medium` | 2 | 4 GB | 50 GB SSD | ~25 USD |
 
-Sequencer sizing covers `ligate-node` + co-located Celestia light node + faucet service + headroom for log/metrics export. Follower sizing covers `ligate-node` + co-located Celestia light node only (no faucet, no sequencing).
+Sequencer sizing covers `ligate-node` + co-located Celestia light node only. Faucet and indexer **do not run on this VM** — they live in [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api), deployed to Railway alongside a Railway-managed Postgres. The Next.js explorer at `explorer.ligate.io` is yet another deploy on Vercel, talking to `api.ligate.io`. Follower sizing matches sequencer (no auxiliary services to host either way).
 
 Both roles can drop to half their disk if you don't need history retention longer than a month; the chain's NOMT prunes aggressively. Conservative numbers above so you don't fight low-disk alerts in the first 90 days.
 
@@ -235,98 +235,47 @@ diff <(curl -s https://rpc.ligate.io/v1/rollup/info | jq -r .chain_hash) \
 # Empty diff => same runtime composition => safe to interop.
 ```
 
-## Step 4.5: Register canonical schemas (Ligate-Labs sequencer only)
+## Step 4.5: Register canonical schemas (run from a workstation)
 
-`devnet-1/genesis/attestation.json` ships with `initial_attestor_sets: []` and `initial_schemas: []`. Once the chain has produced a few blocks and `/v1/rollup/info` returns a non-zero `chain_hash`, register the canonical Themisra schema (`themisra.proof-of-prompt/v1`) via the [`ligate-bootstrap`](../../crates/bootstrap-cli/) ceremony from chain repo PR #249. Do this only on the canonical sequencer; followers do not register, they sync the schema from DA.
+`devnet-1/genesis/attestation.json` ships with `initial_attestor_sets: []` and `initial_schemas: []`. Once the chain has produced a few blocks and `/v1/rollup/info` returns a non-zero `chain_hash`, register the canonical Themisra schema (`themisra.proof-of-prompt/v1`) via the [`ligate-bootstrap`](../../crates/bootstrap-cli/) ceremony from chain repo PR #249.
+
+This step runs from your **workstation** (not the GCP VM) — the operator key only needs to be loaded into the bootstrap-cli's process briefly to sign two registration txs. The VM never sees the operator key in this flow.
 
 ```bash
-# 1. Copy + fill the canonical-schemas.toml template with real attestor pubkeys
-#    for the 2-of-3 federated quorum.
+# 1. From your workstation, in the chain repo:
 cp devnet-1/canonical-schemas.toml.example devnet-1/canonical-schemas.toml
-$EDITOR devnet-1/canonical-schemas.toml
+$EDITOR devnet-1/canonical-schemas.toml  # fill in real attestor pubkeys
 
 # 2. Run the ceremony binary. Auto-fetches chain_hash from /v1/rollup/info.
 #    --chain-id is the numeric u64 from chain_state.json (NOT the
 #    "ligate-devnet-1" string).
 cargo run --release -p ligate-bootstrap-cli -- register-canonical-schemas \
     --config devnet-1/canonical-schemas.toml \
-    --signer-key /etc/ligate/keys/operator.key \
+    --signer-key ~/.ligate-keys/devnet-1/operator.key \
     --rpc https://rpc.ligate.io \
-    --chain-id 4321  # or whatever the genesis chain_state.json declares
+    --chain-id 4321
 
 # 3. Verify the schema landed.
 curl https://rpc.ligate.io/v1/modules/attestation/schemas/lsc1...
-# {"schema_id":"lsc1...","name":"themisra.proof-of-prompt","version":1,...}
 ```
 
 Idempotent — re-running skips already-landed registrations. Full operator runbook with troubleshooting at [`canonical-schema-registration.md`](canonical-schema-registration.md).
 
 This step happens **before** announcing devnet to partners; the schema_id needs to be published in `v0.1.0-devnet` release notes alongside the rpc URL and chain_hash.
 
-## Step 4.7: Deploy faucet (Ligate-Labs sequencer only)
+## Step 4.7: Faucet — does NOT run on this VM
 
-The faucet ([`ligate-io/faucet`](https://github.com/ligate-io/faucet)) drips $LGT to fresh addresses so anyone can pay tx fees. v0 deploy co-locates on the same GCP VM as `ligate-node` (separate systemd unit, separate port). Caddy reverse-proxy entry for `faucet.ligate.io` follows the same pattern as `rpc.ligate.io` (Step 3).
+Pre-launch architecture moved the faucet off the chain VM. It now runs as part of [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api) (unified Rust HTTP service hosting drip + indexer queries) on Railway, against a Railway-managed Postgres. The chain VM only runs `ligate-node` + the Celestia light node.
 
-The faucet hot key is **separate** from the operator/sequencer key. Generated alongside the operator keys during the [#231](https://github.com/ligate-io/ligate-chain/issues/231) ceremony, kept offline at `~/.ligate-keys/devnet-1/faucet.key` until VM provisioning. After the chain boots, the operator transfers a starting balance from operator → faucet, then starts the faucet service.
+Concretely:
 
-```bash
-# 1. Install. Once the faucet repo's release.yml ships:
-sudo wget https://github.com/ligate-io/faucet/releases/download/v0.0.1-devnet/ligate-faucet-0.0.1-devnet-linux-amd64.tar.gz -O /tmp/faucet.tar.gz
-sudo tar -xzf /tmp/faucet.tar.gz -C /tmp
-sudo mv /tmp/ligate-faucet-*/ligate-faucet /usr/local/bin/
-# Or fallback: cargo install --git https://github.com/ligate-io/faucet
+- Chain (`rpc.ligate.io`) lives on this GCP VM.
+- API (`api.ligate.io/v1/drip` for faucet, `/v1/blocks*` etc. for indexer queries) lives on Railway.
+- Explorer (`explorer.ligate.io`) lives on Vercel as a Next.js app talking to `api.ligate.io`.
 
-# 2. Place the faucet hot key on the VM.
-sudo install -m 600 -o ligate -g ligate ~/.ligate-keys/devnet-1/faucet.key /etc/ligate/keys/faucet.key
+Faucet deploy is documented in [`ligate-api` README](https://github.com/ligate-io/ligate-api). The operator transfers an initial 1M LGT from the operator key (one-shot from a workstation via `ligate transfer`) to the faucet hot-key address; the api service holds the faucet hot key as a Railway secret and uses it to sign drip txs.
 
-# 3. Fund the faucet from the operator key. ~1M LGT is plenty for 10k drips at the
-#    default 100 LGT/drip; refill periodically.
-ligate transfer \
-    --to "$(cat ~/.ligate-keys/devnet-1/faucet.address)" \
-    --amount 1000000 \
-    --signer operator \
-    --rpc https://rpc.ligate.io
-
-# 4. systemd unit (one-time setup).
-sudo tee /etc/systemd/system/ligate-faucet.service >/dev/null <<'EOF'
-[Unit]
-Description=Ligate Chain devnet faucet
-After=ligate-node.service network-online.target
-Requires=ligate-node.service
-
-[Service]
-User=ligate
-EnvironmentFile=/etc/ligate/env
-ExecStart=/usr/local/bin/ligate-faucet
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# 5. Add faucet env vars to /etc/ligate/env. The chain_id, chain_hash, and
-#    LGT_TOKEN_ID_HEX are knowable from /v1/rollup/info + bank.json's gas
-#    token id.
-echo 'FAUCET_BIND=0.0.0.0:8080
-FAUCET_CHAIN_RPC=https://rpc.ligate.io
-FAUCET_SIGNER_KEY=<paste-hex-from-faucet.key>
-FAUCET_DRIP_AMOUNT=100000000000   # 100 LGT in nano-LGT
-FAUCET_CHAIN_ID=4321
-FAUCET_CHAIN_HASH=<canonical-hex>
-FAUCET_LGT_TOKEN_ID_HEX=<32-byte-hex-from-bank-json>
-FAUCET_STARTING_NONCE=0' | sudo tee -a /etc/ligate/env
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now ligate-faucet
-
-# 6. Smoke test from a workstation.
-curl -X POST https://faucet.ligate.io/drip \
-     -H 'content-type: application/json' \
-     --data '{"address":"lig1<a-test-address>"}'
-# {"tx_hash":"<hex>","amount":"100000000000"}
-```
-
-If a partner drains the faucet, only the faucet balance is affected; treasury (operator address) is untouched. Tracking issue: [#95](https://github.com/ligate-io/ligate-chain/issues/95).
+This split keeps the GCP VM minimal (`e2-medium`, ~$25/mo, only chain + Celestia DA processes) and lets the api scale independently from the chain.
 
 ## Step 5: Monitoring
 
