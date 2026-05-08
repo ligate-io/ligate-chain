@@ -30,6 +30,7 @@
 
 mod celestia_rollup;
 pub mod chain_config;
+pub mod follower_guard;
 pub mod health;
 pub mod info;
 pub mod metrics;
@@ -38,3 +39,28 @@ mod mock_rollup;
 pub use celestia_rollup::{CelestiaLigateRollup, CelestiaRollupSpec};
 pub use chain_config::{ChainConfig, ChainIdError};
 pub use mock_rollup::{MockLigateRollup, MockRollupSpec};
+
+/// Operator role this node should run as.
+///
+/// `Sequencer` is the normal full-node-with-sequencer flow; the node
+/// builds batches and posts them to DA. `Follower` is a read-only
+/// sync mode for non-sequencer operators (design partners, auditors,
+/// anyone running their own Ligate node who isn't the registered
+/// sequencer).
+///
+/// In `Follower` mode `main.rs` disables `automatic_batch_production`
+/// (no posts to DA), and `create_endpoints` layers a middleware
+/// (see [`follower_guard`]) that returns `503 Service Unavailable`
+/// for `POST /v1/sequencer/txs` so submissions don't silently
+/// disappear into a local mempool that never propagates.
+///
+/// Tracking: [#243](https://github.com/ligate-io/ligate-chain/issues/243).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeRole {
+    /// Normal full node: produces batches, posts to DA, accepts
+    /// submissions on `/v1/sequencer/txs`.
+    Sequencer,
+    /// Read-only follower: syncs STF from DA, serves read endpoints,
+    /// does not auto-produce batches, returns 503 on submissions.
+    Follower,
+}

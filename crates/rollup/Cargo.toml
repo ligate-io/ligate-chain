@@ -70,6 +70,8 @@ ed25519-dalek   = { workspace = true }
 serde_json      = { workspace = true }
 sov-test-utils  = { workspace = true }
 tempfile        = { workspace = true }
+tower           = { version = "0.5", features = ["util"] }
+http-body-util  = "0.1"
 # Re-list ligate-stf with the `test-utils` feature so the e2e smoke
 # tests get the `MinimalGenesis` impl on the production runtime that
 # `TestRunner` requires. Cargo unions this with the [dependencies]

@@ -105,15 +105,26 @@ enum SupportedDaLayer {
 }
 
 /// Role this node operates as. See `Args::mode` for the operator-
-/// facing semantics.
+/// facing semantics. Mirrors [`ligate_rollup::NodeRole`] but with
+/// `clap::ValueEnum` derived for CLI parsing; the lib's variant
+/// stays clap-free so the library has no clap dep.
 #[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum NodeRole {
     /// Normal full node: produces batches, posts to DA, accepts
     /// submissions on `/v1/sequencer/txs`.
     Sequencer,
     /// Read-only follower: syncs STF from DA, serves read endpoints,
-    /// does not auto-produce batches.
+    /// does not auto-produce batches, returns 503 on submissions.
     Follower,
+}
+
+impl From<NodeRole> for ligate_rollup::NodeRole {
+    fn from(role: NodeRole) -> Self {
+        match role {
+            NodeRole::Sequencer => ligate_rollup::NodeRole::Sequencer,
+            NodeRole::Follower => ligate_rollup::NodeRole::Follower,
+        }
+    }
 }
 
 impl SupportedDaLayer {
@@ -181,9 +192,9 @@ async fn run() -> anyhow::Result<()> {
         tracing::info!(
             "ligate-node booting in FOLLOWER mode: this node will sync the STF \
              from DA but will NOT produce batches. Submissions to this node's \
-             /v1/sequencer/txs endpoint do not propagate to the chain. Point \
+             /v1/sequencer/txs endpoint return 503 Service Unavailable. Point \
              clients at the upstream sequencer (e.g. https://rpc.ligate.io) for \
-             transaction submission. Tracking: #243."
+             transaction submission."
         );
     }
 
@@ -272,7 +283,7 @@ async fn run_with_mock(
         metrics::DEFAULT_STATE_DB_SIZE_POLL_INTERVAL,
     );
 
-    let rollup = MockLigateRollup::<Native>::new(chain.chain_id)
+    let rollup = MockLigateRollup::<Native>::new_with_role(chain.chain_id, mode.into())
         .create_new_rollup(
             genesis_paths,
             rollup_config,
@@ -321,7 +332,7 @@ async fn run_with_celestia(
         metrics::DEFAULT_STATE_DB_SIZE_POLL_INTERVAL,
     );
 
-    let rollup = CelestiaLigateRollup::<Native>::new(chain.chain_id)
+    let rollup = CelestiaLigateRollup::<Native>::new_with_role(chain.chain_id, mode.into())
         .create_new_rollup(
             genesis_paths,
             rollup_config,
