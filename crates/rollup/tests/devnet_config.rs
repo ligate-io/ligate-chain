@@ -126,3 +126,25 @@ fn devnet_1_genesis_jsons_load_and_pass_cross_module_validation() {
             panic!("devnet-1/genesis/ failed to load + validate: {e:?}");
         });
 }
+
+#[test]
+fn devnet_1_does_not_ship_a_rollup_toml() {
+    // Devnet-1 is Celestia-only by design (`devnet-1/README.md`):
+    // MockDA only exists in `devnet/` for local smoke testing. If
+    // someone copy-pastes `devnet/rollup.toml` into `devnet-1/` by
+    // mistake (a plausible cargo-culting accident), operators booting
+    // with `--rollup-config-path devnet-1/rollup.toml` would silently
+    // get a MockDA flavour instead of Celestia and never publish to
+    // Mocha. Catch the file-existence drift here.
+    //
+    // Closes #190 (the public-devnet config drift coverage; the
+    // celestia.toml + genesis tests above pin the chain_id and module
+    // shapes; this one pins the file inventory).
+    let stray = devnet_1_dir().join("rollup.toml");
+    assert!(
+        !stray.exists(),
+        "devnet-1/ is Celestia-only by design — rollup.toml should not exist; \
+         see devnet-1/README.md. Found: {}",
+        stray.display(),
+    );
+}
