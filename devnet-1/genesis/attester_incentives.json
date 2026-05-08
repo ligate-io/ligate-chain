@@ -1,10 +1,19 @@
 {
-  "minimum_attester_bond": [1000, 1000],
-  "minimum_challenger_bond": [1000, 1000],
   "initial_attesters": [
-    ["lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt", "1000000000000"]
+    [
+      "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8",
+      "1000000000000"
+    ]
   ],
-  "rollup_finality_period": 5,
+  "light_client_finalized_height": 0,
   "maximum_attested_height": 0,
-  "light_client_finalized_height": 0
+  "minimum_attester_bond": [
+    1000,
+    1000
+  ],
+  "minimum_challenger_bond": [
+    1000,
+    1000
+  ],
+  "rollup_finality_period": 5
 }
