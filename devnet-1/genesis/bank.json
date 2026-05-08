@@ -1,15 +1,24 @@
 {
   "gas_token_config": {
-    "token_name": "LGT",
-    "token_decimals": 9,
     "address_and_balances": [
-      ["lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt", "100000000000000000"],
-      ["lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7", "10000000000000000"],
-      ["lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx", "10000000000000000"]
+      [
+        "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8",
+        "100000000000000000"
+      ],
+      [
+        "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544",
+        "10000000000000000"
+      ],
+      [
+        "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz",
+        "10000000000000000"
+      ]
     ],
     "admins": [
-      "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
-    ]
+      "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8"
+    ],
+    "token_decimals": 9,
+    "token_name": "LGT"
   },
   "tokens": []
 }

@@ -1,10 +1,10 @@
 {
-  "treasury": "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt",
-  "lgt_token_id": "token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2xxx3vs0y07u7",
   "attestation_fee": "100000",
-  "schema_registration_fee": "100000000",
   "attestor_set_fee": "50000000",
   "initial_attestor_sets": [],
   "initial_schemas": [],
-  "max_builder_bps": 5000
+  "lgt_token_id": "token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2xxx3vs0y07u7",
+  "max_builder_bps": 5000,
+  "schema_registration_fee": "100000000",
+  "treasury": "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8"
 }

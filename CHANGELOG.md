@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- `devnet-1/genesis/` substituted with operator-controlled keys for `ligate-devnet-1`. The placeholder bootstrap address (`lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt`, derivable from a public seed) is replaced with the real operator key (`lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8`) across all 6 module configs that reference it (sequencer registry, attester / prover / operator incentives, bank treasury + admins, attestation treasury). Two demo wallets (`lig19tzz...`, `lig1e0lp...`) ship pre-funded with 10M LGT each for partner-integration testing. v0 uses the single-operator-key model: one address fills bootstrap + sequencer + treasury + reward; security-separated treasury / sequencer keys land at testnet (#231 follow-up). Private keys live offline at `~/.ligate-keys/devnet-1/<role>.key` (chmod 600, never in repo). The `chain_hash` is now finalised for `ligate-devnet-1` — anything signed against the prior placeholder hash will fail signature verification on the public network. Closes [#231](https://github.com/ligate-io/ligate-chain/issues/231).
+
 ### Added
 
 - `crates/rollup/tests/devnet_config.rs` gains `devnet_1_does_not_ship_a_rollup_toml` — a one-line file-inventory guard for the Celestia-only-by-design `devnet-1/` directory (`devnet-1/README.md`). If a future PR copy-pastes `devnet/rollup.toml` into `devnet-1/` by mistake, the test breaks loudly at PR time rather than silently letting an operator boot the public-devnet config in MockDA mode. Companion to the existing chain-id pin in `devnet_1_celestia_toml_parses_against_celestia_blueprint_types`. Closes [#190](https://github.com/ligate-io/ligate-chain/issues/190) (the public-devnet config drift coverage).
