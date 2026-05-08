@@ -14,8 +14,8 @@
 //! why their tx didn't appear on chain.
 //!
 //! Returning `503 Service Unavailable` with a clear "this node is a
-//! follower; submit to <upstream>" message gives the user an obvious
-//! signal to redirect their submission.
+//! follower; submit to the upstream sequencer" message gives the user
+//! an obvious signal to redirect their submission.
 //!
 //! ## What it does
 //!
