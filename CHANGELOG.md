@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Added
+
+- `crates/bootstrap-cli/examples/disc_probe.rs` — one-shot fixture probe that prints byte-exact `borsh(RuntimeCall::Attestation(...))` output for `RegisterAttestorSet` / `RegisterSchema` / `SubmitAttestation`, plus the deterministic `AttestorSet::derive_id` / `Schema::derive_id` outputs for known-input fixtures. Used as the source-of-truth for the `@ligate/sdk` TS-side wire-format pinning (`ligate-js/test/attestation.test.ts`); regenerate fixtures after any Sovereign SDK pin bump that touches runtime composition or `attestation::CallMessage` shape. `cargo run --example disc_probe -p ligate-bootstrap-cli`. No CI changes — this is a developer tool, not a runtime gate.
+
 ### Changed
 
 - `docs/development/public-devnet-deploy.md` gains two new operator-flow steps: **Step 4.5** (run the canonical-schema ceremony from PR #249's `ligate-bootstrap` binary; the chain ships with `initial_attestor_sets: []` / `initial_schemas: []` so first-party schemas register post-genesis via on-chain tx) and **Step 4.7** (deploy the faucet on the same VM as `ligate-node`: install / fund-from-operator / systemd unit / env-var setup / smoke test). Both blocks lift the canonical commands operators run on Day 1, so the runbook is now end-to-end actionable from "GCP VM exists" to "partners can drip and use the chain". No code changes; documentation only.
