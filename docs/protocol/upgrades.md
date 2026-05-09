@@ -249,16 +249,28 @@ For the full v0 attacker model and every mitigation across attestation, sequence
 | Change `attestation_fee` type (`Amount` → `u128` say) | Hard | Borsh snapshot fires | Coordinated reset |
 | Change attestor signature scheme | Hard | Every existing signature breaks | Coordinated reset, schema version bump |
 | Bump Sovereign SDK rev | Soft if `CHAIN_HASH` unchanged, hard otherwise | `CHAIN_HASH` derivation; review the SDK changelog | Test build, check the hash, then either soft-release or coordinated-reset |
+| Bump fork rev (`ligate-io/sovereign-sdk`) | Soft if `CHAIN_HASH` unchanged, hard otherwise | Same `CHAIN_HASH` guard as upstream rev bumps | Update the `[patch]` block's `rev = ...` in `Cargo.toml`; rebuild; check the hash; localnet smoke (submit a tx, confirm `ltx1...` round-trip). See `CONTRIBUTING.ligate.md` on the fork. |
 | Switch Celestia testnet (mocha → mocha-2) | Hard (operationally) | `celestia.toml` change | Coordinated reset (every operator re-syncs from the new namespace) |
 | Swap DA layer (Celestia → Avail / EigenDA / etc.) | Hard | New `--da-layer` arm; `CHAIN_HASH` may shift if guest crate changes | Coordinated reset; see [`da-layers.md`](da-layers.md) for the playbook |
 
 ---
+
+## Sovereign SDK fork
+
+Ligate Chain consumes the Sovereign SDK via a fork at [`ligate-io/sovereign-sdk`](https://github.com/ligate-io/sovereign-sdk), branch `ligate-mainline`. The fork carries:
+
+- Two upstream-PR-pending features (`Sequencer::pending_tx_count()`, typed `BlobSubmissionError`) that we use today and drop on rebase when Sovereign merges
+- Bech32m-encoded hash types (`LtxHash` / `LblkHash` / `LsrHash`) so partner-facing tx hashes display as `ltx1...` rather than `0x...`. Permanent for the fork's lifetime unless the upstream `HashEncoding` extension proposal lands ([`Sovereign-Labs/sovereign-sdk#2837`](https://github.com/Sovereign-Labs/sovereign-sdk/issues/2837))
+
+The fork's branch model + rebase discipline lives in `CONTRIBUTING.ligate.md` on the fork itself. The chain's `Cargo.toml` has a `[patch."<sov-url>"]` block pinning the consumed `rev` so the chain rebuilds reproducibly. Bump that `rev` in a deliberate PR; never let it move under the chain.
 
 ## Related
 
 - [Protocol spec, "Chain id"](attestation-v0.md#chain-id) — the locked four-row identifier ladder
 - [`crates/stf/build.rs`](../../crates/stf/build.rs) — `CHAIN_HASH` derivation
 - [`crates/stf/src/runtime_capabilities.rs`](../../crates/stf/src/runtime_capabilities.rs) — where `CHAIN_HASH` plugs into the runtime authenticator
+- [`ligate-io/sovereign-sdk`](https://github.com/ligate-io/sovereign-sdk) — our Sovereign SDK fork
+- [`Sovereign-Labs/sovereign-sdk#2837`](https://github.com/Sovereign-Labs/sovereign-sdk/issues/2837) — upstream proposal to retire the bech32m-encoding patch
 - [`tests/borsh_snapshot.rs`](../../crates/modules/attestation/tests/borsh_snapshot.rs) — the wire-format guard
 - [`audit.toml`](../../audit.toml) + [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — `cargo audit` gate
 - [`da-layers.md`](da-layers.md) — DA-agnostic-by-construction architecture and adapter playbook
