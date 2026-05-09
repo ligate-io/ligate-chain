@@ -361,8 +361,9 @@ allow-git = [
   # transitive would still resolve there.
   "https://github.com/Sovereign-Labs/sovereign-sdk.git",
   # Our fork of the SDK on `ligate-mainline`. Carries the bech32m
-  # tx hash types and the operator-facing fork patches. Workflow +
-  # patch list in CONTRIBUTING.ligate.md on the fork.
+  # hash types, `pending_tx_count`, typed `BlobSubmissionError`, and
+  # the operator-facing fork patches. Workflow + patch list in
+  # CONTRIBUTING.ligate.md on the fork.
   "https://github.com/ligate-io/sovereign-sdk.git",
   # SDK's RocksDB wrapper, pulled by sov-db / sov-blob-sender. Lives
   # in a separate repo from the main SDK; both are pinned by rev.
