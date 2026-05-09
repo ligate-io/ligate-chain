@@ -159,10 +159,9 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         // MockZkvm-default. Phase A.4 swaps the outer to a real commitment.
         use sov_rollup_interface::zk::aggregated_proof::CodeCommitmentHash;
         use sov_rollup_interface::zk::CodeCommitmentTrait;
-        let inner =
-            <Risc0MethodId as CodeCommitmentTrait>::from_hash(
-                CodeCommitmentHash::from_u32_array(ligate_prover_risc0::ROLLUP_ID),
-            );
+        let inner = <Risc0MethodId as CodeCommitmentTrait>::from_hash(
+            CodeCommitmentHash::from_u32_array(ligate_prover_risc0::ROLLUP_ID),
+        );
         Ok((inner, MockCodeCommitment::default()))
     }
 
