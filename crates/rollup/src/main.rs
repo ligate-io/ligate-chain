@@ -288,9 +288,10 @@ async fn run_with_mock(
             genesis_paths,
             rollup_config,
             RollupProverConfig::Disabled,
-            None, // start_at_rollup_height
-            None, // stop_at_rollup_height
-            None, // exec_config (we use `()`)
+            None,  // start_at_rollup_height
+            None,  // stop_at_rollup_height
+            None,  // exec_config (we use `()`)
+            false, // start_fresh_outer_proof_on_resync
         )
         .await
         .context("Failed to initialize Ligate rollup on mock DA")?;
@@ -337,9 +338,10 @@ async fn run_with_celestia(
             genesis_paths,
             rollup_config,
             RollupProverConfig::Disabled,
-            None,
-            None,
-            None,
+            None,  // start_at_rollup_height
+            None,  // stop_at_rollup_height
+            None,  // exec_config
+            false, // start_fresh_outer_proof_on_resync
         )
         .await
         .context("Failed to initialize Ligate rollup on Celestia DA")?;
