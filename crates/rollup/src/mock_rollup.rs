@@ -31,7 +31,7 @@ use sov_mock_da::MockDaSpec;
 use sov_mock_zkvm::{MockCodeCommitment, MockZkvm, MockZkvmCryptoSpec, MockZkvmHost};
 use sov_modules_api::configurable_spec::ConfigurableSpec;
 use sov_modules_api::execution_mode::Native;
-use sov_modules_api::{CryptoSpec, NodeEndpoints, Spec, ZkVerifier};
+use sov_modules_api::{CryptoSpec, NodeEndpoints, Spec};
 use sov_modules_rollup_blueprint::pluggable_traits::PluggableSpec;
 use sov_modules_rollup_blueprint::proof_sender::SovApiProofSender;
 use sov_modules_rollup_blueprint::{FullNodeBlueprint, RollupBlueprint, SequencerCreationReceipt};
@@ -41,7 +41,7 @@ use sov_rollup_interface::node::SyncStatus;
 use sov_sequencer::ProofBlobSender;
 use sov_state::nomt::prover_storage::NomtProverStorage;
 use sov_state::{DefaultStorageSpec, Storage};
-use sov_stf_runner::processes::{ParallelProverService, ProverService, RollupProverConfig};
+use sov_stf_runner::processes::{ParallelProverService, RollupProverConfig};
 use sov_stf_runner::RollupConfig;
 
 /// Marker type for the mock-DA / mock-zkVM rollup.
@@ -145,13 +145,13 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
 
     type ProofSender = SovApiProofSender<Self::Spec>;
 
-    fn create_outer_code_commitment(
-        &self,
-    ) -> <<Self::ProverService as ProverService>::Verifier as ZkVerifier>::CodeCommitment {
-        // MockZkvm accepts any commitment as valid; the default is
-        // fine. A real prover swaps this for the production circuit
-        // commitment in Phase A.4 (#xx).
-        MockCodeCommitment::default()
+    fn compute_code_commitments() -> anyhow::Result<(
+        sov_modules_api::CodeCommitmentFor<<Self::Spec as Spec>::InnerZkvm>,
+        sov_modules_api::CodeCommitmentFor<<Self::Spec as Spec>::OuterZkvm>,
+    )> {
+        // MockZkvm accepts any commitment as valid; defaults are fine
+        // for both inner (state-transition) and outer (aggregation) circuits.
+        Ok((MockCodeCommitment::default(), MockCodeCommitment::default()))
     }
 
     async fn create_endpoints(
@@ -256,22 +256,23 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         _prover_config: RollupProverConfig,
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
         _da_service: &Self::DaService,
-    ) -> Self::ProverService {
-        // Even when proving is disabled at the operator level
-        // (`SOV_PROVER_MODE` unset), the blueprint still needs a
-        // `ProverService` instance. `MockZkvmHost::new_non_blocking`
-        // produces one that accepts every proof — fine for a
-        // mock-zkVM devnet.
+        _ledger_db: &LedgerDb,
+        _start_fresh_outer_proof_on_resync: bool,
+    ) -> (Self::ProverService, Option<sov_rollup_interface::common::SlotNumber>) {
+        // Mock-zkVM devnet: blueprint always needs a ProverService instance
+        // even when proving is disabled (`SOV_PROVER_MODE` unset).
         let inner_vm = MockZkvmHost::new_non_blocking();
         let outer_vm = MockZkvmHost::new_non_blocking();
         let da_verifier = Default::default();
 
-        ParallelProverService::new_with_default_workers(
+        let prover = ParallelProverService::new_with_default_workers(
             inner_vm,
             outer_vm,
             da_verifier,
             rollup_config.proof_manager.prover_address,
-        )
+            5,
+        );
+        (prover, None)
     }
 
     fn create_storage_manager(

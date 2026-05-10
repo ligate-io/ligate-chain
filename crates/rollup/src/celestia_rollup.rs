@@ -26,19 +26,19 @@ use sov_mock_zkvm::{MockCodeCommitment, MockZkvm, MockZkvmHost};
 use sov_modules_api::configurable_spec::ConfigurableSpec;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::macros::config_value;
-use sov_modules_api::{CryptoSpec, NodeEndpoints, Spec, ZkVerifier};
+use sov_modules_api::{CryptoSpec, NodeEndpoints, Spec};
 use sov_modules_rollup_blueprint::pluggable_traits::PluggableSpec;
 use sov_modules_rollup_blueprint::proof_sender::SovApiProofSender;
 use sov_modules_rollup_blueprint::{FullNodeBlueprint, RollupBlueprint, SequencerCreationReceipt};
 use sov_risc0_adapter::host::Risc0Host;
-use sov_risc0_adapter::{Risc0, Risc0CryptoSpec};
+use sov_risc0_adapter::{Risc0, Risc0CryptoSpec, Risc0MethodId};
 use sov_rollup_full_node_interface::StateUpdateReceiver;
 use sov_rollup_interface::da::{DaSpec, DaVerifier};
 use sov_rollup_interface::node::SyncStatus;
 use sov_sequencer::ProofBlobSender;
 use sov_state::nomt::prover_storage::NomtProverStorage;
 use sov_state::{DefaultStorageSpec, Storage};
-use sov_stf_runner::processes::{ParallelProverService, ProverService, RollupProverConfig};
+use sov_stf_runner::processes::{ParallelProverService, RollupProverConfig};
 use sov_stf_runner::RollupConfig;
 
 /// Marker type for the Celestia / mock-zkVM rollup.
@@ -150,12 +150,19 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
 
     type ProofSender = SovApiProofSender<Self::Spec>;
 
-    fn create_outer_code_commitment(
-        &self,
-    ) -> <<Self::ProverService as ProverService>::Verifier as ZkVerifier>::CodeCommitment {
-        // MockZkvm accepts any commitment. A real prover swaps this
-        // for the production circuit commitment in Phase A.4.
-        MockCodeCommitment::default()
+    fn compute_code_commitments() -> anyhow::Result<(
+        sov_modules_api::CodeCommitmentFor<<Self::Spec as Spec>::InnerZkvm>,
+        sov_modules_api::CodeCommitmentFor<<Self::Spec as Spec>::OuterZkvm>,
+    )> {
+        // Inner Risc0 commitment derived from `ROLLUP_ID` ([u32; 8] from
+        // risc0-build) via the chain's `CodeCommitmentTrait`. Outer stays
+        // MockZkvm-default. Phase A.4 swaps the outer to a real commitment.
+        use sov_rollup_interface::zk::aggregated_proof::CodeCommitmentHash;
+        use sov_rollup_interface::zk::CodeCommitmentTrait;
+        let inner = <Risc0MethodId as CodeCommitmentTrait>::from_hash(
+            CodeCommitmentHash::from_u32_array(ligate_prover_risc0::ROLLUP_ID),
+        );
+        Ok((inner, MockCodeCommitment::default()))
     }
 
     async fn create_endpoints(
@@ -242,15 +249,17 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         _prover_config: RollupProverConfig,
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
         _da_service: &Self::DaService,
-    ) -> Self::ProverService {
+        _ledger_db: &LedgerDb,
+        _start_fresh_outer_proof_on_resync: bool,
+    ) -> (Self::ProverService, Option<sov_rollup_interface::common::SlotNumber>) {
         // Real Risc0 inner host pinned to our guest ELF; outer
-        // stays Mock (matches the SDK demo's pattern — outer
+        // stays Mock (matches the SDK demo's pattern; outer
         // aggregation can stay mock until cross-chain proof
         // aggregation matters). DA verification is fully real.
         //
         // Under `SKIP_GUEST_BUILD=1` the ELF is empty and the
-        // prover host won't be able to generate real proofs —
-        // fine for `cargo check` / CI, but a node started this
+        // prover host won't be able to generate real proofs.
+        // Fine for `cargo check` / CI, but a node started this
         // way must have `RollupProverConfig::Disabled`.
         let inner_vm = Risc0Host::new(ligate_prover_risc0::ROLLUP_ELF);
         let outer_vm = MockZkvmHost::new_non_blocking();
@@ -259,12 +268,14 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
             rollup_proof_namespace: ROLLUP_PROOF_NAMESPACE,
         });
 
-        ParallelProverService::new_with_default_workers(
+        let prover = ParallelProverService::new_with_default_workers(
             inner_vm,
             outer_vm,
             da_verifier,
             rollup_config.proof_manager.prover_address,
-        )
+            5,
+        );
+        (prover, None)
     }
 
     fn create_storage_manager(

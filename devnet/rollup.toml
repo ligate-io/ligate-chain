@@ -77,11 +77,20 @@ aggregated_proof_block_jump = 1
 prover_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 max_number_of_transitions_in_db = 100
 max_number_of_transitions_in_memory = 30
+# Added by SDK rev `f6cd64749` (Sovereign-Labs/sovereign-sdk#2832): bound
+# in-memory aggregated-proof retention. 5 mirrors the SDK demo.
+max_number_of_aggregated_proofs_in_memory = 5
 
 [sequencer]
 blob_processing_timeout_secs = 3000
 max_batch_size_bytes = 1048576
-max_concurrent_blobs = 128
+# Renamed from `max_concurrent_blobs` per SDK rev `f6cd64749`
+# (Sovereign-Labs/sovereign-sdk#2805): only batch blobs count against
+# this cap; proof blobs go through `max_concurrent_proof_blobs`.
+max_concurrent_batch_blobs = 128
+# Added by SDK rev `f6cd64749` (Sovereign-Labs/sovereign-sdk#2808): cap
+# proof blobs in flight on the DA layer; rollup shuts down on saturation.
+max_concurrent_proof_blobs = 1024
 max_allowed_node_distance_behind = 10
 # The devnet sequencer is the same Anvil dev actor that owns the
 # treasury / attester / prover roles. Single-actor genesis simplifies
