@@ -7,10 +7,10 @@
 //! Catches:
 //!
 //! 1. Router wiring + `State` extractor for `InfoState`.
-//! 2. JSON shape: `{"chain_id":"...","chain_hash":"...","version":"..."}`.
-//! 3. `chain_hash` always renders as exactly 64 hex chars (no `0x`
-//!    prefix, lowercase, padded). A regression here would break
-//!    wallets and explorers reading the value.
+//! 2. JSON shape: `{"chain_id":"...","chain_hash":"lsch1...","version":"..."}`.
+//! 3. `chain_hash` always renders as bech32m with HRP `lsch`, so a
+//!    regression in the encoder breaks wallets / explorers reading
+//!    the value. Decode round-trip pins the bytes.
 //! 4. The `version` field reflects the binary's `CARGO_PKG_VERSION`.
 //!
 //! Tracking issue: #181.
@@ -19,6 +19,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use ligate_rollup::info::{self, RollupInfo};
+use sov_rollup_interface::ChainHash;
 use tokio::net::TcpListener;
 
 async fn spawn_info_server(chain_id: &'static str, chain_hash: [u8; 32]) -> SocketAddr {
@@ -51,20 +52,25 @@ async fn info_returns_configured_chain_id_and_hash() {
 
     let body: RollupInfo = resp.json().await.expect("response is JSON of expected shape");
     assert_eq!(body.chain_id, "ligate-localnet");
-    assert_eq!(
-        body.chain_hash, "1212121212121212121212121212121212121212121212121212121212121212",
-        "chain_hash hex must be lowercase, 64 chars, no 0x prefix"
+    assert!(
+        body.chain_hash.starts_with("lsch1"),
+        "chain_hash must be bech32m with HRP `lsch`, got {}",
+        body.chain_hash
     );
+    let parsed: ChainHash = body.chain_hash.parse().expect("bech32m parses");
+    assert_eq!(parsed.0, chain_hash, "chain_hash decodes back to the configured bytes");
     assert_eq!(body.version, env!("CARGO_PKG_VERSION"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn info_renders_zero_chain_hash_as_64_zeros() {
+async fn info_round_trips_zero_chain_hash() {
     // The placeholder CHAIN_HASH ([0; 32]) only fires before
     // `build.rs` has run; production never serves it. Snapshot the
-    // hex shape anyway so a regression in the encoder (e.g. dropping
-    // leading zeros) is caught even on the placeholder.
-    let addr = spawn_info_server("ligate-localnet", [0u8; 32]).await;
+    // bech32m shape anyway so a regression in the encoder (e.g.
+    // changing HRP, dropping leading bytes) is caught even on the
+    // placeholder.
+    let zeros = [0u8; 32];
+    let addr = spawn_info_server("ligate-localnet", zeros).await;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -80,8 +86,9 @@ async fn info_renders_zero_chain_hash_as_64_zeros() {
         .await
         .expect("body parses");
 
-    assert_eq!(body.chain_hash.len(), 64);
-    assert!(body.chain_hash.chars().all(|c| c == '0'));
+    assert!(body.chain_hash.starts_with("lsch1"), "got {}", body.chain_hash);
+    let parsed: ChainHash = body.chain_hash.parse().expect("bech32m parses");
+    assert_eq!(parsed.0, zeros);
 }
 
 #[tokio::test(flavor = "multi_thread")]
