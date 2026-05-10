@@ -1,14 +1,18 @@
 # Grafana dashboard for `ligate-node`
 
-Drop-in Grafana dashboard for the Phase 1 metrics shipped on
-`ligate-node:9100/metrics`. Three rows, eight panels:
+Drop-in Grafana dashboard for the Phase 1 + Phase 2 metrics shipped
+on `ligate-node:9100/metrics`. Five rows, fifteen panels:
 
 - **Chain activity** — schemas registered, attestor sets registered,
   attestation submission rate.
-- **Node health** — block height, state-DB size, RPC request rate by
-  endpoint.
-- **Errors / rejections** — top-10 rejection reasons over the last
-  hour, RPC p95 latency by endpoint.
+- **Node health** — block height, mempool depth, state-DB size, RPC
+  request rate by endpoint.
+- **DA layer** — DA submission failures by reason, DA finalization
+  latency p50 / p95 / p99 (Mocha-aware buckets).
+- **Errors / rejections** — top-10 attestation rejection reasons over
+  the last hour, RPC p95 latency by endpoint.
+- **Process / observability** — process CPU (cores), RSS, open FDs,
+  metrics-dropped rate (broadcast lag).
 
 Tracking issue: [#165](https://github.com/ligate-io/ligate-chain/issues/165).
 
@@ -69,10 +73,17 @@ recreate or fork them without re-importing.
 | Attestor sets registered | `ligate_attestor_sets_registered_total` |
 | Attestations submitted (rate) | `rate(ligate_attestations_submitted_total[5m])` |
 | Block height | `ligate_block_height` |
+| Mempool depth | `ligate_mempool_depth` |
 | State DB size | `ligate_state_db_size_bytes` |
 | RPC requests / sec | `sum by (endpoint) (rate(ligate_rpc_requests_total[5m]))` |
+| DA submission failures (rate, by reason) | `sum by (reason) (rate(ligate_da_submission_failures_total[5m]))` |
+| DA finalization latency p50 / p95 / p99 | `histogram_quantile(0.99, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket[5m])))` |
 | Rejections by reason (top 10) | `topk(10, sum by (reason) (rate(ligate_attestations_rejected_total[1h])))` |
 | RPC p95 latency | `histogram_quantile(0.95, sum by (le, endpoint) (rate(ligate_rpc_request_duration_seconds_bucket[5m])))` |
+| Process CPU (cores) | `rate(process_cpu_seconds_total[5m])` |
+| Process RSS | `process_resident_memory_bytes` |
+| Process open FDs | `process_open_fds` |
+| Metrics dropped (broadcast lagged) | `rate(ligate_metrics_dropped_total[5m])` |
 
 ## Versioning
 
@@ -80,10 +91,12 @@ The dashboard is checked into the repo at `ops/grafana/ligate-node.json`
 with `schemaVersion: 38` (Grafana 10.0+). Future schema bumps update
 the JSON in-place; operators re-import to pick up changes.
 
-When Phase 2 metrics ([#164](https://github.com/ligate-io/ligate-chain/issues/164))
-land — DA submission latency, sequencer-specific signals, RPC error
-histograms — this dashboard grows a fourth row. See [#165](https://github.com/ligate-io/ligate-chain/issues/165)
-for the layout discussion.
+Phase 2 metrics ([#164](https://github.com/ligate-io/ligate-chain/issues/164))
+landed in #281 (mempool, process collector, CHAIN_HASH pin) and #282
+(DA failures, DA finalization latency, broadcast-lag counter). The
+dashboard's "DA layer" and "Process / observability" rows wrap them.
+Future panels for sequencer signals not yet exposed (validator stalls,
+state-trie depth) will land via follow-up issues.
 
 ## Deploying a public Grafana
 
