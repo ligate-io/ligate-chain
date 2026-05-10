@@ -182,7 +182,15 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
             ledger_db.clone(),
             crate::metrics::DEFAULT_BLOCK_HEIGHT_POLL_INTERVAL,
         );
+        // Phase 6.1 of #110: mempool depth via the SDK fork's
+        // `MempoolMetrics` exposure on the receipt.
+        crate::metrics::spawn_mempool_depth_task(
+            sequencer.mempool_metrics.clone(),
+            crate::metrics::DEFAULT_MEMPOOL_DEPTH_POLL_INTERVAL,
+        );
         crate::metrics::init_rpc_metrics();
+        // Process-level metrics (CPU / RSS / FDs).
+        crate::metrics::register_process_collector();
 
         let sync_status_for_health = sync_status_receiver.clone();
 

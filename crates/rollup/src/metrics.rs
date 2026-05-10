@@ -38,6 +38,8 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::Router;
+#[cfg(target_os = "linux")]
+use prometheus::process_collector::ProcessCollector;
 use prometheus::{
     register_histogram_vec, register_int_counter_vec, register_int_gauge, Encoder, HistogramVec,
     IntCounterVec, IntGauge, TextEncoder,
@@ -45,6 +47,8 @@ use prometheus::{
 use sov_db::ledger_db::LedgerDb;
 use sov_rollup_interface::common::SlotNumber;
 use sov_rollup_interface::node::ledger_api::LedgerStateProvider;
+use sov_sequencer::MempoolMetrics;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{debug, info, warn};
 
@@ -365,4 +369,97 @@ pub fn spawn_block_height_task(ledger_db: LedgerDb, interval: Duration) {
             }
         }
     });
+}
+
+// ============================================================================
+// Mempool depth gauge (#110 Phase 2, was blocked on SDK upstream)
+// ============================================================================
+
+/// Default polling interval for the mempool-depth sampler.
+///
+/// Slot times are typically 1s on devnet. Polling every 1s keeps the
+/// gauge fresh enough that operators see in-flight tx queueing during
+/// load spikes without spamming the (cheap) `pending_tx_count` call.
+pub const DEFAULT_MEMPOOL_DEPTH_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+/// `ligate_mempool_depth` gauge. Number of transactions currently
+/// sitting in the sequencer mempool, awaiting inclusion in a batch.
+fn mempool_depth() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_mempool_depth",
+            "Number of transactions currently sitting in the sequencer mempool, \
+             awaiting inclusion in a batch."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+/// Touch the gauge so `HELP` and `TYPE` show up in `/metrics` from
+/// the very first scrape, before the first poll completes.
+pub fn init_mempool_depth() {
+    let _ = mempool_depth();
+}
+
+/// Set the mempool-depth gauge to a concrete value. Pulled out of
+/// the polling loop so tests can drive a single sample without a
+/// real `MempoolMetrics` provider.
+pub fn sample_mempool_depth(count: usize) {
+    init_mempool_depth();
+    mempool_depth().set(count as i64);
+}
+
+/// Spawn a tokio task that polls `mempool_metrics.pending_tx_count()`
+/// every `interval` and updates the `ligate_mempool_depth` gauge.
+/// Runs until the runtime drops.
+///
+/// `mempool_metrics` is the `Arc<dyn MempoolMetrics>` exposed by
+/// `SequencerCreationReceipt::mempool_metrics` (added to the SDK fork
+/// in `ligate-mainline`'s `Expose MempoolMetrics +
+/// blob_status_channel` patch). Cloneable cheaply (Arc bump).
+pub fn spawn_mempool_depth_task(mempool_metrics: Arc<dyn MempoolMetrics>, interval: Duration) {
+    init_mempool_depth();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            let count = mempool_metrics.pending_tx_count().await;
+            sample_mempool_depth(count);
+        }
+    });
+}
+
+// ============================================================================
+// Process metrics (CPU, memory, FDs) via prometheus's `process` feature
+// ============================================================================
+
+/// Register the `process_collector` so `process_cpu_seconds_total`,
+/// `process_resident_memory_bytes`, `process_open_fds`,
+/// `process_max_fds`, and `process_start_time_seconds` show up on
+/// every `/metrics` scrape. Idempotent: subsequent calls are no-ops.
+///
+/// Uses the global default registry, same surface as every other
+/// gauge / counter in this module. Operators get OS-level health for
+/// free without writing module-side bookkeeping.
+///
+/// Linux-only: the upstream `prometheus` crate gates
+/// `process_collector` behind `target_os = "linux"` because it reads
+/// `/proc/self/*`. macOS / Windows builds compile cleanly but skip
+/// registration; production deploys are Linux per
+/// `docs/development/public-devnet-deploy.md`.
+pub fn register_process_collector() {
+    #[cfg(target_os = "linux")]
+    {
+        static REGISTERED: OnceLock<()> = OnceLock::new();
+        REGISTERED.get_or_init(|| {
+            let collector = ProcessCollector::for_self();
+            if let Err(e) = prometheus::default_registry().register(Box::new(collector)) {
+                warn!(error = %e, "failed to register process_collector (already registered?)");
+            }
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    debug!("process_collector skipped (non-Linux build)");
 }
