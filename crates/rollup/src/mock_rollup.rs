@@ -172,9 +172,22 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
             crate::metrics::DEFAULT_BLOCK_HEIGHT_POLL_INTERVAL,
         );
 
+        // Phase 6.1 of #110: spawn the mempool-depth polling task.
+        // `mempool_metrics` is exposed on `SequencerCreationReceipt`
+        // by our `ligate-mainline` SDK fork patch (#164 was blocked on
+        // upstream Sovereign exposing this; our fork unblocks it).
+        crate::metrics::spawn_mempool_depth_task(
+            sequencer.mempool_metrics.clone(),
+            crate::metrics::DEFAULT_MEMPOOL_DEPTH_POLL_INTERVAL,
+        );
+
         // Pre-touch the RPC counter + histogram so their HELP/TYPE
         // lines appear from the first /metrics scrape.
         crate::metrics::init_rpc_metrics();
+
+        // Process-level metrics (CPU / RSS / FDs) via prometheus's
+        // `process` feature. Idempotent registration.
+        crate::metrics::register_process_collector();
 
         // Clone sync_status_receiver before passing it into the SDK
         // helper. The clone is a watch::Receiver alias to the same
