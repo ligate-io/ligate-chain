@@ -4294,6 +4294,7 @@ dependencies = [
  "serde_json",
  "sov-address",
  "sov-bank",
+ "sov-blob-sender",
  "sov-celestia-adapter",
  "sov-db",
  "sov-kernels",

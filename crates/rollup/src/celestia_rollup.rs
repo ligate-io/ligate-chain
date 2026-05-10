@@ -188,6 +188,9 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
             sequencer.mempool_metrics.clone(),
             crate::metrics::DEFAULT_MEMPOOL_DEPTH_POLL_INTERVAL,
         );
+        // Phase 6.2 of #110: DA submission failures + finalization
+        // latency from the BlobSender's broadcast channel.
+        crate::metrics::spawn_da_metrics_task(sequencer.blob_status_channel.clone());
         crate::metrics::init_rpc_metrics();
         // Process-level metrics (CPU / RSS / FDs).
         crate::metrics::register_process_collector();
