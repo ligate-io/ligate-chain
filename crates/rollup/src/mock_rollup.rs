@@ -181,6 +181,12 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
             crate::metrics::DEFAULT_MEMPOOL_DEPTH_POLL_INTERVAL,
         );
 
+        // Phase 6.2 of #110: subscribe to the BlobSender's broadcast
+        // channel for DA submission failures (by reason) and DA
+        // finalization latency (Published -> Finalized). Channel
+        // exposure also comes from the `ligate-mainline` fork patch.
+        crate::metrics::spawn_da_metrics_task(sequencer.blob_status_channel.clone());
+
         // Pre-touch the RPC counter + histogram so their HELP/TYPE
         // lines appear from the first /metrics scrape.
         crate::metrics::init_rpc_metrics();

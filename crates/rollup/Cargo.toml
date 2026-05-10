@@ -33,6 +33,7 @@ sov-address                    = { workspace = true, features = ["evm", "native"
 sov-bank                       = { workspace = true, features = ["native"] }
 sov-db                         = { workspace = true }
 sov-kernels                    = { workspace = true, features = ["native"] }
+sov-blob-sender                = { workspace = true }
 sov-celestia-adapter           = { workspace = true, features = ["native"] }
 sov-mock-da                    = { workspace = true, features = ["native"] }
 sov-mock-zkvm                  = { workspace = true, features = ["native"] }

@@ -41,15 +41,21 @@ use axum::Router;
 #[cfg(target_os = "linux")]
 use prometheus::process_collector::ProcessCollector;
 use prometheus::{
-    register_histogram_vec, register_int_counter_vec, register_int_gauge, Encoder, HistogramVec,
-    IntCounterVec, IntGauge, TextEncoder,
+    register_histogram, register_histogram_vec, register_int_counter, register_int_counter_vec,
+    register_int_gauge, Encoder, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    TextEncoder,
 };
+use sov_blob_sender::{BlobSubmissionError, BlobSubmissionStatus};
 use sov_db::ledger_db::LedgerDb;
 use sov_rollup_interface::common::SlotNumber;
+use sov_rollup_interface::da::DaSpec;
 use sov_rollup_interface::node::ledger_api::LedgerStateProvider;
-use sov_sequencer::MempoolMetrics;
+use sov_rollup_interface::BlobHash;
+use sov_sequencer::{BlobExecutionStatus, MempoolMetrics};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
 /// Build the axum router with a single `/metrics` GET route.
@@ -462,4 +468,198 @@ pub fn register_process_collector() {
     }
     #[cfg(not(target_os = "linux"))]
     debug!("process_collector skipped (non-Linux build)");
+}
+
+// ============================================================================
+// DA submission metrics (#110 Phase 2, was blocked on SDK upstream)
+// ============================================================================
+
+/// Stable snake_case label per `BlobSubmissionError` discriminant.
+/// Used as the `reason` label on `ligate_da_submission_failures_total`.
+/// Free-form `String` payloads are intentionally NOT included so the
+/// Prometheus cardinality stays bounded by the enum's variant count.
+fn submission_error_reason(error: &BlobSubmissionError) -> &'static str {
+    match error {
+        BlobSubmissionError::Submission(_) => "submission",
+        BlobSubmissionError::PublishTimeout { .. } => "publish_timeout",
+        BlobSubmissionError::Reorg => "reorg",
+        BlobSubmissionError::FinalityCheck(_) => "finality_check",
+        BlobSubmissionError::MaxRetriesExhausted { .. } => "max_retries_exhausted",
+    }
+}
+
+/// `ligate_da_submission_failures_total{reason}` counter. One bump per
+/// `BlobSubmissionStatus::Failed` event observed on the BlobSender's
+/// broadcast channel. `reason` is a stable snake_case discriminant of
+/// the typed `BlobSubmissionError` (see `submission_error_reason`).
+fn da_submission_failures() -> &'static IntCounterVec {
+    static M: OnceLock<IntCounterVec> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter_vec!(
+            "ligate_da_submission_failures_total",
+            "Number of DA blob submission failures, labelled by typed-error discriminant.",
+            &["reason"]
+        )
+        .expect("counter vec registers once")
+    })
+}
+
+/// `ligate_da_finalization_latency_seconds` histogram. Time from
+/// `BlobSubmissionStatus::Published` (DA accepted the blob) to
+/// `BlobSubmissionStatus::Finalized` (DA finality reached) for a given
+/// blob hash. Measures the DA layer's contribution to end-to-end
+/// inclusion latency. Mocha block time is ~12s, so default Prometheus
+/// buckets (5ms-10s) under-cover the realistic range; we override with
+/// a coarser ladder.
+///
+/// MustSubmit -> Published latency (sequencer-side submission time)
+/// requires correlation by blob_hash that the early
+/// `BlobSubmissionStatus` variants don't carry. Tracking that needs
+/// an upstream change; #164's submission-latency ask is satisfied
+/// closely enough by Published -> Finalized for now.
+fn da_finalization_latency() -> &'static Histogram {
+    static M: OnceLock<Histogram> = OnceLock::new();
+    M.get_or_init(|| {
+        register_histogram!(
+            "ligate_da_finalization_latency_seconds",
+            "DA finalization latency in seconds: time from Published to Finalized for a blob.",
+            // Mocha is ~12s/block; a few-blocks finality typical.
+            // Buckets cover sub-second (caching artefacts), one-block,
+            // a few-blocks normal, deep tails (network stalls).
+            vec![0.5, 1.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0]
+        )
+        .expect("histogram registers once")
+    })
+}
+
+/// `ligate_metrics_dropped_total` counter. Bumped when a metric task
+/// observer (currently the DA-status subscriber) gets `Lagged` on its
+/// broadcast receiver, signalling we missed `n` events because the
+/// subscriber fell behind the channel. Lets us alert on observer
+/// starvation rather than silently under-counting.
+fn metrics_dropped() -> &'static IntCounter {
+    static M: OnceLock<IntCounter> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter!(
+            "ligate_metrics_dropped_total",
+            "Number of metrics events dropped because a metric observer's broadcast \
+             receiver lagged behind. A non-zero rate indicates the metric task is \
+             starved (broadcast channel size 1024 by default)."
+        )
+        .expect("counter registers once")
+    })
+}
+
+/// Touch all DA metrics so their `HELP` and `TYPE` lines appear from
+/// the very first scrape, before the first event.
+pub fn init_da_metrics() {
+    let _ = da_submission_failures();
+    let _ = da_finalization_latency();
+    let _ = metrics_dropped();
+}
+
+/// Spawn a tokio task that subscribes to the BlobSender's
+/// `blob_status_channel` and updates DA-side metrics in response to
+/// every status transition:
+///
+/// - `Published` → record `Instant::now()` keyed by `blob_hash`
+/// - `Finalized` → compute `now - start`, observe finalization latency,
+///   drop the entry from the in-flight map
+/// - `Failed { error, .. }` → bump
+///   `da_submission_failures_total{reason=<discriminant>}`, drop any
+///   in-flight entry (a Failed blob never finalizes the same submission)
+/// - `RecvError::Lagged(n)` → bump `metrics_dropped_total` by `n`,
+///   warn-log, continue. Lagged subscribers see this when the channel
+///   capacity (1024) overruns the consumer; it tells us to widen the
+///   channel or speed up the consumer rather than silently miscount.
+/// - `RecvError::Closed` → channel sender dropped (sequencer shutting
+///   down). Exit the task cleanly.
+///
+/// The in-flight HashMap is bounded by a periodic sweep that drops
+/// entries older than `INFLIGHT_TTL`. Without it, blobs that get
+/// stuck in `Published` without progressing to Finalized or Failed
+/// (would be an SDK bug, but defensive) leak memory.
+pub fn spawn_da_metrics_task<Da: DaSpec>(
+    blob_status_channel: broadcast::Sender<BlobExecutionStatus<Da>>,
+) {
+    init_da_metrics();
+    let mut rx = blob_status_channel.subscribe();
+
+    tokio::spawn(async move {
+        // Cap the in-flight map at this many entries. Mocha at ~12s
+        // blocks with our typical concurrency stays well under 1k;
+        // 4k is a defensive cap that's still bounded.
+        const INFLIGHT_CAP: usize = 4096;
+        // Sweep entries older than this on each cleanup pass. 30 min
+        // is well above any sensible DA finality (Mocha: ~24s for
+        // single-block finality, deep finality < 1 min).
+        const INFLIGHT_TTL: Duration = Duration::from_secs(30 * 60);
+        // Periodic sweep cadence. Cheap; runs on the same task.
+        const SWEEP_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
+        let mut in_flight: HashMap<BlobHash, std::time::Instant> = HashMap::new();
+        let mut sweep = tokio::time::interval(SWEEP_INTERVAL);
+        sweep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            tokio::select! {
+                _ = sweep.tick() => {
+                    let before = in_flight.len();
+                    in_flight.retain(|_, started| started.elapsed() < INFLIGHT_TTL);
+                    let dropped = before.saturating_sub(in_flight.len());
+                    if dropped > 0 {
+                        warn!(dropped, "Pruned stale in-flight DA entries past TTL");
+                    }
+                }
+                event = rx.recv() => match event {
+                    Ok(status) => match status.blob_submission_status {
+                        BlobSubmissionStatus::Published { receipt } => {
+                            // Defensive: cap the map size. Drop the
+                            // oldest if we somehow blow past the cap.
+                            if in_flight.len() >= INFLIGHT_CAP {
+                                if let Some(k) = in_flight.keys().next().cloned() {
+                                    in_flight.remove(&k);
+                                }
+                            }
+                            in_flight.insert(receipt.blob_hash, std::time::Instant::now());
+                        }
+                        BlobSubmissionStatus::Finalized { receipt } => {
+                            if let Some(started) = in_flight.remove(&receipt.blob_hash) {
+                                let elapsed = started.elapsed().as_secs_f64();
+                                da_finalization_latency().observe(elapsed);
+                                debug!(
+                                    blob_hash = %receipt.blob_hash,
+                                    elapsed_secs = elapsed,
+                                    "DA finalization latency observed"
+                                );
+                            }
+                        }
+                        BlobSubmissionStatus::Failed { error, will_retry } => {
+                            let reason = submission_error_reason(&error);
+                            da_submission_failures()
+                                .with_label_values(&[reason])
+                                .inc();
+                            debug!(
+                                reason,
+                                will_retry,
+                                "DA submission failure observed"
+                            );
+                        }
+                        // Processed / MustSubmit don't drive metrics
+                        // directly; processed is between Published and
+                        // Finalized, MustSubmit is pre-publish.
+                        _ => {}
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        metrics_dropped().inc_by(n);
+                        warn!(skipped = n, "DA metrics task lagged; bump channel size or speed up consumer");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        info!("DA metrics task: blob_status_channel closed, exiting");
+                        return;
+                    }
+                }
+            }
+        }
+    });
 }
