@@ -8,9 +8,11 @@
 //!   Bumps on state-breaking restarts only; stable across STF
 //!   upgrades.
 //! - `chain_hash`: the runtime's build-script-generated 32-byte
-//!   `CHAIN_HASH`, hex-encoded. Bumps on every runtime composition
-//!   change (added module, changed const, etc.). Used for tx
-//!   replay-protection in the signing domain.
+//!   `CHAIN_HASH`, bech32m-encoded with HRP `lsch` (`lsch1...`).
+//!   Matches the format used by the SDK's `/v1/rollup/schema`
+//!   endpoint so partners see the same identifier on both surfaces.
+//!   Bumps on every runtime composition change (added module, changed
+//!   const, etc.); used for tx replay-protection in the signing domain.
 //! - `version`: the `ligate-node` binary version (`CARGO_PKG_VERSION`).
 //!
 //! Why three: `chain_id` is the human-readable network identifier that
@@ -26,6 +28,7 @@ use axum::extract::State;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
+use sov_rollup_interface::ChainHash;
 
 /// Inner state of the `/v1/rollup/info` handler.
 ///
@@ -51,8 +54,10 @@ impl InfoState {
 pub struct RollupInfo {
     /// Cosmos-style chain identifier from the `[chain]` config section.
     pub chain_id: String,
-    /// Runtime's build-time `CHAIN_HASH`, hex-encoded (lowercase, no
-    /// `0x` prefix, 64 chars).
+    /// Runtime's build-time `CHAIN_HASH`, bech32m-encoded with HRP
+    /// `lsch` (`lsch1...`). Matches the SDK's `/v1/rollup/schema`
+    /// response shape so wallets see one identifier across both
+    /// surfaces.
     pub chain_hash: String,
     /// `ligate-node` binary version (semver per `CARGO_PKG_VERSION`).
     pub version: String,
@@ -83,53 +88,21 @@ pub fn router_for_test(chain_id: impl Into<std::sync::Arc<str>>, chain_hash: [u8
 async fn handle_info(State(state): State<InfoState>) -> Json<RollupInfo> {
     Json(RollupInfo {
         chain_id: state.chain_id.to_string(),
-        chain_hash: hex_encode_lower(&state.chain_hash),
+        chain_hash: ChainHash::new(state.chain_hash).to_string(),
         version: state.version.to_string(),
     })
-}
-
-/// Lowercase hex encode, no separators, no `0x` prefix.
-///
-/// Inlined rather than pulling the `hex` crate; the chain_hash is the
-/// only place we need it on this code path.
-fn hex_encode_lower(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        // The two-char `{:02x}` form left-pads single-digit values
-        // with a `0`. Without the `02`, `0x0a` would render as `a`
-        // and break the fixed-width hex contract.
-        use std::fmt::Write as _;
-        let _ = write!(out, "{b:02x}");
-    }
-    out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn hex_encode_lower_pads_single_digits() {
-        // 0x0A must render as "0a", not "a", so a 32-byte hash always
-        // produces 64 chars regardless of byte values.
-        assert_eq!(hex_encode_lower(&[0x0a]), "0a");
-        assert_eq!(hex_encode_lower(&[0xff, 0x00, 0x10]), "ff0010");
-    }
-
-    #[test]
-    fn hex_encode_lower_round_trips_zero_bytes() {
-        let zeros = [0u8; 32];
-        let s = hex_encode_lower(&zeros);
-        assert_eq!(s.len(), 64);
-        assert!(s.chars().all(|c| c == '0'));
-    }
-
     #[tokio::test(flavor = "multi_thread")]
     async fn info_endpoint_returns_configured_values() {
         // Spawn the router on an ephemeral port and hit `/rollup/info`
         // with a real HTTP client. Verifies the wire shape end-to-end:
-        // chain_id from state, chain_hash hex-encoded, version from
-        // env.
+        // chain_id from state, chain_hash bech32m-encoded, version
+        // from env.
         let state = InfoState::new("ligate-localnet", [0xABu8; 32]);
         let app: Router<()> = add_routes(Router::new(), state);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
@@ -143,10 +116,11 @@ mod tests {
         assert_eq!(resp.status().as_u16(), 200);
         let body: RollupInfo = resp.json().await.expect("json");
         assert_eq!(body.chain_id, "ligate-localnet");
-        assert_eq!(
-            body.chain_hash,
-            "abababababababababababababababababababababababababababababababab"
-        );
+        // bech32m with HRP `lsch`. Decoding it back must yield the
+        // same 32 bytes we configured.
+        assert!(body.chain_hash.starts_with("lsch1"), "got {}", body.chain_hash);
+        let parsed: ChainHash = body.chain_hash.parse().expect("parse bech32m");
+        assert_eq!(parsed.0, [0xABu8; 32]);
         assert_eq!(body.version, env!("CARGO_PKG_VERSION"));
     }
 }
