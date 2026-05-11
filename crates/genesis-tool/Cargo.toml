@@ -19,7 +19,7 @@ anyhow.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-toml = "0.8"
+toml = "1.1"
 
 # The chain's spec types and genesis loader. We use the production
 # spec (`MockRollupSpec<Native>`) so the tool round-trips the same
