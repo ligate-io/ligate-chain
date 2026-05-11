@@ -25,8 +25,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
-use rand::rngs::OsRng;
-use rand::RngCore;
 use sov_modules_api::Address;
 
 /// Result of generating one role-tagged keypair.
@@ -62,10 +60,15 @@ pub fn generate_role(role: &str, output_dir: &Path) -> Result<GeneratedKey> {
         .with_context(|| format!("creating output dir {}", output_dir.display()))?;
 
     // Sample 32 bytes of CSPRNG entropy and construct the signing
-    // key directly. Avoids needing the `rand_core` feature on
+    // key directly. Calls `getrandom::fill` directly rather than
+    // routing through `rand::rngs::OsRng` so the dep doesn't get
+    // tangled in rand's churn (rand 0.9 removed `rand::rngs::OsRng`,
+    // 0.10 reshapes again; getrandom 0.3 is stable across all of
+    // that and is what the rand_core `OsRng` calls under the hood
+    // anyway). Also avoids needing the `rand_core` feature on
     // ed25519-dalek (workspace pin uses `default-features = false`).
     let mut secret_bytes = [0u8; 32];
-    OsRng.fill_bytes(&mut secret_bytes);
+    getrandom::fill(&mut secret_bytes).context("CSPRNG fill for key generation")?;
     let signing_key = SigningKey::from_bytes(&secret_bytes);
     let pubkey_bytes = signing_key.verifying_key().to_bytes();
 
