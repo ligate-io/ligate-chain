@@ -70,7 +70,7 @@ jobs:
             archive_suffix: darwin-amd64
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           # Need full history for the changelog excerpt step.
           fetch-depth: 0
@@ -205,7 +205,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (for CHANGELOG access)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download all artifacts
         uses: actions/download-artifact@v7
