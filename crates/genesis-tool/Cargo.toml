@@ -31,12 +31,15 @@ sov-modules-api = { workspace = true, features = ["native"] }
 # Crypto primitives for the `keys generate` subcommand. ed25519-dalek
 # and sha2 are workspace-pinned with `default-features = false`; the
 # bare API (`SigningKey::from_bytes`, `Sha256::digest`) is available
-# without enabling extra features. rand 0.8 + hex 0.4 are pulled in
-# transitively already so adding them as direct deps costs no extra
-# build time.
+# without enabling extra features. `getrandom` 0.3 is pulled in
+# transitively already (via rand_core 0.9 + others) so adding it as a
+# direct dep costs no extra build time; it gives us a 2-line
+# CSPRNG-fill that doesn't pin us to a particular `rand` major
+# version's `OsRng` shape (rand 0.9 dropped `rand::rngs::OsRng`, 0.10
+# would re-shape again — getrandom is stable across all of that).
 ed25519-dalek.workspace = true
 sha2.workspace = true
-rand = "0.8"
+getrandom = "0.3"
 hex = "0.4"
 
 [dev-dependencies]
