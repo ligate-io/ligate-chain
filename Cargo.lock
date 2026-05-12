@@ -4813,7 +4813,7 @@ dependencies = [
 [[package]]
 name = "nearly-linear"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 
 [[package]]
 name = "nmt-rs"
@@ -7659,7 +7659,7 @@ dependencies = [
 [[package]]
 name = "sov-accounts"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7673,7 +7673,7 @@ dependencies = [
 [[package]]
 name = "sov-address"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -7692,7 +7692,7 @@ dependencies = [
 [[package]]
 name = "sov-api-spec"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "backon",
@@ -7716,7 +7716,7 @@ dependencies = [
 [[package]]
 name = "sov-attester-incentives"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7737,7 +7737,7 @@ dependencies = [
 [[package]]
 name = "sov-bank"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7756,7 +7756,7 @@ dependencies = [
 [[package]]
 name = "sov-blob-sender"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7779,7 +7779,7 @@ dependencies = [
 [[package]]
 name = "sov-blob-storage"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7799,7 +7799,7 @@ dependencies = [
 [[package]]
 name = "sov-build"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7811,7 +7811,7 @@ dependencies = [
 [[package]]
 name = "sov-capabilities"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "sov-accounts",
@@ -7831,7 +7831,7 @@ dependencies = [
 [[package]]
 name = "sov-celestia-adapter"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7864,7 +7864,7 @@ dependencies = [
 [[package]]
 name = "sov-chain-state"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7880,7 +7880,7 @@ dependencies = [
 [[package]]
 name = "sov-cli"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -7903,7 +7903,7 @@ dependencies = [
 [[package]]
 name = "sov-db"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7935,7 +7935,7 @@ dependencies = [
 [[package]]
 name = "sov-db-types"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "borsh",
  "derivative",
@@ -7951,7 +7951,7 @@ dependencies = [
 [[package]]
 name = "sov-full-node-configs"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "schemars 0.8.22",
@@ -7965,7 +7965,7 @@ dependencies = [
 [[package]]
 name = "sov-kernels"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "serde_json",
@@ -7979,7 +7979,7 @@ dependencies = [
 [[package]]
 name = "sov-ledger-apis"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "axum",
@@ -8004,7 +8004,7 @@ dependencies = [
 [[package]]
 name = "sov-metrics"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "bincode",
@@ -8026,7 +8026,7 @@ dependencies = [
 [[package]]
 name = "sov-mock-da"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8057,7 +8057,7 @@ dependencies = [
 [[package]]
 name = "sov-mock-zkvm"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "bincode",
@@ -8077,7 +8077,7 @@ dependencies = [
 [[package]]
 name = "sov-modules-api"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8121,7 +8121,7 @@ dependencies = [
 [[package]]
 name = "sov-modules-macros"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "bech32",
@@ -8143,7 +8143,7 @@ dependencies = [
 [[package]]
 name = "sov-modules-rollup-blueprint"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8183,7 +8183,7 @@ dependencies = [
 [[package]]
 name = "sov-modules-stf-blueprint"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "axum",
@@ -8204,7 +8204,7 @@ dependencies = [
 [[package]]
 name = "sov-node-client"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -8223,7 +8223,7 @@ dependencies = [
 [[package]]
 name = "sov-operator-incentives"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -8241,7 +8241,7 @@ dependencies = [
 [[package]]
 name = "sov-paymaster"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "bcs",
@@ -8260,7 +8260,7 @@ dependencies = [
 [[package]]
 name = "sov-prover-incentives"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -8280,7 +8280,7 @@ dependencies = [
 [[package]]
 name = "sov-rest-utils"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "axum",
@@ -8302,7 +8302,7 @@ dependencies = [
 [[package]]
 name = "sov-risc0-adapter"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "bincode",
@@ -8330,7 +8330,7 @@ dependencies = [
 [[package]]
 name = "sov-rollup-apis"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -8358,7 +8358,7 @@ dependencies = [
 [[package]]
 name = "sov-rollup-full-node-interface"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "derive_more",
  "rockbound",
@@ -8370,7 +8370,7 @@ dependencies = [
 [[package]]
 name = "sov-rollup-interface"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8395,7 +8395,7 @@ dependencies = [
 [[package]]
 name = "sov-sequencer"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8446,7 +8446,7 @@ dependencies = [
 [[package]]
 name = "sov-sequencer-registry"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -8462,7 +8462,7 @@ dependencies = [
 [[package]]
 name = "sov-state"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "bcs",
@@ -8488,7 +8488,7 @@ dependencies = [
 [[package]]
 name = "sov-stf-runner"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8523,7 +8523,7 @@ dependencies = [
 [[package]]
 name = "sov-test-utils"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8584,7 +8584,7 @@ dependencies = [
 [[package]]
 name = "sov-uniqueness"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -8597,7 +8597,7 @@ dependencies = [
 [[package]]
 name = "sov-universal-wallet"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "alloy-primitives",
  "arrayvec",
@@ -8618,7 +8618,7 @@ dependencies = [
 [[package]]
 name = "sov-universal-wallet-macro-helpers"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "bech32",
  "borsh",
@@ -8635,7 +8635,7 @@ dependencies = [
 [[package]]
 name = "sov-universal-wallet-macros"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "proc-macro2",
  "sov-universal-wallet-macro-helpers",
@@ -8645,7 +8645,7 @@ dependencies = [
 [[package]]
 name = "sov-value-setter"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "borsh",
@@ -8661,7 +8661,7 @@ dependencies = [
 [[package]]
 name = "sov-zkvm-utils"
 version = "0.3.0"
-source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=572cada6c6c84ef8d90baef451484a2161bdb85c#572cada6c6c84ef8d90baef451484a2161bdb85c"
+source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=49e9b2057a5b3d244abab9ca98bb91edbfb9c533#49e9b2057a5b3d244abab9ca98bb91edbfb9c533"
 dependencies = [
  "anyhow",
  "convert_case 0.6.0",
