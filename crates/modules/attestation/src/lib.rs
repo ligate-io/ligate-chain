@@ -98,8 +98,8 @@ use sha2::{Digest, Sha256};
 use sov_bank::{Amount, Bank, Coins, TokenId};
 use sov_modules_api::macros::{serialize, UniversalWallet};
 use sov_modules_api::{
-    Context, DaSpec, GenesisState, Module, ModuleId, ModuleInfo, ModuleRestApi, SafeString,
-    SafeVec, Spec, StateMap, StateValue, TxState,
+    Context, DaSpec, EventEmitter, GenesisState, Module, ModuleId, ModuleInfo, ModuleRestApi,
+    SafeString, SafeVec, Spec, StateMap, StateValue, TxState,
 };
 use thiserror::Error as ThisError;
 
@@ -1138,21 +1138,84 @@ impl AttestationError {
     Deserialize,
     schemars::JsonSchema,
 )]
+#[schemars(bound = "S: Spec", rename = "AttestationEvent")]
 #[non_exhaustive]
-pub enum AttestationEvent {
-    /// Placeholder variant. Never emitted in v0; reserved so the enum
-    /// is non-empty (Borsh derives require at least one variant on
-    /// enums) without committing to an event shape we'd later
-    /// regret. Real events land alongside the query RPC in #21.
+pub enum AttestationEvent<S: Spec> {
+    /// Placeholder variant. Never emitted; kept so older borsh-decoded
+    /// streams that wrote this variant still round-trip. Subsequent
+    /// variants are the real events the module emits at call time.
     #[doc(hidden)]
     Reserved,
+
+    /// Emitted on successful [`CallMessage::RegisterAttestorSet`].
+    ///
+    /// `members` carries the sorted post-canonicalisation list (matches
+    /// what's stored under `attestor_sets[id]`). `registered_by` is the
+    /// tx sender (paid the registration fee).
+    ///
+    /// Indexers key off `"Attestation/AttestorSetRegistered"`; see
+    /// `ligate-api/crates/indexer/src/parser.rs` for the consumer side.
+    AttestorSetRegistered {
+        /// Deterministic [`AttestorSetId`] (bech32m `las1...`).
+        attestor_set_id: AttestorSetId,
+        /// Member pubkeys, sorted by raw bytes per the canonicalisation
+        /// rule used by `derive_id`.
+        members: Vec<PubKey>,
+        /// M-of-N threshold (1..=members.len()).
+        threshold: u8,
+        /// Tx sender who paid the registration fee.
+        registered_by: S::Address,
+    },
+
+    /// Emitted on successful [`CallMessage::RegisterSchema`]. Carries
+    /// every column `ligate-api`'s `schemas` table needs to ingest
+    /// directly from the event (no follow-up state read required).
+    SchemaRegistered {
+        /// Deterministic [`SchemaId`] (bech32m `lsc1...`).
+        schema_id: SchemaId,
+        /// Schema name (e.g. `"themisra.proof-of-prompt"`).
+        name: String,
+        /// Schema version (monotonic per name+owner).
+        version: u32,
+        /// Owner address — receives schema-routed fees.
+        owner: S::Address,
+        /// Bound attestor set; submissions must carry signatures from
+        /// members of this set.
+        attestor_set_id: AttestorSetId,
+        /// Fee-routing share in basis points (0..=`max_builder_bps`).
+        fee_routing_bps: u16,
+        /// Destination address for the routed share (required iff
+        /// `fee_routing_bps > 0`).
+        fee_routing_addr: Option<S::Address>,
+        /// SHA-256 of the canonical schema-doc bytes.
+        payload_shape_hash: Hash32,
+    },
+
+    /// Emitted on successful [`CallMessage::SubmitAttestation`].
+    ///
+    /// `signature_count` matches `attestations[id].signatures.len()` —
+    /// always >= the bound schema's threshold (enforced upstream of
+    /// the emit). Submitter pubkey isn't carried at the call site so
+    /// only the address is exposed; partners who need the raw pubkey
+    /// can resolve it from `accounts` state.
+    AttestationSubmitted {
+        /// Schema this attestation is bound to.
+        schema_id: SchemaId,
+        /// SHA-256 of the off-chain payload that was attested.
+        payload_hash: PayloadHash,
+        /// Tx sender (the address that submitted the attestation;
+        /// pays the attestation fee).
+        submitter: S::Address,
+        /// Number of attestor signatures included in the submission.
+        signature_count: u32,
+    },
 }
 
 impl<S: Spec> Module for AttestationModule<S> {
     type Spec = S;
     type Config = AttestationConfig<S>;
     type CallMessage = CallMessage<S>;
-    type Event = AttestationEvent;
+    type Event = AttestationEvent<S>;
     type Error = anyhow::Error;
 
     fn genesis(
@@ -1347,7 +1410,24 @@ impl<S: Spec> AttestationModule<S> {
         let fee = self.attestor_set_fee.get(state)?.unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS);
         self.charge_to_treasury(context.sender(), fee, state)?;
 
-        self.attestor_sets.set(&id, &AttestorSet { members: sorted_members, threshold }, state)?;
+        self.attestor_sets.set(
+            &id,
+            &AttestorSet { members: sorted_members.clone(), threshold },
+            state,
+        )?;
+
+        // Emit typed event so the indexer (and any other consumer)
+        // can ingest from the event stream without a follow-up state
+        // read. Key auto-generates as `"Attestation/AttestorSetRegistered"`.
+        self.emit_event(
+            state,
+            AttestationEvent::AttestorSetRegistered {
+                attestor_set_id: id,
+                members: sorted_members,
+                threshold,
+                registered_by: *context.sender(),
+            },
+        );
 
         #[cfg(feature = "native")]
         metrics::record_attestor_set_registered();
@@ -1402,7 +1482,7 @@ impl<S: Spec> AttestationModule<S> {
             &id,
             &Schema {
                 owner,
-                name,
+                name: name.clone(),
                 version,
                 attestor_set,
                 fee_routing_bps,
@@ -1411,6 +1491,23 @@ impl<S: Spec> AttestationModule<S> {
             },
             state,
         )?;
+
+        // Emit typed event with every column the indexer's `schemas`
+        // table requires. Key auto-generates as
+        // `"Attestation/SchemaRegistered"`.
+        self.emit_event(
+            state,
+            AttestationEvent::SchemaRegistered {
+                schema_id: id,
+                name,
+                version,
+                owner,
+                attestor_set_id: attestor_set,
+                fee_routing_bps,
+                fee_routing_addr,
+                payload_shape_hash,
+            },
+        );
 
         #[cfg(feature = "native")]
         metrics::record_schema_registered();
@@ -1484,11 +1581,24 @@ impl<S: Spec> AttestationModule<S> {
             }
         }
 
+        let signature_count = signatures.len() as u32;
         self.attestations.set(
             &attestation_id,
             &Attestation { schema_id, payload_hash, submitter, timestamp, signatures },
             state,
         )?;
+
+        // Emit typed event. Key auto-generates as
+        // `"Attestation/AttestationSubmitted"`.
+        self.emit_event(
+            state,
+            AttestationEvent::AttestationSubmitted {
+                schema_id,
+                payload_hash,
+                submitter,
+                signature_count,
+            },
+        );
 
         #[cfg(feature = "native")]
         metrics::record_attestation_submitted();
