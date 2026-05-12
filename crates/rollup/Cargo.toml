@@ -81,3 +81,10 @@ http-body-util  = "0.1"
 ligate-stf      = { path = "../stf", features = ["test-utils"] }
 # `sov-celestia-adapter` already lives in `[dependencies]`, so the
 # integration tests can use it directly.
+# Signing client for the binary-spawn smoke (#146 v2): build + sign +
+# submit RegisterAttestorSet / RegisterSchema / SubmitAttestation
+# through the production `RollupAuthenticator` path that the
+# in-process `e2e_smoke.rs` can't reach.
+ligate-client   = { path = "../client-rs", features = ["submit"] }
+sha2            = { workspace = true }
+bech32          = "0.11"
