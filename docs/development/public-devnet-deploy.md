@@ -93,6 +93,7 @@ packages:
   - git
   - jq
   - rsync
+  - chrony
 
 write_files:
   - path: /etc/systemd/system/celestia-light.service
@@ -175,6 +176,47 @@ The cloud-init does the chassis. The operator still has to:
   RUST_LOG=info,sov=info
   ```
 - `systemctl enable --now ligate-node.service`.
+
+## Step 2.5: NTP / clock sync (required)
+
+`ligate-node` stamps each slot with `Time::now()` at production. Operators whose host clocks disagree by more than a second produce skewed `slot.timestamp` values, which corrupts dashboards / SLA computations and — once attesters are in the loop — can drive quorum disputes when attesters disagree on whether a batch arrived before its deadline.
+
+This step is not optional on bare-metal. GCP, AWS, and Azure all run managed NTP by default and the cloud-init above installs `chrony` as belt-and-braces. Verify before starting `ligate-node`:
+
+```bash
+chronyc tracking | grep -E "Reference|Stratum|System time|Last offset"
+# Expected: System time drift < 1.0 seconds, Last offset within a few ms
+```
+
+If `chronyc tracking` reports drift > 1s or shows the system as unsynchronised, fix it before starting the node. Common causes:
+
+- **Air-gapped or firewall-blocked machine.** `chrony` defaults to public NTP pools; if outbound UDP/123 is blocked you'll never sync. Either open the port to `pool.ntp.org`, or point `chrony` at an internal NTP server via `/etc/chrony/chrony.conf` (`server <internal-ntp> iburst` line).
+- **VM clock drift after host migration.** GCP live-migration occasionally jumps the clock. `chronyc makestep` once to correct, then verify with `chronyc tracking`.
+- **macOS workstation hosting `ligate-node` for local dev.** The system uses `timed` rather than chrony; verify with `sudo sntp -sS time.apple.com`. Same < 1s requirement.
+
+### Failure mode if drift exceeds threshold
+
+The chain doesn't refuse to start with a skewed clock — it just produces bad data. What you observe:
+
+- `slot.timestamp` values from this sequencer drift relative to wall clock and to other operators' followers.
+- Dashboards that compute "blocks per second" from timestamps misreport.
+- Once attesters check timestamp claims against their own clocks (post-#268 attester-side checks), attesters disagree on whether a batch is fresh enough; quorum disputes appear in attester logs.
+
+The simplest mitigation is to never let drift get to that point. The `chronyc tracking` check above takes 2 seconds to run. Wire it into your monitoring (the [#268](https://github.com/ligate-io/ligate-chain/issues/268) Alertmanager work has a candidate `clock_skew_seconds` metric for exactly this).
+
+### Optional: clock-skew Prometheus metric
+
+A follow-up to this section: expose `ligate_node_clock_skew_seconds` from `ligate-node` itself by comparing `Time::now()` against an external NTP source on a 30s tick. Pair with an Alertmanager rule:
+
+```yaml
+- alert: LigateNodeClockSkew
+  expr: abs(ligate_node_clock_skew_seconds) > 1.0
+  for: 2m
+  annotations:
+    runbook: docs/development/public-devnet-deploy.md#step-25-ntp--clock-sync-required
+```
+
+Tracked as a follow-up to [#268](https://github.com/ligate-io/ligate-chain/issues/268).
 
 ## Step 3: Caddy reverse proxy + TLS
 

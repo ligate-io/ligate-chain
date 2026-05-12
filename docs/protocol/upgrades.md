@@ -264,6 +264,72 @@ Ligate Chain consumes the Sovereign SDK via a fork at [`ligate-io/sovereign-sdk`
 
 The fork's branch model + rebase discipline lives in `CONTRIBUTING.ligate.md` on the fork itself. The chain's `Cargo.toml` has a `[patch."<sov-url>"]` block pinning the consumed `rev` so the chain rebuilds reproducibly. Bump that `rev` in a deliberate PR; never let it move under the chain.
 
+---
+
+## Operator recovery: `start_fresh_outer_proof_on_resync`
+
+Not an upgrade in the sense above, but an operator lever bundled with the SDK upgrade that introduced it ([`Sovereign-Labs/sovereign-sdk#2833`](https://github.com/Sovereign-Labs/sovereign-sdk/pull/2833)). Documented here because the failure modes it addresses look like upgrade-class incidents to an on-call.
+
+### What the flag controls
+
+The Sovereign prover aggregates inner ZK proofs into outer proofs across multiple slots. When a node restarts (`ligate-node` SIGTERM + restart, container OOM, host reboot), the prover service has to decide what to do with whatever partial outer-aggregation work was in flight at shutdown.
+
+- `start_fresh_outer_proof_on_resync = false` (**default**): on resync, the prover resumes the in-progress outer proof from disk state. Faster recovery in the happy path; no work is thrown away.
+- `start_fresh_outer_proof_on_resync = true`: on resync, the prover discards in-progress outer-aggregation work and starts a fresh outer proof from the current resync point. Slower (we re-prove anything that was mid-flight) but safe when the on-disk state is suspected to be wedged.
+
+The flag is wired through `FullNodeBlueprint::create_prover_service` and lives at every call site in [`crates/rollup/src/main.rs`](../../crates/rollup/src/main.rs). Today it's hardcoded `false` — recompile to flip it. The CLI-flag follow-up below removes the recompile.
+
+### Decision tree
+
+| Situation | Setting | Why |
+|---|---|---|
+| Routine restart (deploy, host reboot, planned maintenance) | `false` | Resume work; no proof gets thrown away |
+| Crash from a known bug, no on-disk corruption suspected | `false` | Same as routine. Restart, observe, file the bug |
+| Chain wedged: outer proofs stop landing on Celestia for >5 minutes after a clean restart, prover logs report repeated "outer aggregation step failed" | `true` | The on-disk partial outer state is suspect. Drop it and rebuild |
+| Recovery from a known-bad SDK rev (e.g. a fork rev that produced malformed partial outer proofs that the new binary refuses to consume) | `true` | The new binary can't parse the old partial state. Restart fresh |
+| Catastrophic disk loss + restore from backup snapshot | `true` | Trust nothing about the in-flight prover state |
+
+Default to `false`. Flip to `true` only when the prover is demonstrably stuck and a normal restart didn't clear it. Flipping pre-emptively wastes minutes per restart in the happy case.
+
+### How to flip it
+
+Today: edit the literal `false` arguments to `create_prover_service` in `crates/rollup/src/main.rs`, rebuild `ligate-node`, restart.
+
+Planned ([open follow-up](#open-follow-ups)): expose as `--start-fresh-outer-proof-on-resync` on the `ligate-node` binary so operators don't have to recompile mid-incident.
+
+### Recovery walkthrough
+
+Concrete scenario: Mocha had a brief outage at 03:14 UTC, `ligate-node` came back online but outer proofs haven't landed in the 7 minutes since.
+
+```sh
+# 1. Confirm the wedge: no new outer proofs in the prover log
+journalctl -u ligate-node | grep "outer_proof_committed" | tail -5
+# (no recent entries; last entry is pre-outage)
+
+# 2. Stop the node
+systemctl stop ligate-node
+
+# 3. Flip the flag (today: edit + rebuild; post-CLI-flag follow-up: drop the env var below)
+START_FRESH_OUTER_PROOF_ON_RESYNC=true systemctl start ligate-node
+# OR (today's recompile path)
+# - edit crates/rollup/src/main.rs, replace `false` arguments with `true`
+# - cargo build --release --bin ligate-node
+# - swap binary, restart
+
+# 4. Watch outer-aggregation restart from scratch
+journalctl -fu ligate-node | grep "outer_aggregation_started"
+
+# 5. Once a fresh outer proof lands, revert the flag back to false for the next restart
+```
+
+Time-to-recovery: roughly one outer-proof cycle (~minutes, depending on slot count between checkpoints). The trade-off is exactly that cycle: you re-prove what you already proved before the wedge. The alternative — leaving the node stuck — costs every subsequent slot.
+
+### Open follow-ups
+
+- Expose `--start-fresh-outer-proof-on-resync` as a CLI flag on `ligate-node` so flipping it doesn't require a rebuild. Filed as a follow-up to this section.
+- Surface a `prover_outer_aggregation_stuck_seconds` Prometheus metric so the wedge condition is observable from outside the journal. Pair with the Alertmanager wiring tracked in [#268](https://github.com/ligate-io/ligate-chain/issues/268).
+- Run this procedure end-to-end on `ligate-localnet` once we have a deterministic way to induce a wedged outer proof. The drill should produce a documented "min time to recovery" measurement.
+
 ## Related
 
 - [Protocol spec, "Chain id"](attestation-v0.md#chain-id) — the locked four-row identifier ladder
