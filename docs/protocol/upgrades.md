@@ -81,6 +81,8 @@ There is no on-chain "upgrade ceremony" for soft forks. The release is the upgra
 4. Set a coordinated cutover time. Every operator restarts their node against the new chain id, the new binary, and (if applicable) the new genesis at the agreed cutover.
 5. The old chain stops producing blocks (sequencer is halted at the cutover); the new chain starts at height 0 with the new genesis.
 
+The operational runbook covering the T-7d through T+24h sequence is [`docs/development/runbooks/chain-id-bump.md`](../development/runbooks/chain-id-bump.md). The first `ligate-devnet-1 → ligate-devnet-2` cutover executes that runbook.
+
 This is informal because it has to be. Pre-mainnet, there are no real funds at stake, no economic finality assumptions, and the operator pool is small enough to coordinate on a chat channel. Post-mainnet, this informality stops scaling and the upgrade module takes over (next section).
 
 ---

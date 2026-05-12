@@ -317,6 +317,8 @@ Concretely:
 
 Faucet deploy is documented in [`ligate-api` README](https://github.com/ligate-io/ligate-api). The operator transfers an initial 1M LGT from the operator key (one-shot from a workstation via `ligate transfer`) to the faucet hot-key address; the api service holds the faucet hot key as a Railway secret and uses it to sign drip txs.
 
+Operational layer (key rotation, balance monitoring, abuse mitigation, treasury top-up): [`runbooks/faucet-ops.md`](runbooks/faucet-ops.md).
+
 This split keeps the GCP VM minimal (`e2-medium`, ~$25/mo, only chain + Celestia DA processes) and lets the api scale independently from the chain.
 
 ## Step 5: Monitoring
@@ -328,6 +330,8 @@ GCP-friendly path: install Cloud Monitoring's OpenTelemetry collector on the VM 
 The metric set + labels lives in `crates/rollup/src/metrics.rs` and the umbrella issue [#110](https://github.com/ligate-io/ligate-chain/issues/110). Phase 2 metrics shipped in [#167-#171](https://github.com/ligate-io/ligate-chain/issues/167); three metrics (mempool depth, DA submission latency, DA failure-by-reason) remain blocked on SDK upstream and are tracked in [#164](https://github.com/ligate-io/ligate-chain/issues/164).
 
 A starter Grafana dashboard is tracked in [#165](https://github.com/ligate-io/ligate-chain/issues/165). Until that lands, the per-metric `HELP` strings in `/metrics` output document each one inline.
+
+The Celestia light node has its own monitoring story (its own `/metrics` endpoint, its own failure modes); the health-check + recovery procedure lives at [`runbooks/celestia-light-node.md`](runbooks/celestia-light-node.md).
 
 ## Step 6: Backups
 
