@@ -42,10 +42,11 @@ jobs:
     # Guard: skip if the operator hasn't set the TIA signer key. The
     # workflow exists for documentation purposes until that's wired.
     if: ${{ vars.MOCHA_SMOKE_ENABLED == 'true' }}
-    # Cold-cache build (first run with no Swatinem cache hit) is closer
-    # to 25-30 min on a hosted runner; allow plenty of margin so the
-    # initial smoke isn't killed by the job wall. Warm runs land in 10-15.
-    timeout-minutes: 60
+    # Cold-cache build (first run with no Swatinem cache hit) takes
+    # ~50 min on a hosted runner because of risc0 kernel + heavy
+    # crate compilation; allow generous margin so the initial smoke
+    # isn't killed by the job wall. Warm runs land in 10-15 min.
+    timeout-minutes: 90
     env:
       # Funded Mocha TIA wallet. Provided as a repo secret.
       SOV_CELESTIA_SIGNER_KEY: ${{ secrets.MOCHA_TIA_SIGNER_KEY }}
@@ -74,14 +75,17 @@ jobs:
           cargo build --release --bin ligate-node
           cargo build --release --bin ligate-cli || true
 
-      # Install + initialize the Celestia light node. v0.20+ matches
-      # the chain's expected light-node version.
+      # Install + initialize the Celestia light node. Pin to a known
+      # version; bump as upstream releases land. Asset name is the
+      # tarball; extract the `celestia` binary out of it.
       - name: Install Celestia light node
         run: |
-          CELESTIA_VERSION=v0.20.0
-          curl -L "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-linux-amd64" \
-            -o /usr/local/bin/celestia
+          CELESTIA_VERSION=v0.30.2
+          curl -fL "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-node_Linux_x86_64.tar.gz" \
+            -o /tmp/celestia.tar.gz
+          tar -xzf /tmp/celestia.tar.gz -C /usr/local/bin celestia
           chmod +x /usr/local/bin/celestia
+          celestia version
           celestia light init --p2p.network=mocha
 
       - name: Start Celestia light node
