@@ -1,22 +1,4 @@
 {
-  "_doc": [
-    "Grafana dashboard for ligate-devnet-1 cost monitoring (#277).",
-    "Two halves: Mocha TIA spend (left) + GCP infra spend (right).",
-    "",
-    "Import via Grafana UI > Dashboards > New > Import > Paste JSON.",
-    "Pin to the 'Ligate Ops' folder once the public Grafana (#234)",
-    "is up.",
-    "",
-    "Data sources:",
-    "- 'Prometheus' for TIA panels (scrapes celestia-light's /metrics).",
-    "- 'GCP-BigQuery' for infra panels (reads billing export tables).",
-    "",
-    "Variables (drop-down at top of dashboard):",
-    "- $instance: which chain VM (sequencer / followers).",
-    "- $window: aggregation window for draw-down rates (1h, 24h, 7d).",
-    "",
-    "Time-range default: Last 7 days, refresh 1m."
-  ],
   "title": "Ligate devnet-1 — cost monitoring",
   "uid": "ligate-devnet-1-cost",
   "tags": ["ligate", "devnet-1", "cost"],

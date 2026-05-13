@@ -1,18 +1,4 @@
 {
-  "_doc": [
-    "GCS lifecycle policy for the ligate-devnet-1 backup bucket.",
-    "Apply via: gcloud storage buckets update gs://$GCS_BUCKET --lifecycle-file=ops/backup/gcs-lifecycle.json",
-    "",
-    "Combined with the local rotation in `scripts/backup-rocksdb.sh`,",
-    "this gives a dense-recent / sparse-old retention curve:",
-    "",
-    "  - hourly snapshots: last 7 days on GCS",
-    "  - daily snapshots:  last 60 days on GCS",
-    "  - weekly snapshots: last 1 year on GCS",
-    "",
-    "GCS prunes anything matching the conditions below. The local",
-    "rotation prunes the staging dir on the chain VM independently."
-  ],
   "rule": [
     {
       "action": { "type": "Delete" },

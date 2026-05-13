@@ -1,17 +1,4 @@
 {
-  "_doc": [
-    "GCS lifecycle policy for the PUBLIC snapshot bucket.",
-    "Apply via: gcloud storage buckets update gs://$PUBLIC_BUCKET --lifecycle-file=ops/backup/gcs-snapshot-lifecycle.json",
-    "",
-    "Distinct from gcs-lifecycle.json (which is for the operator-private",
-    "backup bucket). Public snapshots have different retention because",
-    "partners may import snapshots months old for forensic / audit use.",
-    "",
-    "  - daily snapshots:   last 30 days",
-    "  - weekly snapshots:  last 12 weeks",
-    "  - monthly snapshots: last 12 months",
-    "  - latest-*.json pointers: never deleted (always-current pointer)"
-  ],
   "rule": [
     {
       "action": { "type": "Delete" },
