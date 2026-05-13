@@ -115,17 +115,15 @@ jobs:
 
       # Generate ephemeral keys + run `ligate-genesis-tool` to produce
       # a valid genesis bundle. The checked-in `devnet-1/genesis/`
-      # ships with placeholder addresses (zero-address `seq_da_address`,
-      # three placeholder `lig1*` addresses) that fail strict genesis
+      # ships with placeholder addresses that fail strict genesis
       # validation. The real operator path runs this same flow with
       # operator-controlled keys; for CI we generate ephemeral keys
       # every run and burn them at job end.
       #
-      # The genesis-tool substitutes the three `lig1*` placeholders.
-      # The DA-layer `seq_da_address` substitution is patched in
-      # separately via jq -- genesis-tool's substitution flow does
-      # not yet handle non-bech32-lig1 addresses (see issue #322 for
-      # the upstream gap).
+      # All four substitutions (three `lig1*` rollup addresses + the
+      # Celestia DA address) go through the genesis-tool's substitution
+      # map. `--da celestia` is the default; `generate` runs the same
+      # validator the chain runs at startup against the output.
       - name: Generate ephemeral genesis for CI smoke
         run: |
           set -euo pipefail
@@ -143,23 +141,15 @@ jobs:
           "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "$OPERATOR"
           "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "$DEMO1"
           "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "$DEMO2"
+          "celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as" = "$MOCHA_TIA_DA_ADDRESS"
           EOF
 
           ./target/release/ligate-genesis-tool generate \
               --template devnet-1/genesis \
               --substitutions /tmp/keys.toml \
-              --output /tmp/genesis
+              --output /tmp/genesis \
+              --da celestia
 
-          # Patch `seq_da_address` with the operator's celestia1 wallet
-          # address. The chain validates that the registered preferred
-          # sequencer's DA address matches the wallet signing blob
-          # submissions; placeholder all-zeros fails the bech32 parse.
-          jq --arg da "$MOCHA_TIA_DA_ADDRESS" \
-             '.sequencer_config.seq_da_address = $da' \
-             /tmp/genesis/sequencer_registry.json > /tmp/sr.json
-          mv /tmp/sr.json /tmp/genesis/sequencer_registry.json
-
-          ./target/release/ligate-genesis-tool verify --dir /tmp/genesis
           echo "Ephemeral genesis ready at /tmp/genesis"
           echo "GENESIS_DIR=/tmp/genesis" >> "$GITHUB_ENV"
 
