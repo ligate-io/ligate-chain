@@ -88,3 +88,8 @@ ligate-stf      = { path = "../stf", features = ["test-utils"] }
 ligate-client   = { path = "../client-rs", features = ["submit"] }
 sha2            = { workspace = true }
 bech32          = "0.11"
+# Used by `restart_recovery.rs` (#193) to serialise the four
+# kill-and-respawn scenarios. CI runners can't host 4 concurrent
+# ligate-node spawns; `#[serial]` forces sequential execution per-
+# test, leaving the rest of the rollup test suite parallel.
+serial_test     = "3"

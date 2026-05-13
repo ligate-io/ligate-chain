@@ -39,6 +39,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use serial_test::serial;
 use tempfile::TempDir;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
@@ -168,6 +169,7 @@ async fn hard_kill(mut child: Child) {
 // ----- Scenarios ------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn idle_kill_resumes_cleanly() {
     // Scenario 1: node starts, sits idle for a brief moment with no
     // tx pressure, gets SIGKILLed, comes back. Tests the simplest
@@ -207,6 +209,7 @@ async fn idle_kill_resumes_cleanly() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn kill_after_blocks_produced_preserves_height() {
     // Scenario 2: let the chain produce a handful of blocks, kill,
     // respawn, assert height didn't go backward.
@@ -252,6 +255,7 @@ async fn kill_after_blocks_produced_preserves_height() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn respawn_continues_producing_blocks() {
     // Scenario 3: kill, respawn, verify the chain keeps producing
     // new blocks (not just preserves old state). The strongest
@@ -304,6 +308,7 @@ async fn respawn_continues_producing_blocks() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn double_restart_still_advances() {
     // Scenario 4: two kill cycles in a row. Catches "first kill is
     // fine but a second kill on the recovered state corrupts" bugs
