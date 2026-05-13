@@ -1,0 +1,22 @@
+# Substitution fixture for the genesis-determinism CI matrix.
+#
+# Identity substitution: maps each placeholder address in
+# `devnet-1/genesis/` to itself. The test only cares that
+# `ligate-genesis-tool generate` produces byte-identical output across
+# machines, not that the substitution does anything semantic. With an
+# identity map, every machine running `generate` should produce a
+# bundle identical to the input — and identical to every other
+# machine's output.
+#
+# When the cross-OS test surfaces a non-determinism source (HashMap
+# iteration order, locale-dependent JSON ordering, etc.), the diff
+# in the artifact comparison will point at the offending field. The
+# `docs/development/genesis-determinism.md` doc catalogs the sources
+# we mitigated (or proved aren't present) as the test expands.
+#
+# Tracking issue: ligate-io/ligate-chain#278.
+
+[addresses]
+"lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8"
+"lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544"
+"lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz"
