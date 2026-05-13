@@ -52,9 +52,11 @@ jobs:
         working-directory: crates/modules/attestation/fuzz
         run: cargo +nightly fuzz build
 
-      # Per-target time budget. 85 seconds × 7 targets = ~10 min
+      # Per-target time budget. 60 seconds × 10 targets = ~10 min
       # runtime. Each target re-uses the build artifact from the
-      # previous step so the only cost here is fuzzing time.
+      # previous step so the only cost here is fuzzing time. The
+      # REST extractor targets (rest_*) added in #157 share the
+      # budget; each is ~60s. Total still under the 30-min job cap.
       - name: Run targets
         working-directory: crates/modules/attestation/fuzz
         run: |
@@ -66,10 +68,13 @@ jobs:
             borsh_attestation \
             borsh_signed_payload \
             bech32_id \
-            attestation_id_parse
+            attestation_id_parse \
+            rest_schema_path \
+            rest_attestor_set_path \
+            rest_attestation_path
           do
             echo "::group::$target"
-            cargo +nightly fuzz run "$target" -- -max_total_time=85
+            cargo +nightly fuzz run "$target" -- -max_total_time=60
             echo "::endgroup::"
           done
 
