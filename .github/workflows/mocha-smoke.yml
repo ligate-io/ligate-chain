@@ -42,7 +42,10 @@ jobs:
     # Guard: skip if the operator hasn't set the TIA signer key. The
     # workflow exists for documentation purposes until that's wired.
     if: ${{ vars.MOCHA_SMOKE_ENABLED == 'true' }}
-    timeout-minutes: 30
+    # Cold-cache build (first run with no Swatinem cache hit) is closer
+    # to 25-30 min on a hosted runner; allow plenty of margin so the
+    # initial smoke isn't killed by the job wall. Warm runs land in 10-15.
+    timeout-minutes: 60
     env:
       # Funded Mocha TIA wallet. Provided as a repo secret.
       SOV_CELESTIA_SIGNER_KEY: ${{ secrets.MOCHA_TIA_SIGNER_KEY }}
