@@ -111,11 +111,20 @@ async fn spawn_node(temp_dir: &Path, port: u16) -> Child {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let genesis_dir = format!("{manifest_dir}/../../devnet/genesis");
 
+    // Disable the metrics endpoint. `ligate-node` defaults
+    // `--metrics-bind` to `127.0.0.1:9100`, which races with parallel
+    // test runs (this file's tests are `#[serial]` but the OS holds
+    // the port in TIME_WAIT between sequential SIGKILL + respawn
+    // cycles, and `cargo llvm-cov` sometimes parallelizes across
+    // crates anyway). Tests don't assert on metrics; disable the
+    // endpoint to remove the false-negative flake.
     Command::new(ligate_node_binary())
         .arg("--rollup-config-path")
         .arg(&rollup_path)
         .arg("--genesis-config-dir")
         .arg(&genesis_dir)
+        .arg("--metrics-bind")
+        .arg("off")
         .kill_on_drop(true)
         .spawn()
         .expect("spawn ligate-node binary")
