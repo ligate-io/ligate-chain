@@ -74,10 +74,14 @@ jobs:
       - name: Generate from devnet-1 template
         run: |
           mkdir -p genesis-out
+          # `--da celestia` because devnet-1/ ships a Celestia-shaped
+          # `seq_da_address` placeholder. Celestia is the default, the
+          # flag is explicit here so the intent is obvious in the CI log.
           ./target/release/ligate-genesis-tool generate \
             --template devnet-1/genesis \
             --substitutions ops/genesis-determinism/substitutions.toml \
-            --output genesis-out
+            --output genesis-out \
+            --da celestia
 
       - name: Hash output files
         run: |

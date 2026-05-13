@@ -65,14 +65,26 @@ use sov_modules_api::execution_mode::Native;
 /// matters for the genesis bundle: `sequencer_registry.json`'s
 /// `seq_da_address` field is `<S::Da as DaSpec>::Address`, which
 /// `MockDaSpec` parses as 32-byte hex and `CelestiaSpec` parses as
-/// bech32 `celestia1...`. A bundle that's valid for one DA may be
-/// invalid for the other.
+/// bech32 `celestia1...`. A bundle that's valid for one DA is
+/// generally invalid for the other.
 ///
-/// `verify` runs `create_genesis_config` against BOTH specs so the
-/// operator's iteration loop reflects the union of constraints any
-/// deployment target imposes. See issue #325 for history.
+/// `verify` / `generate` take a `--da` flag selecting which spec to
+/// validate against. Default is `celestia` (production target). Mock
+/// flow is opt-in for localnet / cross-OS-determinism tests. See
+/// issue #325 for history.
 type MockSpec = MockRollupSpec<Native>;
 type CelestiaSpec = CelestiaRollupSpec<Native>;
+
+#[derive(clap::ValueEnum, Clone, Copy, Debug, Default)]
+enum DaFlavor {
+    /// Mock DA (32-byte hex `seq_da_address`). Use for localnet,
+    /// integration tests, cross-OS genesis-determinism CI.
+    Mock,
+    /// Celestia DA (bech32 `celestia1...` `seq_da_address`). Use for
+    /// `ligate-devnet-1` and any production-shape deployment.
+    #[default]
+    Celestia,
+}
 
 /// The 8 module JSON filenames the genesis loader expects, in
 /// `Module::genesis` declaration order. Matches
@@ -109,6 +121,11 @@ enum Command {
         /// Directory containing the 8 module JSONs.
         #[arg(long, value_name = "DIR")]
         dir: PathBuf,
+        /// Which DA spec to validate against. Default is `celestia`
+        /// (production target). Pass `--da mock` for localnet /
+        /// integration / cross-OS-determinism CI.
+        #[arg(long, value_enum, default_value_t = DaFlavor::Celestia)]
+        da: DaFlavor,
     },
 
     /// Substitute addresses in a template genesis bundle to produce a
@@ -124,6 +141,10 @@ enum Command {
         /// Output directory. Created if it doesn't exist.
         #[arg(long, value_name = "DIR")]
         output: PathBuf,
+        /// Which DA spec the substituted output targets. Drives the
+        /// post-generate verify pass. Default is `celestia`.
+        #[arg(long, value_enum, default_value_t = DaFlavor::Celestia)]
+        da: DaFlavor,
     },
 
     /// Generate one or more Ed25519 keypairs and derive their
@@ -183,15 +204,15 @@ struct Substitutions {
 fn main() -> ExitCode {
     let args = Args::parse();
     match args.command {
-        Command::Verify { dir } => match run_verify(&dir) {
+        Command::Verify { dir, da } => match run_verify(&dir, da) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("verify failed: {e:#}");
                 ExitCode::FAILURE
             }
         },
-        Command::Generate { template, substitutions, output } => {
-            match run_generate(&template, &substitutions, &output) {
+        Command::Generate { template, substitutions, output, da } => {
+            match run_generate(&template, &substitutions, &output, da) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
                     eprintln!("generate failed: {e:#}");
@@ -262,27 +283,45 @@ fn run_keys_generate(roles: &[String], output: &Path) -> anyhow::Result<()> {
 /// as a typed `GenesisError` that this command prints verbatim, so
 /// the operator's iteration loop is "edit JSON, run verify, read
 /// error, repeat".
-fn run_verify(dir: &Path) -> anyhow::Result<()> {
+fn run_verify(dir: &Path, da: DaFlavor) -> anyhow::Result<()> {
     if !dir.is_dir() {
         return Err(anyhow!("not a directory: {}", dir.display()));
     }
     let paths = GenesisPaths::from_dir(dir);
 
-    // Validate against the Celestia spec first (it's the production
-    // target; bech32 `celestia1...` for `seq_da_address` is what
-    // operators ship). Then mock-spec for cross-DA consistency.
-    let cfg = create_genesis_config::<CelestiaSpec>(&paths).with_context(|| {
-        format!("genesis bundle at {} failed Celestia-DA validation", dir.display())
-    })?;
-    create_genesis_config::<MockSpec>(&paths).with_context(|| {
-        format!("genesis bundle at {} failed Mock-DA validation", dir.display())
-    })?;
+    // The `seq_da_address` field is `<S::Da as DaSpec>::Address`; its
+    // serde shape depends on the chosen DA. Validate against whichever
+    // spec matches the operator's deployment target.
+    let (treasury, lgt_token_id, n_sets, n_schemas) = match da {
+        DaFlavor::Celestia => {
+            let cfg = create_genesis_config::<CelestiaSpec>(&paths).with_context(|| {
+                format!("genesis bundle at {} failed Celestia-DA validation", dir.display())
+            })?;
+            (
+                cfg.attestation.treasury.to_string(),
+                cfg.attestation.lgt_token_id.to_string(),
+                cfg.attestation.initial_attestor_sets.len(),
+                cfg.attestation.initial_schemas.len(),
+            )
+        }
+        DaFlavor::Mock => {
+            let cfg = create_genesis_config::<MockSpec>(&paths).with_context(|| {
+                format!("genesis bundle at {} failed Mock-DA validation", dir.display())
+            })?;
+            (
+                cfg.attestation.treasury.to_string(),
+                cfg.attestation.lgt_token_id.to_string(),
+                cfg.attestation.initial_attestor_sets.len(),
+                cfg.attestation.initial_schemas.len(),
+            )
+        }
+    };
 
-    eprintln!("verify: OK (Celestia + Mock DA specs)");
-    eprintln!("  treasury: {}", cfg.attestation.treasury);
-    eprintln!("  lgt_token_id: {}", cfg.attestation.lgt_token_id);
-    eprintln!("  initial_attestor_sets: {}", cfg.attestation.initial_attestor_sets.len());
-    eprintln!("  initial_schemas: {}", cfg.attestation.initial_schemas.len());
+    eprintln!("verify: OK (DA={:?})", da);
+    eprintln!("  treasury: {}", treasury);
+    eprintln!("  lgt_token_id: {}", lgt_token_id);
+    eprintln!("  initial_attestor_sets: {}", n_sets);
+    eprintln!("  initial_schemas: {}", n_schemas);
     Ok(())
 }
 
@@ -303,7 +342,12 @@ fn run_verify(dir: &Path) -> anyhow::Result<()> {
 ///    syntactic validation but break a cross-module invariant
 ///    (e.g. introducing a duplicate address that violates a uniqueness
 ///    check) surface here.
-fn run_generate(template: &Path, subs_path: &Path, output: &Path) -> anyhow::Result<()> {
+fn run_generate(
+    template: &Path,
+    subs_path: &Path,
+    output: &Path,
+    da: DaFlavor,
+) -> anyhow::Result<()> {
     let subs_text = std::fs::read_to_string(subs_path)
         .with_context(|| format!("read substitutions from {}", subs_path.display()))?;
     let subs: Substitutions = toml::from_str(&subs_text)
@@ -337,8 +381,8 @@ fn run_generate(template: &Path, subs_path: &Path, output: &Path) -> anyhow::Res
     }
 
     eprintln!("generate: wrote {} files to {}", GENESIS_FILES.len(), output.display());
-    eprintln!("generate: validating output...");
-    run_verify(output)?;
+    eprintln!("generate: validating output (DA={:?})...", da);
+    run_verify(output, da)?;
     Ok(())
 }
 
