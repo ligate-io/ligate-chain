@@ -43,6 +43,10 @@ tokio.workspace = true
 # this, transitive visibility through `attestation/native` isn't
 # enough for `use prometheus`.
 prometheus.workspace = true
+# Property-based testing for codec roundtrips (#122). Complements
+# `borsh_snapshot.rs` (wire-format guard) with random-input
+# decode(encode(t)) == t coverage.
+proptest = "1"
 
 [features]
 default = []
