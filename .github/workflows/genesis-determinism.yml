@@ -1,0 +1,161 @@
+name: Genesis determinism
+
+# Cross-OS reproducibility check for `ligate-genesis-tool generate`.
+#
+# Runs the tool with the same inputs on Linux and macOS, sha256s each
+# output file, and asserts the hashes match across the two runners.
+# Divergence is detected as a hard error.
+#
+# Triggers narrowly: only when genesis-tool, genesis fixture, or this
+# workflow itself changes. The cross-OS build is expensive (~5-10 min
+# cold cache); skipping it on unrelated PRs keeps the cost contained.
+#
+# Tracking issue: ligate-io/ligate-chain#278.
+
+on:
+  pull_request:
+    paths:
+      - 'crates/genesis-tool/**'
+      - 'devnet-1/genesis/**'
+      - 'ops/genesis-determinism/**'
+      - '.github/workflows/genesis-determinism.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/genesis-tool/**'
+      - 'devnet-1/genesis/**'
+      - 'ops/genesis-determinism/**'
+      - '.github/workflows/genesis-determinism.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  SKIP_GUEST_BUILD: "1"
+  RISC0_SKIP_BUILD_KERNELS: "1"
+  CONSTANTS_MANIFEST_PATH: ${{ github.workspace }}/constants.toml
+
+jobs:
+  generate:
+    name: generate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch_label: linux-amd64
+          - os: macos-14
+            arch_label: darwin-arm64
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.0
+
+      - name: Install libclang (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+
+      - name: Install libclang (macos)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=/opt/homebrew/opt/llvm/lib" >> $GITHUB_ENV
+          echo "DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/opt/llvm/lib" >> $GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch_label }}
+
+      - name: Build ligate-genesis-tool
+        run: cargo build --release -p ligate-genesis-tool
+
+      - name: Generate from devnet-1 template
+        run: |
+          mkdir -p genesis-out
+          ./target/release/ligate-genesis-tool generate \
+            --template devnet-1/genesis \
+            --substitutions ops/genesis-determinism/substitutions.toml \
+            --output genesis-out
+
+      - name: Hash output files
+        run: |
+          # Sort by filename for stable comparison. Each file gets a
+          # `<sha256>  <relpath>` line. The relpath is identical across
+          # runners (same input filenames); only the hash should match.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+              HASHER="shasum -a 256"
+          else
+              HASHER="sha256sum"
+          fi
+          find genesis-out -type f | sort | while read f; do
+              $HASHER "$f"
+          done > hashes-${{ matrix.arch_label }}.txt
+          echo "===== hashes (${{ matrix.arch_label }}) ====="
+          cat hashes-${{ matrix.arch_label }}.txt
+
+      - name: Upload hashes
+        uses: actions/upload-artifact@v4
+        with:
+          name: hashes-${{ matrix.arch_label }}
+          path: hashes-${{ matrix.arch_label }}.txt
+          retention-days: 7
+
+      - name: Upload output (for diff-on-failure)
+        uses: actions/upload-artifact@v4
+        with:
+          name: genesis-out-${{ matrix.arch_label }}
+          path: genesis-out/
+          retention-days: 7
+
+  compare:
+    name: compare hashes
+    needs: generate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download linux hashes
+        uses: actions/download-artifact@v4
+        with:
+          name: hashes-linux-amd64
+          path: linux/
+
+      - name: Download macOS hashes
+        uses: actions/download-artifact@v4
+        with:
+          name: hashes-darwin-arm64
+          path: darwin/
+
+      - name: Diff
+        run: |
+          # Normalise the relpath column (which differs only in the
+          # ./genesis-out prefix on each runner) before diffing the
+          # hashes themselves.
+          # First column is the sha256; second column is the file path.
+          # We compare ONLY the sha256s, keyed by filename, so runner-
+          # local working directory differences don't masquerade as
+          # non-determinism.
+          awk '{
+              # Extract just the basename of the file column for keying
+              n = split($2, p, "/")
+              key = p[n]
+              print key, $1
+          }' linux/hashes-linux-amd64.txt | sort > /tmp/linux.txt
+
+          awk '{
+              n = split($2, p, "/")
+              key = p[n]
+              print key, $1
+          }' darwin/hashes-darwin-arm64.txt | sort > /tmp/darwin.txt
+
+          echo "===== linux ====="
+          cat /tmp/linux.txt
+          echo "===== darwin ====="
+          cat /tmp/darwin.txt
+
+          if ! diff -u /tmp/linux.txt /tmp/darwin.txt; then
+              echo "::error::genesis-tool output diverges between linux and macOS"
+              echo "::error::See uploaded artifacts genesis-out-linux-amd64 + genesis-out-darwin-arm64 to inspect the diff"
+              exit 1
+          fi
+          echo "OK: cross-OS sha256s identical."
