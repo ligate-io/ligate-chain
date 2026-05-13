@@ -1,0 +1,206 @@
+{
+  "_doc": [
+    "Grafana dashboard for ligate-devnet-1 cost monitoring (#277).",
+    "Two halves: Mocha TIA spend (left) + GCP infra spend (right).",
+    "",
+    "Import via Grafana UI > Dashboards > New > Import > Paste JSON.",
+    "Pin to the 'Ligate Ops' folder once the public Grafana (#234)",
+    "is up.",
+    "",
+    "Data sources:",
+    "- 'Prometheus' for TIA panels (scrapes celestia-light's /metrics).",
+    "- 'GCP-BigQuery' for infra panels (reads billing export tables).",
+    "",
+    "Variables (drop-down at top of dashboard):",
+    "- $instance: which chain VM (sequencer / followers).",
+    "- $window: aggregation window for draw-down rates (1h, 24h, 7d).",
+    "",
+    "Time-range default: Last 7 days, refresh 1m."
+  ],
+  "title": "Ligate devnet-1 — cost monitoring",
+  "uid": "ligate-devnet-1-cost",
+  "tags": ["ligate", "devnet-1", "cost"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": "Prometheus",
+        "query": "label_values(up{job=\"celestia-light\"}, instance)",
+        "current": { "text": "All", "value": "$__all" },
+        "includeAll": true,
+        "refresh": 2
+      },
+      {
+        "name": "window",
+        "type": "custom",
+        "query": "1h,24h,7d",
+        "current": { "text": "24h", "value": "24h" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Current TIA balance",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "celestia_node_da_signer_balance_utia{instance=~\"$instance\"} / 1e6",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "green", "value": 50 }
+            ]
+          }
+        }
+      },
+      "description": "Current TIA balance on the DA signer wallet in whole TIA (utia / 1e6). Source: Celestia light node's /metrics endpoint. Red at <10 TIA (~7 day runway), yellow at <50 TIA, green above."
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "TIA balance trend",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "celestia_node_da_signer_balance_utia{instance=~\"$instance\"} / 1e6",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      },
+      "description": "TIA balance over the dashboard's time range. A consistent downward slope is expected (blob submission burns TIA); a flat line indicates no submissions are happening (which would coincide with chain stall alerts)."
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "TIA draw-down rate (per $window)",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[$window]) * -1 * 60 * 60 * 24 / 1e6",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 3
+        }
+      },
+      "description": "TIA burned per day, averaged over $window. Negative draw-down (positive sign here after the *-1) means balance is decreasing. Compare against the alert threshold (50 TIA/30 days = ~1.67 TIA/day baseline; spikes above 5 TIA/day suggest abuse or backfill anomaly)."
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "GCP infra",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 }
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "VM-hours this month",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
+      "datasource": "GCP-BigQuery",
+      "targets": [
+        {
+          "rawSql": "SELECT SUM(usage.amount) AS vm_hours FROM `${billing_table}` WHERE service.description = 'Compute Engine' AND usage.unit = 'hour' AND DATE(usage_start_time) >= DATE_TRUNC(CURRENT_DATE(), MONTH)",
+          "format": "table"
+        }
+      ],
+      "description": "Sum of vCPU-hours billed this calendar month. Set the BigQuery dataset name in the dashboard variable `${billing_table}`. Cross-check against expected envelope (1 e2-medium = ~720 hours/month)."
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "GCS storage GB-months",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
+      "datasource": "GCP-BigQuery",
+      "targets": [
+        {
+          "rawSql": "SELECT SUM(usage.amount_in_pricing_units) AS gb_months FROM `${billing_table}` WHERE service.description = 'Cloud Storage' AND DATE(usage_start_time) >= DATE_TRUNC(CURRENT_DATE(), MONTH)",
+          "format": "table"
+        }
+      ],
+      "description": "Cloud Storage GB-month consumption. Dominated by the backup + snapshot buckets; surfaces if retention isn't pruning."
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Network egress GB",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
+      "datasource": "GCP-BigQuery",
+      "targets": [
+        {
+          "rawSql": "SELECT SUM(usage.amount_in_pricing_units) AS gb FROM `${billing_table}` WHERE service.description = 'Compute Engine' AND sku.description LIKE '%Network Egress%' AND DATE(usage_start_time) >= DATE_TRUNC(CURRENT_DATE(), MONTH)",
+          "format": "table"
+        }
+      ],
+      "description": "Egress GB this month. RPC + indexer traffic. Spike here means either real partner volume or a backfill abuse pattern."
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Estimated month-to-date $USD",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
+      "datasource": "GCP-BigQuery",
+      "targets": [
+        {
+          "rawSql": "SELECT SUM(cost) AS month_to_date FROM `${billing_table}` WHERE DATE(usage_start_time) >= DATE_TRUNC(CURRENT_DATE(), MONTH)",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      },
+      "description": "Total billed cost this calendar month so far. Yellow at $50, red at $200 — devnet's expected envelope is ~$30-$50/mo. Spike here is the first signal something's misconfigured."
+    }
+  ]
+}
