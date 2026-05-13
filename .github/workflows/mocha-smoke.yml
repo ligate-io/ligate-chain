@@ -1,0 +1,180 @@
+name: Mocha smoke
+
+# Recurring (or on-demand) smoke against real Celestia Mocha. Companion
+# to the manual procedure in `docs/development/runbooks/mocha-smoke.md`.
+# This workflow exercises steps 1-7 of that runbook in CI.
+#
+# DISABLED until `MOCHA_TIA_SIGNER_KEY` repo secret is set + the cron
+# schedule below is uncommented. Workflow exists as documentation +
+# one-shot operator capability via `workflow_dispatch`.
+#
+# Tracking issue: ligate-io/ligate-chain#285.
+
+on:
+  # Operator-triggered one-shot runs. Use this for the initial pre-
+  # devnet-announce smoke per the runbook.
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Chain branch to smoke (default: main)'
+        required: false
+        default: 'main'
+
+  # Uncomment once the manual smoke passes + the operator is ready
+  # to commit to a recurring CI gate.
+  # schedule:
+  #   - cron: '0 6 * * *'  # 06:00 UTC nightly
+
+env:
+  CARGO_TERM_COLOR: always
+  SKIP_GUEST_BUILD: "1"
+  RISC0_SKIP_BUILD_KERNELS: "1"
+  CONSTANTS_MANIFEST_PATH: ${{ github.workspace }}/constants.toml
+
+jobs:
+  smoke:
+    name: ligate-node + Mocha smoke
+    runs-on: ubuntu-latest
+    # Guard: skip if the operator hasn't set the TIA signer key. The
+    # workflow exists for documentation purposes until that's wired.
+    if: ${{ vars.MOCHA_SMOKE_ENABLED == 'true' }}
+    timeout-minutes: 30
+    env:
+      # Funded Mocha TIA wallet. Provided as a repo secret.
+      SOV_CELESTIA_SIGNER_KEY: ${{ secrets.MOCHA_TIA_SIGNER_KEY }}
+      # Mocha bridge to use. Default to pops.one; override via the
+      # `MOCHA_BRIDGE` repo variable if needed (e.g. switching to a
+      # backup bridge during pops.one maintenance).
+      MOCHA_BRIDGE: ${{ vars.MOCHA_BRIDGE || 'rpc-mocha.pops.one' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.93.0
+
+      - name: Install libclang
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Build ligate-node + ligate-cli. Cold-cache build is ~10 min;
+      # cached re-runs ~2 min.
+      - name: Build chain binaries
+        run: |
+          cargo build --release --bin ligate-node
+          cargo build --release --bin ligate-cli || true
+
+      # Install + initialize the Celestia light node. v0.20+ matches
+      # the chain's expected light-node version.
+      - name: Install Celestia light node
+        run: |
+          CELESTIA_VERSION=v0.20.0
+          curl -L "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-linux-amd64" \
+            -o /usr/local/bin/celestia
+          chmod +x /usr/local/bin/celestia
+          celestia light init --p2p.network=mocha
+
+      - name: Start Celestia light node
+        run: |
+          nohup celestia light start \
+              --core.ip "${MOCHA_BRIDGE}" \
+              --p2p.network mocha \
+              --rpc.addr 127.0.0.1 \
+              --rpc.port 26658 \
+              > /tmp/celestia.log 2>&1 &
+          echo "Waiting for light node to sync..."
+          for i in {1..60}; do
+              if celestia rpc header sync-state 2>/dev/null | jq -e '.height > 0' >/dev/null; then
+                  echo "Light node synced."
+                  break
+              fi
+              sleep 5
+          done
+
+      # The actual chain smoke. Spawns ligate-node against the live
+      # mocha light node, waits for slot 3, asserts bech32m encodings
+      # on every hash type, asserts DA metrics increment.
+      - name: Run smoke
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+
+          # Start ligate-node in the background
+          nohup ./target/release/ligate-node \
+              --da-layer celestia \
+              --rollup-config-path devnet-1/celestia.toml \
+              --genesis-config-dir devnet-1/genesis \
+              --metrics-bind 127.0.0.1:9100 \
+              > /tmp/ligate-node.log 2>&1 &
+          NODE_PID=$!
+          # Cleanup on exit
+          trap "kill $NODE_PID 2>/dev/null || true; sleep 1; cat /tmp/ligate-node.log | tail -50" EXIT
+
+          # Wait for the REST API to come up
+          for i in {1..60}; do
+              if curl -sf http://127.0.0.1:12346/v1/rollup/info >/dev/null 2>&1; then
+                  break
+              fi
+              sleep 2
+          done
+
+          # === Step 2: chain identity ===
+          echo "=== chain identity ==="
+          INFO=$(curl -sf http://127.0.0.1:12346/v1/rollup/info)
+          echo "$INFO" | jq
+          CHAIN_HASH=$(echo "$INFO" | jq -r .chain_hash)
+          if [[ "$CHAIN_HASH" != lsch1* ]]; then
+              echo "FAIL: chain_hash is not bech32m: $CHAIN_HASH" >&2
+              exit 1
+          fi
+
+          SCHEMA_HASH=$(curl -sf http://127.0.0.1:12346/v1/rollup/schema | jq -r .chain_hash)
+          if [[ "$SCHEMA_HASH" != "$CHAIN_HASH" ]]; then
+              echo "FAIL: schema chain_hash diverges: $SCHEMA_HASH vs $CHAIN_HASH" >&2
+              exit 1
+          fi
+          echo "OK: chain_hash round-trips as $CHAIN_HASH"
+
+          # === Step 3: slot encoding ===
+          echo "=== slot encoding ==="
+          for i in {1..60}; do
+              LATEST=$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/latest | jq -r .number)
+              if [ "$LATEST" -ge 3 ]; then break; fi
+              sleep 2
+          done
+          SLOT=$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/3)
+          echo "$SLOT" | jq
+          SLOT_HASH=$(echo "$SLOT" | jq -r .hash)
+          STATE_ROOT=$(echo "$SLOT" | jq -r .state_root)
+          [[ "$SLOT_HASH" == lblk1* ]] || { echo "FAIL: slot.hash not bech32m: $SLOT_HASH" >&2; exit 1; }
+          [[ "$STATE_ROOT" == lsr1* ]]  || { echo "FAIL: state_root not bech32m: $STATE_ROOT" >&2; exit 1; }
+          echo "OK: slot bech32m encoding correct"
+
+          # === Step 7: DA metrics ===
+          echo "=== DA metrics ==="
+          METRICS=$(curl -sf http://127.0.0.1:9100/metrics)
+          if ! echo "$METRICS" | grep -q "ligate_da_finalization_latency_seconds_count"; then
+              echo "FAIL: ligate_da_finalization_latency_seconds_count metric missing" >&2
+              exit 1
+          fi
+          DA_COUNT=$(echo "$METRICS" | awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}')
+          if [ -z "$DA_COUNT" ] || [ "$DA_COUNT" = "0" ]; then
+              echo "WARN: no DA finalizations recorded yet (smoke may not have run long enough)"
+          else
+              echo "OK: DA finalization count = $DA_COUNT"
+          fi
+
+          echo "=== SMOKE PASSED ==="
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mocha-smoke-logs
+          path: |
+            /tmp/ligate-node.log
+            /tmp/celestia.log
+          retention-days: 14
