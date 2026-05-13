@@ -1,0 +1,15 @@
+[Unit]
+Description=Publish daily public state snapshot for follower bootstrap
+Requires=ligate-snapshot-publish.service
+
+[Timer]
+# 04:30 UTC nightly. 1 hour after `ligate-backup-daily.timer` so the
+# two don't race for the same systemctl stop window. Cold-snapshot
+# downtime is ~30s; schedule reflects the low-traffic window for our
+# operator timezone.
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+Unit=ligate-snapshot-publish.service
+
+[Install]
+WantedBy=timers.target
