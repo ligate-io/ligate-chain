@@ -30,9 +30,9 @@
 # ---------------------------------------------------------------------
 # [addresses]: placeholder address (left) -> real address (right)
 #
-# All three placeholders below are deterministic test fixtures derived
-# from public seeds (see `devnet/genesis/`); their private keys are
-# derivable. Anyone could impersonate them. Substitute every one.
+# All four placeholders below are deterministic test fixtures committed
+# to `devnet-1/genesis/`. Their private keys are derivable from public
+# seeds, so anyone could impersonate them. Substitute every one.
 # ---------------------------------------------------------------------
 [addresses]
 
@@ -40,8 +40,8 @@
 # address fills:
 #   - sequencer registry's `seq_rollup_address`
 #   - operator-incentives `reward_address`
-#   - bank `treasury`
-#   - 100M nano-LGT initial balance
+#   - bank `treasury` + minting authority (admins)
+#   - 900M nano-LGT initial balance
 #
 # For real devnet-1 deploy, you can either:
 #   (a) Map this single placeholder to ONE real address and reuse it
@@ -53,16 +53,16 @@
 # If (a): just substitute this one line. If (b): substitute this AND
 # add per-role overrides via additional substitution rounds, OR run
 # the tool then hand-edit the four JSONs that reference this address.
-"lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt" = "<YOUR_OPERATOR_ADDRESS>"
+"lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "<YOUR_OPERATOR_ADDRESS>"
 
-# Demo wallet 1 (placeholder ships with 10M LGT). Optional; you can:
+# Demo wallet 1 (placeholder ships with 50M LGT). Optional; you can:
 #   - Substitute with a real demo / faucet-source address
 #   - Or set `balances` below to 0 to deactivate it without
 #     substituting
-"lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7" = "<YOUR_DEMO_WALLET_1>"
+"lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "<YOUR_DEMO_WALLET_1>"
 
-# Demo wallet 2 (placeholder ships with 10M LGT). Same notes as above.
-"lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx" = "<YOUR_DEMO_WALLET_2>"
+# Demo wallet 2 (placeholder ships with 50M LGT). Same notes as above.
+"lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "<YOUR_DEMO_WALLET_2>"
 
 # Celestia DA wallet that signs blob-submission transactions. The
 # placeholder bech32 below is the all-zero 20-byte address encoded
@@ -82,23 +82,23 @@
 # Value is the new balance as a decimal string (matches `Amount` shape
 # in `bank.json`).
 #
-# Defaults from the placeholder genesis:
-#   bootstrap address: 100_000_000_000_000_000 (100M LGT)
-#   demo wallet 1:      10_000_000_000_000_000 (10M LGT)
-#   demo wallet 2:      10_000_000_000_000_000 (10M LGT)
+# Defaults from the placeholder genesis (post-#324, 1B total supply):
+#   bootstrap address: 900_000_000_000_000_000 (900M LGT)
+#   demo wallet 1:      50_000_000_000_000_000 (50M LGT)
+#   demo wallet 2:      50_000_000_000_000_000 (50M LGT)
 #
 # Bond requirements at genesis (from `sequencer_registry.json`,
 # `prover_incentives.json`, `attester_incentives.json`):
-#   sequencer bond: 1_000_000_000_000 nano-LGT (1 LGT)
+#   sequencer bond: 5_000_000_000_000 nano-LGT (5 LGT)
 #
 # The bootstrap address must hold at least the sequencer bond + some
 # slack for fees. If you split roles, ensure each role's address holds
 # its bond requirement.
 # ---------------------------------------------------------------------
 [balances]
-# "<YOUR_OPERATOR_ADDRESS>" = "100000000000000000"   # 100M nano-LGT
-# "<YOUR_DEMO_WALLET_1>"    = "10000000000000000"    # 10M  nano-LGT
-# "<YOUR_DEMO_WALLET_2>"    = "10000000000000000"    # 10M  nano-LGT
+# "<YOUR_OPERATOR_ADDRESS>" = "900000000000000000"   # 900M nano-LGT
+# "<YOUR_DEMO_WALLET_1>"    = "50000000000000000"    # 50M  nano-LGT
+# "<YOUR_DEMO_WALLET_2>"    = "50000000000000000"    # 50M  nano-LGT
 
 # ---------------------------------------------------------------------
 # Out of scope for this file (configured separately):
