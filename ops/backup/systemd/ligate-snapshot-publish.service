@@ -1,0 +1,17 @@
+[Unit]
+Description=Publish public state snapshot for new followers
+After=ligate-node.service
+
+[Service]
+Type=oneshot
+User=ligate
+EnvironmentFile=/etc/ligate/snapshot.env
+# `snapshot.env` provides at minimum:
+#   PUBLIC_BUCKET=ligate-snapshots-public
+#   GOOGLE_APPLICATION_CREDENTIALS=/etc/ligate/snapshot-sa.json
+# Optional: --hot for hot-snapshot mode (no downtime, slight
+# eventual-consistency window). Default is cold (~30s pause).
+ExecStart=/opt/ligate/scripts/publish-snapshot.sh --tier daily
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=30min
