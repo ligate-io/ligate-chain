@@ -54,6 +54,13 @@ jobs:
       # `MOCHA_BRIDGE` repo variable if needed (e.g. switching to a
       # backup bridge during pops.one maintenance).
       MOCHA_BRIDGE: ${{ vars.MOCHA_BRIDGE || 'rpc-mocha.pops.one' }}
+      # `celestia1...` bech32 of the operator's TIA wallet. Public
+      # value (derived from the public key of `MOCHA_TIA_SIGNER_KEY`),
+      # so it lives in a repo variable rather than a secret. Used to
+      # patch `seq_da_address` in the ephemeral genesis before chain
+      # boot; the chain validates that the registered sequencer's
+      # DA address matches the wallet signing blob submissions.
+      MOCHA_TIA_DA_ADDRESS: ${{ vars.MOCHA_TIA_DA_ADDRESS }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -68,11 +75,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # Build ligate-node + ligate-cli. Cold-cache build is ~10 min;
-      # cached re-runs ~2 min.
+      # Build ligate-node + ligate-cli + ligate-genesis-tool. The
+      # genesis-tool is what generates the ephemeral genesis below.
+      # Cold-cache build is ~50 min; cached re-runs ~2 min.
       - name: Build chain binaries
         run: |
-          cargo build --release --bin ligate-node
+          cargo build --release --bin ligate-node --bin ligate-genesis-tool
           cargo build --release --bin ligate-cli || true
 
       # Install + initialize the Celestia light node. Pin to a known
@@ -105,6 +113,56 @@ jobs:
               sleep 5
           done
 
+      # Generate ephemeral keys + run `ligate-genesis-tool` to produce
+      # a valid genesis bundle. The checked-in `devnet-1/genesis/`
+      # ships with placeholder addresses (zero-address `seq_da_address`,
+      # three placeholder `lig1*` addresses) that fail strict genesis
+      # validation. The real operator path runs this same flow with
+      # operator-controlled keys; for CI we generate ephemeral keys
+      # every run and burn them at job end.
+      #
+      # The genesis-tool substitutes the three `lig1*` placeholders.
+      # The DA-layer `seq_da_address` substitution is patched in
+      # separately via jq -- genesis-tool's substitution flow does
+      # not yet handle non-bech32-lig1 addresses (see issue #322 for
+      # the upstream gap).
+      - name: Generate ephemeral genesis for CI smoke
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/keys
+          ./target/release/ligate-genesis-tool keys generate \
+              --roles operator,demo1,demo2 \
+              --output /tmp/keys
+
+          OPERATOR=$(cat /tmp/keys/operator.address)
+          DEMO1=$(cat /tmp/keys/demo1.address)
+          DEMO2=$(cat /tmp/keys/demo2.address)
+
+          cat > /tmp/keys.toml <<EOF
+          [addresses]
+          "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "$OPERATOR"
+          "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "$DEMO1"
+          "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "$DEMO2"
+          EOF
+
+          ./target/release/ligate-genesis-tool generate \
+              --template devnet-1/genesis \
+              --substitutions /tmp/keys.toml \
+              --output /tmp/genesis
+
+          # Patch `seq_da_address` with the operator's celestia1 wallet
+          # address. The chain validates that the registered preferred
+          # sequencer's DA address matches the wallet signing blob
+          # submissions; placeholder all-zeros fails the bech32 parse.
+          jq --arg da "$MOCHA_TIA_DA_ADDRESS" \
+             '.sequencer_config.seq_da_address = $da' \
+             /tmp/genesis/sequencer_registry.json > /tmp/sr.json
+          mv /tmp/sr.json /tmp/genesis/sequencer_registry.json
+
+          ./target/release/ligate-genesis-tool verify --dir /tmp/genesis
+          echo "Ephemeral genesis ready at /tmp/genesis"
+          echo "GENESIS_DIR=/tmp/genesis" >> "$GITHUB_ENV"
+
       # The actual chain smoke. Spawns ligate-node against the live
       # mocha light node, waits for slot 3, asserts bech32m encodings
       # on every hash type, asserts DA metrics increment.
@@ -117,7 +175,7 @@ jobs:
           nohup ./target/release/ligate-node \
               --da-layer celestia \
               --rollup-config-path devnet-1/celestia.toml \
-              --genesis-config-dir devnet-1/genesis \
+              --genesis-config-dir "${GENESIS_DIR}" \
               --metrics-bind 127.0.0.1:9100 \
               > /tmp/ligate-node.log 2>&1 &
           NODE_PID=$!
