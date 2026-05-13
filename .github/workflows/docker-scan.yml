@@ -1,0 +1,92 @@
+name: Docker Scan
+
+# Vulnerability scan for the `ligate-node` container image. Runs on
+# PRs that touch the Dockerfile or this workflow, and on every push
+# to `main` to catch newly-published CVEs against the pinned base.
+# Doesn't gate releases (`docker.yml` handles publish on `v*` tags);
+# this is a PR-time check + a `main`-watchdog.
+#
+# Tracking issue: #280 (container image hardening).
+#
+# Why both PR-time and post-merge scans:
+#
+# - PR-time catches a developer changing the base or adding a system
+#   package that introduces a HIGH/CRITICAL CVE.
+# - The post-merge `main` schedule (via `push` to main + a weekly
+#   cron) catches CVE disclosures against an unchanged image: the
+#   pinned base may be fine today, vulnerable next week. The post-
+#   merge run is informational (uploads SARIF to GitHub Security
+#   so the alert surfaces), not gating.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/docker-scan.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/docker-scan.yml'
+  # Weekly scan of `main` against new CVE feeds. Pinned base may have
+  # a fresh disclosure even if our source hasn't changed.
+  schedule:
+    - cron: '0 9 * * 1'  # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write  # upload SARIF to Security tab
+
+jobs:
+  trivy:
+    name: Trivy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build the image locally to scan. We don't push; this is a
+      # scan-only job that consumes the built image and discards it.
+      # Cache scoped by ref to share with the publish workflow's cache
+      # when there's overlap.
+      - name: Build image for scan
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ligate-node:scan
+          cache-from: type=gha,scope=docker-scan
+          cache-to: type=gha,mode=max,scope=docker-scan
+          provenance: false
+
+      # Trivy with the SARIF format + the `security-events` permission
+      # populates GitHub's Security tab with any CVE findings. The
+      # severity gate (HIGH,CRITICAL) fails the PR check on actually
+      # serious issues but keeps medium/low informational.
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ligate-node:scan
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          # Don't ignore unfixed CVEs: a real CVE without a patch is
+          # still a real CVE; operator awareness matters even if we
+          # can't fix it inside the image.
+          ignore-unfixed: false
+          # Exit non-zero on findings only for pull requests; for
+          # push-to-main + scheduled runs, surface via SARIF upload
+          # without failing the workflow.
+          exit-code: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy-container'

@@ -19,7 +19,12 @@
 # Releases tarball workflow (#194). Operators choose whichever drop
 # matches their ops culture; the binary inside is identical.
 
-FROM rust:1.93-bookworm AS builder
+# Base images pinned by digest, not by floating tag. A `docker pull rust:1.93-bookworm`
+# six months from now might quietly drag in CVE fixes, ABI bumps, or
+# `apt` archive shifts that change the build. Pinning the digest makes
+# the build reproducible across time; bump deliberately in a PR after
+# reviewing the diff. See `docs/development/docker.md`.
+FROM rust:1.93-bookworm@sha256:7c4ae649a84014c467d79319bbf17ce2632ae8b8be123ac2fb2ea5be46823f31 AS builder
 
 # Build-time deps for the host binary. The chain depends on rocksdb
 # (vendors librocksdb-sys), tonic, ed25519-dalek, and the sov-* graph;
@@ -60,7 +65,7 @@ RUN cargo build --release --bin ligate-node --locked
 # in newer toolchains, but the explicit call is cheap and idempotent).
 RUN strip /work/target/release/ligate-node || true
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:67b30a61dc87758f0caf819646104f29ecbda97d920aaf5edc834128ac8493d3 AS runtime
 
 # Runtime deps: TLS (rustls uses ring, no openssl needed at link
 # time, but Celestia gRPC paths through reqwest may; keep ca-certs
