@@ -163,3 +163,69 @@ groups:
             congested or our submission path is buffering. Investigate
             via the Celestia explorer + the local light node.
           runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/da-finalization-latency-high.md
+
+  - name: ligate-node.cost
+    interval: 5m
+    rules:
+      # TIA balance warning + page tiers. Sources from the Celestia
+      # light node's own /metrics endpoint (the chain doesn't expose
+      # this directly; the light node is the local authority on its
+      # wallet balance).
+      #
+      # Thresholds calibrated against `da-signer-rotation.md`'s
+      # "TIA balance monitoring" section:
+      # - 50 TIA = ~30 days at our submission cadence (warn-level)
+      # - 12 TIA = ~7 days runway (page-level — operator should
+      #   already be topping up by now)
+      - alert: TIABalanceLow
+        expr: |
+          (celestia_node_da_signer_balance_utia / 1e6) < 50
+        for: 30m
+        labels:
+          severity: warn
+          component: chain
+        annotations:
+          summary: "TIA balance below 50 (~30 days runway) on {{ $labels.instance }}"
+          description: |
+            DA signer wallet has dropped below 50 TIA, roughly 30 days
+            of expected blob-fee burn. Plan a top-up from treasury in
+            the next week. Procedure:
+            docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
+
+      - alert: TIABalanceCritical
+        expr: |
+          (celestia_node_da_signer_balance_utia / 1e6) < 12
+        for: 5m
+        labels:
+          severity: page
+          component: chain
+        annotations:
+          summary: "TIA balance below 12 (~7 days runway) on {{ $labels.instance }}"
+          description: |
+            DA signer wallet has dropped below 12 TIA, roughly 7 days
+            of runway. Top up immediately or blob submission halts.
+            Procedure: docs/development/runbooks/da-signer-rotation.md
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
+
+      # Daily draw-down rate alarm. Steady-state burn is ~1-2 TIA/day
+      # (1 blob per slot at ~1000ms cadence, average blob fee ~0.001
+      # TIA). A 24h-rolling rate above 5 TIA/day suggests abnormal
+      # activity: backfill anomaly, partner abuse, or a bug spiking
+      # blob production.
+      - alert: TIADrawdownSpike
+        expr: |
+          rate(celestia_node_da_signer_balance_utia[24h]) * -1 * 86400 / 1e6 > 5
+        for: 1h
+        labels:
+          severity: warn
+          component: chain
+        annotations:
+          summary: "TIA draw-down >5 TIA/day on {{ $labels.instance }}"
+          description: |
+            24h-rolling burn rate exceeds 5 TIA/day, well above the
+            steady-state baseline (~1-2/day). Investigate next:
+            - Mempool depth spike (partner abuse?)
+            - Backfill replay loop (followers reprocessing)
+            - Bug spiking blob production rate
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/cost-monitoring.md
