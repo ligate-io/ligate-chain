@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use ligate_rollup::chain_config::load_split_config;
-use ligate_rollup::MockRollupSpec;
+use ligate_rollup::{CelestiaRollupSpec, MockRollupSpec};
 use ligate_stf::genesis_config::GenesisPaths;
 use ligate_stf::Runtime;
 use sov_address::MultiAddressEvm;
@@ -113,13 +113,13 @@ fn devnet_1_celestia_toml_parses_against_celestia_blueprint_types() {
 
 #[test]
 fn devnet_1_genesis_jsons_load_and_pass_cross_module_validation() {
-    // The committed devnet-1/genesis/ uses the same placeholder
-    // addresses as devnet/genesis/ (test fixtures, not for production
-    // deploy; the README explains the substitution path via the
-    // genesis-tool in #191). The validator runs the same cross-module
-    // checks regardless, so a schema drift in any module's JSON or a
-    // tightened invariant breaks this test.
-    type S = MockRollupSpec<Native>;
+    // The committed devnet-1/genesis/ uses placeholder lig1 addresses
+    // shared with devnet/genesis/, plus a Celestia bech32 placeholder
+    // for `seq_da_address` (test fixtures, not for production deploy;
+    // operators substitute via the genesis-tool — see #191 / #325).
+    // devnet-1 is Celestia-only by design, so validate against the
+    // Celestia rollup spec (which parses `seq_da_address` as bech32).
+    type S = CelestiaRollupSpec<Native>;
     let paths = GenesisPaths::from_dir(devnet_1_dir().join("genesis"));
     let _config = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)
         .unwrap_or_else(|e| {

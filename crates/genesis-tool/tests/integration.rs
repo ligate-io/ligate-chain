@@ -42,10 +42,14 @@ fn binary() -> PathBuf {
 
 #[test]
 fn verify_succeeds_on_localnet_bundle() {
+    // Localnet fixture targets Mock DA (32-byte hex `seq_da_address`);
+    // pass `--da mock` so the verifier picks the matching DA spec.
     let output = Command::new(binary())
         .arg("verify")
         .arg("--dir")
         .arg(devnet_genesis_dir())
+        .arg("--da")
+        .arg("mock")
         .output()
         .expect("invoke binary");
     assert!(
@@ -75,6 +79,8 @@ fn verify_fails_on_corrupted_bundle() {
         .arg("verify")
         .arg("--dir")
         .arg(tmp.path())
+        .arg("--da")
+        .arg("mock")
         .output()
         .expect("invoke binary");
     assert!(
@@ -103,6 +109,8 @@ fn generate_with_empty_substitutions_round_trips() {
         .arg(&subs_path)
         .arg("--output")
         .arg(&output_dir)
+        .arg("--da")
+        .arg("mock")
         .output()
         .expect("invoke binary");
     assert!(
@@ -118,6 +126,8 @@ fn generate_with_empty_substitutions_round_trips() {
         .arg("verify")
         .arg("--dir")
         .arg(&output_dir)
+        .arg("--da")
+        .arg("mock")
         .output()
         .expect("invoke verify");
     assert!(
@@ -164,6 +174,8 @@ fn generate_substitutes_addresses_and_balances() {
         .arg(&subs_path)
         .arg("--output")
         .arg(&output_dir)
+        .arg("--da")
+        .arg("mock")
         .output()
         .expect("invoke binary");
     assert!(

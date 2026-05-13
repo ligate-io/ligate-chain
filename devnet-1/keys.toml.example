@@ -64,6 +64,18 @@
 # Demo wallet 2 (placeholder ships with 10M LGT). Same notes as above.
 "lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx" = "<YOUR_DEMO_WALLET_2>"
 
+# Celestia DA wallet that signs blob-submission transactions. The
+# placeholder bech32 below is the all-zero 20-byte address encoded
+# with the `celestia` HRP (visually obvious it's a placeholder).
+# Substitute with the bech32 form of the wallet that holds your Mocha
+# TIA balance — i.e. the wallet derived from `SOV_CELESTIA_SIGNER_KEY`.
+# This wallet must equal the sequencer that submits blobs, or the chain
+# will reject the registered DA address at startup.
+#
+# Derive the bech32 from your hex private key with any cosmos-sdk
+# keyring tool, or from a celestia-light-node import.
+"celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as" = "<YOUR_CELESTIA_DA_ADDRESS>"
+
 # ---------------------------------------------------------------------
 # [balances]: optional override of nano-LGT balances post-substitution.
 # Key is the POST-substitution address (the value side of [addresses]).
