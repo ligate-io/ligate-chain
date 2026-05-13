@@ -51,20 +51,28 @@ use std::process::ExitCode;
 
 use anyhow::{anyhow, Context};
 use clap::{Parser, Subcommand};
-use ligate_rollup::MockRollupSpec;
+use ligate_rollup::{CelestiaRollupSpec, MockRollupSpec};
 use ligate_stf::genesis_config::{create_genesis_config, GenesisPaths};
 use serde::Deserialize;
 use sov_modules_api::execution_mode::Native;
 
-/// Concrete spec used to drive the genesis loader.
+/// Concrete specs used to drive the genesis loader.
 ///
-/// `MockRollupSpec<Native>` carries `MultiAddressEvm` (the production
-/// address shape) so the tool's deserialization matches what the
-/// `ligate-node` binary does at startup. The DA flavour is a property
-/// of the `RollupConfig` (`devnet/celestia.toml` vs `devnet/rollup.toml`),
-/// not of the genesis bundle, so picking the mock spec for genesis
-/// validation does not bias against Celestia deployments.
-type Spec = MockRollupSpec<Native>;
+/// `MockRollupSpec<Native>` and `CelestiaRollupSpec<Native>` both carry
+/// `MultiAddressEvm` (the production address shape) so the tool's
+/// deserialization matches what the `ligate-node` binary does at
+/// startup. They differ only in their DA spec, and that difference
+/// matters for the genesis bundle: `sequencer_registry.json`'s
+/// `seq_da_address` field is `<S::Da as DaSpec>::Address`, which
+/// `MockDaSpec` parses as 32-byte hex and `CelestiaSpec` parses as
+/// bech32 `celestia1...`. A bundle that's valid for one DA may be
+/// invalid for the other.
+///
+/// `verify` runs `create_genesis_config` against BOTH specs so the
+/// operator's iteration loop reflects the union of constraints any
+/// deployment target imposes. See issue #325 for history.
+type MockSpec = MockRollupSpec<Native>;
+type CelestiaSpec = CelestiaRollupSpec<Native>;
 
 /// The 8 module JSON filenames the genesis loader expects, in
 /// `Module::genesis` declaration order. Matches
@@ -249,7 +257,7 @@ fn run_keys_generate(roles: &[String], output: &Path) -> anyhow::Result<()> {
 /// Re-run the genesis loader's typed validator.
 ///
 /// `create_genesis_config` reads each JSON, deserializes against the
-/// `Runtime`'s expected `GenesisConfig<Spec>`, and runs
+/// `Runtime`'s expected `GenesisConfig<S>`, and runs
 /// `validate_config` (cross-module invariants). Either step surfaces
 /// as a typed `GenesisError` that this command prints verbatim, so
 /// the operator's iteration loop is "edit JSON, run verify, read
@@ -259,10 +267,18 @@ fn run_verify(dir: &Path) -> anyhow::Result<()> {
         return Err(anyhow!("not a directory: {}", dir.display()));
     }
     let paths = GenesisPaths::from_dir(dir);
-    let cfg = create_genesis_config::<Spec>(&paths)
-        .with_context(|| format!("genesis bundle at {} failed validation", dir.display()))?;
 
-    eprintln!("verify: OK");
+    // Validate against the Celestia spec first (it's the production
+    // target; bech32 `celestia1...` for `seq_da_address` is what
+    // operators ship). Then mock-spec for cross-DA consistency.
+    let cfg = create_genesis_config::<CelestiaSpec>(&paths).with_context(|| {
+        format!("genesis bundle at {} failed Celestia-DA validation", dir.display())
+    })?;
+    create_genesis_config::<MockSpec>(&paths).with_context(|| {
+        format!("genesis bundle at {} failed Mock-DA validation", dir.display())
+    })?;
+
+    eprintln!("verify: OK (Celestia + Mock DA specs)");
     eprintln!("  treasury: {}", cfg.attestation.treasury);
     eprintln!("  lgt_token_id: {}", cfg.attestation.lgt_token_id);
     eprintln!("  initial_attestor_sets: {}", cfg.attestation.initial_attestor_sets.len());
