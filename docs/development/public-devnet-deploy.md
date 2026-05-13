@@ -337,6 +337,10 @@ The Celestia light node has its own monitoring story (its own `/metrics` endpoin
 
 ## Step 6: Backups
 
+Full backup/restore procedure: [`runbooks/backup-restore.md`](runbooks/backup-restore.md). Scripts ship at [`scripts/backup-rocksdb.sh`](../../scripts/backup-rocksdb.sh) + [`scripts/restore-rocksdb.sh`](../../scripts/restore-rocksdb.sh); systemd units at [`ops/backup/systemd/`](../../ops/backup/systemd/); GCS lifecycle at [`ops/backup/gcs-lifecycle.json`](../../ops/backup/gcs-lifecycle.json).
+
+Three timers (hourly/daily/weekly) covering the dense-recent / sparse-old retention curve described in the runbook. Quarterly restore drill via [`scripts/restore-drill.sh`](../../scripts/restore-drill.sh) on a non-prod VM proves the restore path works without waiting for an incident.
+
 Two persistent surfaces need backup:
 
 - `/var/lib/ligate` (RocksDB + NOMT state). Recoverable from genesis + DA replay if lost, but a fresh sync takes hours and operators want fast restart.

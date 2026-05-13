@@ -1,0 +1,12 @@
+[Unit]
+Description=Ligate Chain RocksDB weekly backup (keep-4 tier)
+Requires=ligate-backup.service
+
+[Timer]
+# Sundays 04:00 UTC.
+OnCalendar=Sun *-*-* 04:00:00
+Persistent=true
+Unit=ligate-backup.service
+
+[Install]
+WantedBy=timers.target

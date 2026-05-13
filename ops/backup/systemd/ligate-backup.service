@@ -1,0 +1,21 @@
+[Unit]
+Description=Ligate Chain RocksDB backup to GCS
+# Don't pile up backups if the previous one is still running (large
+# state + slow network = backup runs longer than the timer interval).
+After=ligate-node.service
+
+[Service]
+Type=oneshot
+User=ligate
+EnvironmentFile=/etc/ligate/backup.env
+# `backup.env` provides at minimum:
+#   GCS_BUCKET=ligate-devnet-1-backups
+#   TIER=hourly  (overridden by the timer flavour)
+# The script reads `$LIGATE_STORAGE_DIR` from env with a sensible
+# default; override if your storage path isn't `/var/lib/ligate/rollup`.
+ExecStart=/opt/ligate/scripts/backup-rocksdb.sh
+# Two metrics matter on backup ops: success / failure + duration.
+# Both surface in `journalctl -u ligate-backup` and the next observability
+# pass (#268) will wire a Prometheus textfile exporter to scrape them.
+StandardOutput=journal
+StandardError=journal
