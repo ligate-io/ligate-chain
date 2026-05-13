@@ -1,0 +1,165 @@
+# Prometheus alerting rules for ligate-node.
+#
+# Loaded by the Prometheus server via `rule_files:` in its main config.
+# Each rule fires after its `for:` duration; Alertmanager then routes
+# the firing alert per `alertmanager.yaml`.
+#
+# Alert-name conventions:
+# - PascalCase
+# - Each rule has a `runbook_url` annotation pointing at the
+#   per-alert runbook in `docs/development/runbooks/alerts/`. On-call
+#   clicks that link to know what fired and what to do.
+# - Severity levels are `page` (someone needs to wake up), `warn`
+#   (look at it in business hours), `info` (informational, no human
+#   action needed).
+#
+# Tracking issue: ligate-io/ligate-chain#268.
+
+groups:
+  - name: ligate-node.liveness
+    interval: 30s
+    rules:
+      # Hardest live signal we have: the chain is producing blocks.
+      # `ligate_block_height` is updated by `metrics::run_block_height_loop`
+      # every `interval`. If it doesn't advance for 60s during expected
+      # block production, the chain is stalled.
+      - alert: BlockHeightStall
+        expr: |
+          changes(ligate_block_height[2m]) == 0
+          and on(instance) (ligate_block_height > 0)
+        for: 60s
+        labels:
+          severity: page
+          component: chain
+        annotations:
+          summary: "Block height unchanged for 60s on {{ $labels.instance }}"
+          description: |
+            `ligate_block_height` has not advanced for at least 60s.
+            Sequencer is either halted, wedged on DA, or has lost
+            its Celestia light node. Check `journalctl -u ligate-node`
+            and the Celestia light node health first.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/block-height-stall.md
+
+      # `up` is Prometheus' own scrape-success gauge per target. If
+      # `ligate-node` can't be scraped for 30s, it crashed, panicked,
+      # or the metrics endpoint is wedged. Faster than waiting for the
+      # block-height stall to also fire.
+      - alert: HealthDown
+        expr: up{job="ligate-node"} == 0
+        for: 30s
+        labels:
+          severity: page
+          component: chain
+        annotations:
+          summary: "ligate-node /metrics scrape failing on {{ $labels.instance }}"
+          description: |
+            Prometheus has been unable to scrape ligate-node's
+            `/metrics` endpoint for 30s. Process likely down or
+            unreachable. Check systemd status and recent logs.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/health-down.md
+
+      # `/ready` distinguishes "alive but not ready to serve" (e.g.
+      # still backfilling slots from DA) from "fully ready". Surfaced
+      # via blackbox-exporter probing the HTTP endpoint, OR via a
+      # `ligate_ready` gauge once that ships.
+      - alert: ReadyFalse
+        expr: |
+          (probe_http_status_code{job="ligate-node-ready"} != 200)
+          or on(instance) (ligate_ready == 0)
+        for: 60s
+        labels:
+          severity: warn
+          component: chain
+        annotations:
+          summary: "ligate-node /ready returning non-200 on {{ $labels.instance }}"
+          description: |
+            Node is up but not ready to serve traffic for 60s+.
+            Common causes: still backfilling DA slots on a fresh boot,
+            sequencer waiting on DA finalization, attestor quorum lag.
+            Operator should investigate; not pager-worthy on its own.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/ready-false.md
+
+  - name: ligate-node.capacity
+    interval: 30s
+    rules:
+      # Mempool depth tracking. Threshold needs Phase 6.1 deployment
+      # data to tune; placeholder of 1000 is a rough "something is
+      # off" line that won't fire under normal load.
+      - alert: MempoolDeep
+        expr: ligate_mempool_depth > 1000
+        for: 5m
+        labels:
+          severity: warn
+          component: chain
+        annotations:
+          summary: "Mempool depth {{ $value }} on {{ $labels.instance }} (>1000 for 5m)"
+          description: |
+            Sequencer accepting txs faster than it can pack them. Either
+            DA submission is backed up, or load exceeds capacity. Check
+            DA submission metrics next.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/mempool-deep.md
+
+      # On-disk state size growth. The chain's NOMT prunes aggressively
+      # so steady-state growth should be slow. Sudden spike usually
+      # means a misbehaving partner spamming attestations or a backfill
+      # blob storm. Threshold is a 10%/hour growth rate.
+      - alert: DiskFillingFast
+        expr: |
+          (
+            rate(ligate_state_db_size_bytes[1h])
+            / on(instance) ligate_state_db_size_bytes
+          ) > 0.10
+        for: 30m
+        labels:
+          severity: warn
+          component: chain
+        annotations:
+          summary: "State DB growing >10%/hour on {{ $labels.instance }}"
+          description: |
+            On-disk RocksDB growth rate exceeds 10%/hour for 30+ minutes.
+            Likely abuse or backfill anomaly. Investigate
+            `ligate_rpc_requests_total{endpoint=~".*submit.*"}` next.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/disk-filling-fast.md
+
+  - name: ligate-node.da
+    interval: 30s
+    rules:
+      # DA submission failure rate. Lands once Phase 6.2 metrics ship
+      # (#164 follow-up). A single failure isn't actionable (transient
+      # Celestia hiccup); sustained > 0 rate over 5m is.
+      - alert: DASubmissionFailures
+        expr: |
+          rate(ligate_da_submission_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: page
+          component: chain
+        annotations:
+          summary: "DA submission failures on {{ $labels.instance }} (reason={{ $labels.reason }})"
+          description: |
+            ligate-node blob submissions to Celestia are failing
+            sustained over 5m. Check the Celestia light node health
+            and TIA balance first; then the DA-signer key state.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/da-submission-failures.md
+
+      # DA finalization latency. Histogram p95 should sit at the
+      # Celestia block time (~12s mocha) + a small finalization
+      # margin. Above 60s sustained is wedged.
+      - alert: DAFinalizationLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            rate(ligate_da_finalization_latency_seconds_bucket[5m])
+          ) > 60
+        for: 10m
+        labels:
+          severity: warn
+          component: chain
+        annotations:
+          summary: "DA finalization p95 >60s on {{ $labels.instance }}"
+          description: |
+            95th-percentile time from blob submission to Celestia
+            finalization is above 60s for 10m+. Either Celestia is
+            congested or our submission path is buffering. Investigate
+            via the Celestia explorer + the local light node.
+          runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/alerts/da-finalization-latency-high.md

@@ -1,0 +1,99 @@
+# Alertmanager config for ligate-devnet-1.
+#
+# Receives firing alerts from Prometheus, deduplicates them, and routes
+# to notification targets. Pre-public-devnet, the routing tree is
+# deliberately simple: single operator, single Slack channel + email.
+# Mainnet routing (PagerDuty rotas, severity-specific escalation) is
+# future work.
+#
+# Secrets:
+# - `SLACK_WEBHOOK_URL`: posted alerts to #devnet-ops Slack channel.
+#   Stored as `slack_webhook_url` in `data/secrets/alertmanager.env`
+#   on the deploy host; injected via `--config.file=<rendered>` at
+#   alertmanager startup. NEVER check in.
+# - `SMTP_PASSWORD`: SMTP send password for the operator's mailbox.
+#   Same secret-injection pattern.
+#
+# Tracking issue: ligate-io/ligate-chain#268.
+
+global:
+  resolve_timeout: 5m
+  # SMTP from = operator address; sender is the alertmanager mailbox.
+  smtp_from: 'alerts@ligate.io'
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_auth_username: 'alerts@ligate.io'
+  smtp_auth_password_file: '/run/secrets/smtp_password'
+  smtp_require_tls: true
+  slack_api_url_file: '/run/secrets/slack_webhook_url'
+
+# Routing tree. All alerts hit `default`. `severity=page` also fans
+# out to email so the operator gets a phone-side notification even if
+# Slack is muted. `severity=info` is Slack-only (no point waking
+# anyone for an informational alert).
+route:
+  receiver: default
+  group_by: ['alertname', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  # Once an alert resolves, alertmanager waits this long before
+  # re-firing if the same alert reappears. Long enough to dampen
+  # flapping; short enough to surface real intermittent issues.
+  repeat_interval: 4h
+
+  routes:
+    - matchers:
+        - severity = page
+      receiver: pager
+      continue: true
+    - matchers:
+        - severity = info
+      receiver: info-only
+
+receivers:
+  # Default receiver: Slack with full alert detail.
+  - name: default
+    slack_configs:
+      - channel: '#devnet-ops'
+        send_resolved: true
+        title: '{{ template "slack.title" . }}'
+        text: '{{ template "slack.text" . }}'
+        actions:
+          - type: button
+            text: 'Runbook'
+            url: '{{ (index .Alerts 0).Annotations.runbook_url }}'
+          - type: button
+            text: 'View in Prometheus'
+            url: '{{ (index .Alerts 0).GeneratorURL }}'
+
+  # Pager receiver: Slack + email. Phone notification surface for
+  # page-severity alerts. Pre-PagerDuty, the operator's email pipes
+  # into their phone's high-priority filter.
+  - name: pager
+    email_configs:
+      - to: 'hello@ligate.io'
+        send_resolved: true
+        headers:
+          Subject: '[PAGE] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
+        html: '{{ template "email.html" . }}'
+
+  # Info-only receiver: Slack with light formatting; no email.
+  - name: info-only
+    slack_configs:
+      - channel: '#devnet-ops'
+        send_resolved: false
+        title: '[INFO] {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+
+# Inhibition rules: if a higher-severity alert is firing, suppress
+# lower-severity alerts for the same instance. Avoids alerting fatigue
+# during incidents.
+inhibit_rules:
+  - source_matchers:
+      - severity = page
+    target_matchers:
+      - severity =~ "warn|info"
+    equal: [instance]
+
+# Templates inlined for the v0 single-file deploy. As the receiver
+# count grows, split into a separate `templates/` dir.
+templates: []

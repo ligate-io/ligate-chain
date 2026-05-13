@@ -331,6 +331,8 @@ The metric set + labels lives in `crates/rollup/src/metrics.rs` and the umbrella
 
 A starter Grafana dashboard is tracked in [#165](https://github.com/ligate-io/ligate-chain/issues/165). Until that lands, the per-metric `HELP` strings in `/metrics` output document each one inline.
 
+Alerting rules ship in [`ops/prometheus/alerts.yaml`](../../ops/prometheus/alerts.yaml) with Alertmanager routing in [`ops/prometheus/alertmanager.yaml`](../../ops/prometheus/alertmanager.yaml). Each alert has a runbook under [`docs/development/runbooks/alerts/`](runbooks/alerts/README.md) keyed by alert name; the `runbook_url` annotation on each rule routes the on-call to the right file via the firing notification. Load `alerts.yaml` via `rule_files:` on the Prometheus server; configure Alertmanager with the rendered `alertmanager.yaml` (Slack webhook + SMTP password injected at deploy time, never in repo).
+
 The Celestia light node has its own monitoring story (its own `/metrics` endpoint, its own failure modes); the health-check + recovery procedure lives at [`runbooks/celestia-light-node.md`](runbooks/celestia-light-node.md).
 
 ## Step 6: Backups
