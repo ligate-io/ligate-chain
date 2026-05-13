@@ -28,7 +28,11 @@ on:
 env:
   CARGO_TERM_COLOR: always
   SKIP_GUEST_BUILD: "1"
-  RISC0_SKIP_BUILD_KERNELS: "1"
+  # Note: we deliberately do NOT set RISC0_SKIP_BUILD_KERNELS here.
+  # That env var skips compiling risc0's CPU/GPU kernels, but
+  # `ligate-node` still references the kernel symbols at link time
+  # so skipping them produces unresolved-symbol errors. Same
+  # rationale as `ci.yml`.
   CONSTANTS_MANIFEST_PATH: ${{ github.workspace }}/constants.toml
 
 jobs:
