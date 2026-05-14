@@ -298,17 +298,37 @@ jobs:
           echo "OK: slot bech32m encoding correct"
 
           # === Step 7: DA metrics ===
+          #
+          # Hard requirement: the metrics endpoint is up and serving a
+          # non-empty Prometheus body. The DA-finalization histogram is
+          # NOT hard-required: `ligate_da_finalization_latency_seconds_count`
+          # is lazily registered and only appears once a blob has been
+          # submitted AND finalized on Celestia. This smoke submits no
+          # transactions, so the sequencer never produces a batch to
+          # submit and the metric is legitimately absent. An actual
+          # submit -> finalize round-trip needs a tx-submitting smoke,
+          # tracked in ligate-chain#333.
+          #
+          # Metrics go to a file and are grepped from disk (no
+          # `echo "$VAR" | cmd` pipes) so an early-exiting consumer
+          # can't SIGPIPE the producer and trip `set -o pipefail`.
           echo "=== DA metrics ==="
-          METRICS=$(curl -sf http://127.0.0.1:9100/metrics)
-          if ! echo "$METRICS" | grep -q "ligate_da_finalization_latency_seconds_count"; then
-              echo "FAIL: ligate_da_finalization_latency_seconds_count metric missing" >&2
+          METRICS_FILE=/tmp/smoke-metrics.txt
+          curl -sf http://127.0.0.1:9100/metrics -o "$METRICS_FILE" || {
+              echo "FAIL: /metrics endpoint unreachable at http://127.0.0.1:9100/metrics" >&2
+              exit 1
+          }
+          if [ ! -s "$METRICS_FILE" ]; then
+              echo "FAIL: /metrics endpoint returned an empty body" >&2
               exit 1
           fi
-          DA_COUNT=$(echo "$METRICS" | awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}')
-          if [ -z "$DA_COUNT" ] || [ "$DA_COUNT" = "0" ]; then
-              echo "WARN: no DA finalizations recorded yet (smoke may not have run long enough)"
-          else
+          LIGATE_METRIC_LINES=$(grep -c '^ligate_' "$METRICS_FILE" || true)
+          echo "OK: /metrics endpoint up (${LIGATE_METRIC_LINES} ligate_* metric lines)"
+          DA_COUNT=$(awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}' "$METRICS_FILE")
+          if [ -n "$DA_COUNT" ]; then
               echo "OK: DA finalization count = $DA_COUNT"
+          else
+              echo "WARN: ligate_da_finalization_latency_seconds_count absent -- expected for this tx-less smoke; real submit->finalize coverage tracked in ligate-chain#333"
           fi
 
           echo "=== SMOKE PASSED ==="
