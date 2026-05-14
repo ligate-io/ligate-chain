@@ -98,11 +98,20 @@ jobs:
 
       - name: Start Celestia light node
         run: |
+          # `--rpc.skip-auth`: the light node's RPC enforces JWT
+          # permissions by default, and `ligate-node` connects without
+          # a token (`rpc_auth_token` is unset), so read calls like
+          # `NetworkHead` get rejected with "missing permission". This
+          # is a localhost-only node on an ephemeral CI runner -- not
+          # reachable from outside -- so skipping auth is safe here and
+          # avoids plumbing a token through. Real deploys keep auth on
+          # and set `SOV_CELESTIA_RPC_AUTH_TOKEN`.
           nohup celestia light start \
               --core.ip "${MOCHA_BRIDGE}" \
               --p2p.network mocha \
               --rpc.addr 127.0.0.1 \
               --rpc.port 26658 \
+              --rpc.skip-auth \
               > /tmp/celestia.log 2>&1 &
           echo "Waiting for light node to sync..."
           for i in {1..60}; do
