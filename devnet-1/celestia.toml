@@ -66,10 +66,18 @@ grpc_url = "http://127.0.0.1:9090"
 
 # Celestia signer private key (hex). The wallet must hold enough
 # Mocha TIA to cover blob inclusion. The Mocha faucet drips for free;
-# top up monthly. Operators inject via `SOV_CELESTIA_SIGNER_KEY`.
-# The placeholder zero key below is for `cargo check` / parse tests
-# only and intentionally cannot sign anything real.
-signer_private_key = "0000000000000000000000000000000000000000000000000000000000000000"
+# top up monthly.
+#
+# Deliberately NOT set here. `signer_private_key` is `Option<String>`
+# with a serde default that reads `SOV_CELESTIA_SIGNER_KEY` from the
+# environment -- but serde only invokes that default when the field
+# is ABSENT. A placeholder value (even all-zeros) shadows the env var
+# and the chain boots with the placeholder, which `k256` rejects as
+# an invalid key ("Failed to build celestia-client: Invalid private
+# key"). So the field is omitted: operators inject the real key via
+# `SOV_CELESTIA_SIGNER_KEY` and the env-var default picks it up.
+# Parse tests (`crates/rollup/tests/devnet_config.rs`) are unaffected
+# -- the field is optional, so an absent value parses fine.
 
 # Conservative retry tuning. Public-devnet leans towards faster
 # failure than indefinite retry so misconfigurations surface in
