@@ -31,6 +31,18 @@ guarded_paths=(
   "crates/client-rs"
 )
 
+# Directories excluded from the scan even when nested under a guarded
+# path. `fuzz/` is a separate `[workspace]` of cargo-fuzz harnesses
+# (`publish = false`, test-only): it links `sov-test-utils`, which
+# transitively pulls the full chain dependency tree including
+# `sov-celestia-adapter`, so its `[patch]` block must mirror every
+# `sov-*` crate. A `[patch]` redirect is a workspace-resolution
+# mechanism, not a `use`-level coupling, and the fuzz crate is not a
+# shippable DA-agnostic module -- so it's out of this guard's scope.
+excluded_dirs=(
+  "fuzz"
+)
+
 # Patterns that indicate Celestia-specific coupling. Case-insensitive
 # so we catch both `Celestia` types and `celestia` identifiers / paths.
 # The word "namespace" alone is not matched — schema-namespace prose
@@ -40,6 +52,12 @@ patterns=(
   "sov_celestia_adapter"
 )
 
+# Build the `--exclude-dir` flags once.
+exclude_flags=()
+for d in "${excluded_dirs[@]}"; do
+  exclude_flags+=("--exclude-dir=$d")
+done
+
 leaks=0
 for path in "${guarded_paths[@]}"; do
   if [[ ! -d "$path" ]]; then
@@ -47,7 +65,8 @@ for path in "${guarded_paths[@]}"; do
     continue
   fi
   for pattern in "${patterns[@]}"; do
-    if matches=$(grep -r -i -n --include="*.rs" --include="*.toml" "$pattern" "$path" 2>/dev/null); then
+    if matches=$(grep -r -i -n --include="*.rs" --include="*.toml" \
+      "${exclude_flags[@]}" "$pattern" "$path" 2>/dev/null); then
       echo "::error::DA isolation violation in $path (pattern: '$pattern'):"
       printf '%s\n' "$matches" | sed 's/^/  /'
       leaks=1
