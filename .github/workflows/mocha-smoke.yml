@@ -34,6 +34,14 @@ env:
   # so skipping them produces unresolved-symbol errors. Same
   # rationale as `ci.yml`.
   CONSTANTS_MANIFEST_PATH: ${{ github.workspace }}/constants.toml
+  # Build-speed overrides for the release profile, scoped to this
+  # workflow only (no Cargo.toml change). The smoke needs a binary
+  # that runs correctly, not a maximally-optimised one: parallelise
+  # codegen (the repo profile pins `codegen-units = 1`) and skip the
+  # slow LTO link pass. Cuts the cold build materially; correctness
+  # is unaffected.
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "256"
+  CARGO_PROFILE_RELEASE_LTO: "false"
 
 jobs:
   smoke:
@@ -84,7 +92,17 @@ jobs:
       - name: Install libclang
         run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
 
+      # `cache-on-failure: true` is the important bit. Every prior
+      # smoke run failed at the `Run smoke` step, which is AFTER the
+      # build -- and rust-cache's default (`cache-on-failure: false`)
+      # discards the build cache whenever the job fails. So every run
+      # rebuilt ~50 min cold and never once got the "cached re-runs"
+      # the comment below promises. Saving on failure lets the next
+      # run restore the multi-GB `target/` and land the build in
+      # minutes.
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
       # Build ligate-node + ligate-cli + ligate-genesis-tool. The
       # genesis-tool is what generates the ephemeral genesis below.
@@ -124,10 +142,20 @@ jobs:
               --rpc.port 26658 \
               --rpc.skip-auth \
               > /tmp/celestia.log 2>&1 &
+          # Wait for the light node to sync a header. Query its
+          # JSON-RPC endpoint directly with curl rather than the
+          # `celestia rpc` CLI: that CLI's stdout is not clean JSON
+          # (jq chokes on it with "Invalid numeric literal"), which
+          # silently no-op'd this check on every prior run. `--rpc.skip-auth`
+          # is set above, so no token is needed.
           echo "Waiting for light node to sync..."
           for i in {1..60}; do
-              if celestia rpc header sync-state 2>/dev/null | jq -e '.height > 0' >/dev/null; then
-                  echo "Light node synced."
+              HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
+                  -H 'Content-Type: application/json' \
+                  -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}' \
+                  | jq -r '.result.header.height // .result.height // 0' 2>/dev/null) || HEAD=0
+              if [ "${HEAD:-0}" -gt 0 ] 2>/dev/null; then
+                  echo "Light node synced to height ${HEAD}."
                   break
               fi
               sleep 5
@@ -179,13 +207,27 @@ jobs:
           # `genesis_da_height: 0` (a placeholder; the real devnet-1
           # launch pins it at launch time). Booting against Mocha with
           # height 0 makes `ligate-node` request DA block 0, which
-          # Celestia rejects with "height is equal to 0". Back off a few
+          # Celestia rejects with "height is equal to 0". Back off 50
           # blocks from the light node's synced tip so the anchor block
-          # is already in its store.
-          MOCHA_HEIGHT=$(celestia rpc header sync-state | jq -r '.height')
-          DA_HEIGHT=$((MOCHA_HEIGHT - 10))
-          if [ -z "$MOCHA_HEIGHT" ] || [ "$DA_HEIGHT" -lt 1 ]; then
-              echo "FAIL: no usable Mocha DA height (light node synced height: '${MOCHA_HEIGHT}')" >&2
+          # is comfortably inside its store.
+          #
+          # The height comes from the light node's JSON-RPC directly
+          # (curl, not the `celestia rpc` CLI -- that CLI's stdout is
+          # not jq-parseable). On any extraction failure, dump the raw
+          # response and fail loudly rather than guessing.
+          HEAD_RESP=$(curl -s -X POST http://127.0.0.1:26658 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}')
+          MOCHA_HEIGHT=$(echo "$HEAD_RESP" \
+              | jq -r '.result.header.height // .result.height // empty' 2>/dev/null || true)
+          if ! [[ "$MOCHA_HEIGHT" =~ ^[0-9]+$ ]]; then
+              echo "FAIL: could not read a numeric Mocha height from the light node RPC." >&2
+              echo "Raw header.LocalHead response: ${HEAD_RESP}" >&2
+              exit 1
+          fi
+          DA_HEIGHT=$((MOCHA_HEIGHT - 50))
+          if [ "$DA_HEIGHT" -lt 1 ]; then
+              echo "FAIL: Mocha height ${MOCHA_HEIGHT} too low to anchor genesis." >&2
               exit 1
           fi
           echo "Mocha synced height ${MOCHA_HEIGHT}; anchoring genesis_da_height at ${DA_HEIGHT}"
