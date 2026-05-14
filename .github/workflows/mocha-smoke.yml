@@ -54,6 +54,17 @@ jobs:
       # `MOCHA_BRIDGE` repo variable if needed (e.g. switching to a
       # backup bridge during pops.one maintenance).
       MOCHA_BRIDGE: ${{ vars.MOCHA_BRIDGE || 'rpc-mocha.pops.one' }}
+      # Celestia consensus gRPC endpoint, for blob submission
+      # (`MsgPayForBlobs`). `ligate-node`'s Celestia adapter needs this
+      # in addition to the light-node RPC: the RPC reads headers/blobs,
+      # the gRPC submits them. `devnet-1/celestia.toml` deliberately
+      # omits `grpc_url` so this env var is the single source of truth
+      # (a hardcoded value in the TOML would shadow it -- same trap as
+      # `signer_private_key`). The runner has no co-located
+      # `celestia-appd`, so this points at a public Mocha consensus
+      # endpoint; override via the `MOCHA_GRPC_URL` repo variable to
+      # switch providers (e.g. during celestia-mocha.com maintenance).
+      SOV_CELESTIA_GRPC_URL: ${{ vars.MOCHA_GRPC_URL || 'http://full.consensus.mocha-4.celestia-mocha.com:9090' }}
       # `celestia1...` bech32 of the operator's TIA wallet. Public
       # value (derived from the public key of `MOCHA_TIA_SIGNER_KEY`),
       # so it lives in a repo variable rather than a secret. Used to

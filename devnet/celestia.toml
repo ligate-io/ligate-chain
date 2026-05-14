@@ -41,7 +41,13 @@ rpc_url = "ws://127.0.0.1:26658"
 
 # gRPC endpoint for submitting blobs (sequencer-only path; nodes
 # that just sync don't strictly need it).
-grpc_url = "http://127.0.0.1:9090"
+#
+# Deliberately NOT set here -- see the long-form explanation in
+# `devnet-1/celestia.toml`. Short version: `grpc_url` is optional with
+# a serde default that reads `SOV_CELESTIA_GRPC_URL`, but a hardcoded
+# value shadows the env var. Omitting the field lets operators point
+# it at the right endpoint (local `celestia-appd` vs remote Mocha
+# consensus) via `SOV_CELESTIA_GRPC_URL`.
 
 # Celestia signer private key (hex). The wallet must hold enough TIA
 # to cover blob inclusion fees.

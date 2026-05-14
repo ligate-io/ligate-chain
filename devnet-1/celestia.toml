@@ -62,7 +62,19 @@ rpc_url = "ws://127.0.0.1:26658"
 
 # gRPC endpoint for submitting blobs (sequencer-only path; followers
 # don't strictly need this).
-grpc_url = "http://127.0.0.1:9090"
+#
+# Deliberately NOT set here, same mechanism as `signer_private_key`
+# below: `grpc_url` is `Option<String>` with a serde default that
+# reads `SOV_CELESTIA_GRPC_URL` from the environment -- and serde only
+# invokes that default when the field is ABSENT. A hardcoded value
+# shadows the env var. The deploy patterns disagree on what this
+# should point at -- a co-located `celestia-appd` for a self-hosted
+# operator, a remote Mocha consensus endpoint for public devnet or the
+# CI smoke (which has no local celestia-appd) -- so the field is
+# omitted and operators inject the right value:
+#
+#   co-located celestia-appd: SOV_CELESTIA_GRPC_URL=http://127.0.0.1:9090
+#   remote Mocha consensus:   SOV_CELESTIA_GRPC_URL=http://full.consensus.mocha-4.celestia-mocha.com:9090
 
 # Celestia signer private key (hex). The wallet must hold enough
 # Mocha TIA to cover blob inclusion. The Mocha faucet drips for free;
