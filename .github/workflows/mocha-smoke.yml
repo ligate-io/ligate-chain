@@ -1,18 +1,20 @@
 name: Mocha smoke
 
-# Recurring (or on-demand) smoke against real Celestia Mocha. Companion
-# to the manual procedure in `docs/development/runbooks/mocha-smoke.md`.
+# Recurring smoke against real Celestia Mocha. Companion to the
+# manual procedure in `docs/development/runbooks/mocha-smoke.md`.
 # This workflow exercises steps 1-7 of that runbook in CI.
 #
-# DISABLED until `MOCHA_TIA_SIGNER_KEY` repo secret is set + the cron
-# schedule below is uncommented. Workflow exists as documentation +
-# one-shot operator capability via `workflow_dispatch`.
+# Active. Runs nightly at 06:00 UTC plus on-demand via
+# `workflow_dispatch`. Gated by the `MOCHA_SMOKE_ENABLED` repo
+# variable (set to `true`) and the `MOCHA_TIA_SIGNER_KEY` repo secret
+# (the funded Mocha wallet's hex private key). Killing the variable
+# is the kill-switch if Mocha or pops.one has a bad day.
 #
 # Tracking issue: ligate-io/ligate-chain#285.
 
 on:
-  # Operator-triggered one-shot runs. Use this for the initial pre-
-  # devnet-announce smoke per the runbook.
+  # Operator-triggered one-shot runs. Use this for ad-hoc smokes
+  # outside the nightly cadence (e.g. validating a workflow change).
   workflow_dispatch:
     inputs:
       branch:
@@ -20,10 +22,11 @@ on:
         required: false
         default: 'main'
 
-  # Uncomment once the manual smoke passes + the operator is ready
-  # to commit to a recurring CI gate.
-  # schedule:
-  #   - cron: '0 6 * * *'  # 06:00 UTC nightly
+  # Nightly at 06:00 UTC. Catches Celestia upgrades, DA adapter
+  # regressions, blob-submission breakage, and TIA-balance issues
+  # before the operator notices them in business hours.
+  schedule:
+    - cron: '0 6 * * *'
 
 env:
   CARGO_TERM_COLOR: always

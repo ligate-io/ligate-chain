@@ -211,17 +211,28 @@ Any bug surfaces a follow-up issue. File before announce.
 
 ---
 
-## Recurring smoke (optional, CI-driven)
+## Recurring smoke (CI-driven, live)
 
-Once the operator confirms the manual smoke passes, the same procedure can run nightly via [`.github/workflows/mocha-smoke.yml`](../../.github/workflows/mocha-smoke.yml). The workflow is checked in but skipped until the `MOCHA_TIA_SIGNER_KEY` secret is set at the repo's Actions secrets. Until then the workflow exists as documentation of "here's what the CI smoke would do" but doesn't run.
+The same procedure runs **nightly at 06:00 UTC** via [`.github/workflows/mocha-smoke.yml`](../../.github/workflows/mocha-smoke.yml), plus on-demand via `workflow_dispatch`. Status badge at the top of the chain README.
 
-When ready:
+Wiring:
 
-1. Set `MOCHA_TIA_SIGNER_KEY` at GitHub Actions secrets (operator's funded TIA wallet hex private key).
-2. Enable the workflow via the `workflow_dispatch` button to do a one-time CI run.
-3. If green, flip `on:` to add the `schedule:` cron (commented out today) for nightly runs.
+- `MOCHA_TIA_SIGNER_KEY` (repo secret): operator's funded TIA wallet hex private key.
+- `MOCHA_TIA_DA_ADDRESS` (repo variable): bech32 `celestia1...` form of the same wallet, used to substitute the placeholder DA address in the ephemeral genesis the workflow generates.
+- `MOCHA_GRPC_URL` (repo variable, optional): Celestia consensus gRPC endpoint for blob submission. Defaults to a public Mocha endpoint; override to switch providers.
+- `MOCHA_SMOKE_ENABLED` (repo variable): `true` to enable. Set to anything else (or unset) to kill all fires of the workflow without a PR. This is the kill-switch if Mocha or the pops.one bridge has a known bad day.
+
+Workflow flow:
+
+1. Build `ligate-node` + `ligate-genesis-tool` (cold cache ~50 min; warm ~10-15).
+2. Install celestia-node v0.30.2, start it against `${MOCHA_BRIDGE}` (default `rpc-mocha.pops.one`).
+3. Generate ephemeral keys (operator + demo1 + demo2), substitute all four placeholder addresses (3 `lig1` + 1 `celestia1`), run `ligate-genesis-tool generate --da celestia` to produce + verify a valid genesis, then anchor `genesis_da_height` to a live Mocha block.
+4. Boot `ligate-node --da-layer celestia` against the ephemeral genesis.
+5. Run steps 1-7 of the manual procedure (chain identity, slot encoding, DA metrics) against the running node.
 
 The CI smoke is a subset of the manual procedure (steps 1-7; step 8 forced-failure injection is harder to do reliably in CI without flake risk).
+
+On failure, the workflow uploads `/tmp/ligate-node.log` and `/tmp/celestia.log` as artifacts (`mocha-smoke-logs`, 14-day retention) for triage.
 
 ---
 
