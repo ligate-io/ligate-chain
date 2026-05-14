@@ -28,8 +28,20 @@ on:
 env:
   CARGO_TERM_COLOR: always
   SKIP_GUEST_BUILD: "1"
-  RISC0_SKIP_BUILD_KERNELS: "1"
+  # Note: we deliberately do NOT set RISC0_SKIP_BUILD_KERNELS here.
+  # That env var skips compiling risc0's CPU/GPU kernels, but
+  # `ligate-node` still references the kernel symbols at link time
+  # so skipping them produces unresolved-symbol errors. Same
+  # rationale as `ci.yml`.
   CONSTANTS_MANIFEST_PATH: ${{ github.workspace }}/constants.toml
+  # Build-speed overrides for the release profile, scoped to this
+  # workflow only (no Cargo.toml change). The smoke needs a binary
+  # that runs correctly, not a maximally-optimised one: parallelise
+  # codegen (the repo profile pins `codegen-units = 1`) and skip the
+  # slow LTO link pass. Cuts the cold build materially; correctness
+  # is unaffected.
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "256"
+  CARGO_PROFILE_RELEASE_LTO: "false"
 
 jobs:
   smoke:
@@ -38,7 +50,11 @@ jobs:
     # Guard: skip if the operator hasn't set the TIA signer key. The
     # workflow exists for documentation purposes until that's wired.
     if: ${{ vars.MOCHA_SMOKE_ENABLED == 'true' }}
-    timeout-minutes: 30
+    # Cold-cache build (first run with no Swatinem cache hit) takes
+    # ~50 min on a hosted runner because of risc0 kernel + heavy
+    # crate compilation; allow generous margin so the initial smoke
+    # isn't killed by the job wall. Warm runs land in 10-15 min.
+    timeout-minutes: 90
     env:
       # Funded Mocha TIA wallet. Provided as a repo secret.
       SOV_CELESTIA_SIGNER_KEY: ${{ secrets.MOCHA_TIA_SIGNER_KEY }}
@@ -46,6 +62,24 @@ jobs:
       # `MOCHA_BRIDGE` repo variable if needed (e.g. switching to a
       # backup bridge during pops.one maintenance).
       MOCHA_BRIDGE: ${{ vars.MOCHA_BRIDGE || 'rpc-mocha.pops.one' }}
+      # Celestia consensus gRPC endpoint, for blob submission
+      # (`MsgPayForBlobs`). `ligate-node`'s Celestia adapter needs this
+      # in addition to the light-node RPC: the RPC reads headers/blobs,
+      # the gRPC submits them. `devnet-1/celestia.toml` deliberately
+      # omits `grpc_url` so this env var is the single source of truth
+      # (a hardcoded value in the TOML would shadow it -- same trap as
+      # `signer_private_key`). The runner has no co-located
+      # `celestia-appd`, so this points at a public Mocha consensus
+      # endpoint; override via the `MOCHA_GRPC_URL` repo variable to
+      # switch providers (e.g. during celestia-mocha.com maintenance).
+      SOV_CELESTIA_GRPC_URL: ${{ vars.MOCHA_GRPC_URL || 'http://full.consensus.mocha-4.celestia-mocha.com:9090' }}
+      # `celestia1...` bech32 of the operator's TIA wallet. Public
+      # value (derived from the public key of `MOCHA_TIA_SIGNER_KEY`),
+      # so it lives in a repo variable rather than a secret. Used to
+      # patch `seq_da_address` in the ephemeral genesis before chain
+      # boot; the chain validates that the registered sequencer's
+      # DA address matches the wallet signing blob submissions.
+      MOCHA_TIA_DA_ADDRESS: ${{ vars.MOCHA_TIA_DA_ADDRESS }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -58,41 +92,151 @@ jobs:
       - name: Install libclang
         run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
 
+      # `cache-on-failure: true` is the important bit. Every prior
+      # smoke run failed at the `Run smoke` step, which is AFTER the
+      # build -- and rust-cache's default (`cache-on-failure: false`)
+      # discards the build cache whenever the job fails. So every run
+      # rebuilt ~50 min cold and never once got the "cached re-runs"
+      # the comment below promises. Saving on failure lets the next
+      # run restore the multi-GB `target/` and land the build in
+      # minutes.
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
 
-      # Build ligate-node + ligate-cli. Cold-cache build is ~10 min;
-      # cached re-runs ~2 min.
+      # Build ligate-node + ligate-cli + ligate-genesis-tool. The
+      # genesis-tool is what generates the ephemeral genesis below.
+      # Cold-cache build is ~50 min; cached re-runs ~2 min.
       - name: Build chain binaries
         run: |
-          cargo build --release --bin ligate-node
+          cargo build --release --bin ligate-node --bin ligate-genesis-tool
           cargo build --release --bin ligate-cli || true
 
-      # Install + initialize the Celestia light node. v0.20+ matches
-      # the chain's expected light-node version.
+      # Install + initialize the Celestia light node. Pin to a known
+      # version; bump as upstream releases land. Asset name is the
+      # tarball; extract the `celestia` binary out of it.
       - name: Install Celestia light node
         run: |
-          CELESTIA_VERSION=v0.20.0
-          curl -L "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-linux-amd64" \
-            -o /usr/local/bin/celestia
+          CELESTIA_VERSION=v0.30.2
+          curl -fL "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-node_Linux_x86_64.tar.gz" \
+            -o /tmp/celestia.tar.gz
+          tar -xzf /tmp/celestia.tar.gz -C /usr/local/bin celestia
           chmod +x /usr/local/bin/celestia
+          celestia version
           celestia light init --p2p.network=mocha
 
       - name: Start Celestia light node
         run: |
+          # `--rpc.skip-auth`: the light node's RPC enforces JWT
+          # permissions by default, and `ligate-node` connects without
+          # a token (`rpc_auth_token` is unset), so read calls like
+          # `NetworkHead` get rejected with "missing permission". This
+          # is a localhost-only node on an ephemeral CI runner -- not
+          # reachable from outside -- so skipping auth is safe here and
+          # avoids plumbing a token through. Real deploys keep auth on
+          # and set `SOV_CELESTIA_RPC_AUTH_TOKEN`.
           nohup celestia light start \
               --core.ip "${MOCHA_BRIDGE}" \
               --p2p.network mocha \
               --rpc.addr 127.0.0.1 \
               --rpc.port 26658 \
+              --rpc.skip-auth \
               > /tmp/celestia.log 2>&1 &
+          # Wait for the light node to sync a header. Query its
+          # JSON-RPC endpoint directly with curl rather than the
+          # `celestia rpc` CLI: that CLI's stdout is not clean JSON
+          # (jq chokes on it with "Invalid numeric literal"), which
+          # silently no-op'd this check on every prior run. `--rpc.skip-auth`
+          # is set above, so no token is needed.
           echo "Waiting for light node to sync..."
           for i in {1..60}; do
-              if celestia rpc header sync-state 2>/dev/null | jq -e '.height > 0' >/dev/null; then
-                  echo "Light node synced."
+              HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
+                  -H 'Content-Type: application/json' \
+                  -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}' \
+                  | jq -r '.result.header.height // .result.height // 0' 2>/dev/null) || HEAD=0
+              if [ "${HEAD:-0}" -gt 0 ] 2>/dev/null; then
+                  echo "Light node synced to height ${HEAD}."
                   break
               fi
               sleep 5
           done
+
+      # Generate ephemeral keys + run `ligate-genesis-tool` to produce
+      # a valid genesis bundle. The checked-in `devnet-1/genesis/`
+      # ships with placeholder addresses that fail strict genesis
+      # validation. The real operator path runs this same flow with
+      # operator-controlled keys; for CI we generate ephemeral keys
+      # every run and burn them at job end.
+      #
+      # All four substitutions (three `lig1*` rollup addresses + the
+      # Celestia DA address) go through the genesis-tool's substitution
+      # map. `--da celestia` is the default; `generate` runs the same
+      # validator the chain runs at startup against the output.
+      #
+      # `genesis_da_height` is patched in afterwards, not via the
+      # substitution map: it's a runtime value (a live Mocha height),
+      # not a static string the map can express.
+      - name: Generate ephemeral genesis for CI smoke
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/keys
+          ./target/release/ligate-genesis-tool keys generate \
+              --roles operator,demo1,demo2 \
+              --output /tmp/keys
+
+          OPERATOR=$(cat /tmp/keys/operator.address)
+          DEMO1=$(cat /tmp/keys/demo1.address)
+          DEMO2=$(cat /tmp/keys/demo2.address)
+
+          cat > /tmp/keys.toml <<EOF
+          [addresses]
+          "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "$OPERATOR"
+          "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "$DEMO1"
+          "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "$DEMO2"
+          "celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as" = "$MOCHA_TIA_DA_ADDRESS"
+          EOF
+
+          ./target/release/ligate-genesis-tool generate \
+              --template devnet-1/genesis \
+              --substitutions /tmp/keys.toml \
+              --output /tmp/genesis \
+              --da celestia
+
+          # Anchor the ephemeral genesis to a live Mocha height. The
+          # checked-in `devnet-1/genesis/chain_state.json` ships
+          # `genesis_da_height: 0` (a placeholder; the real devnet-1
+          # launch pins it at launch time). Booting against Mocha with
+          # height 0 makes `ligate-node` request DA block 0, which
+          # Celestia rejects with "height is equal to 0". Back off 50
+          # blocks from the light node's synced tip so the anchor block
+          # is comfortably inside its store.
+          #
+          # The height comes from the light node's JSON-RPC directly
+          # (curl, not the `celestia rpc` CLI -- that CLI's stdout is
+          # not jq-parseable). On any extraction failure, dump the raw
+          # response and fail loudly rather than guessing.
+          HEAD_RESP=$(curl -s -X POST http://127.0.0.1:26658 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}')
+          MOCHA_HEIGHT=$(echo "$HEAD_RESP" \
+              | jq -r '.result.header.height // .result.height // empty' 2>/dev/null || true)
+          if ! [[ "$MOCHA_HEIGHT" =~ ^[0-9]+$ ]]; then
+              echo "FAIL: could not read a numeric Mocha height from the light node RPC." >&2
+              echo "Raw header.LocalHead response: ${HEAD_RESP}" >&2
+              exit 1
+          fi
+          DA_HEIGHT=$((MOCHA_HEIGHT - 50))
+          if [ "$DA_HEIGHT" -lt 1 ]; then
+              echo "FAIL: Mocha height ${MOCHA_HEIGHT} too low to anchor genesis." >&2
+              exit 1
+          fi
+          echo "Mocha synced height ${MOCHA_HEIGHT}; anchoring genesis_da_height at ${DA_HEIGHT}"
+          jq --argjson h "$DA_HEIGHT" '.genesis_da_height = $h' \
+              /tmp/genesis/chain_state.json > /tmp/chain_state.patched.json
+          mv /tmp/chain_state.patched.json /tmp/genesis/chain_state.json
+
+          echo "Ephemeral genesis ready at /tmp/genesis"
+          echo "GENESIS_DIR=/tmp/genesis" >> "$GITHUB_ENV"
 
       # The actual chain smoke. Spawns ligate-node against the live
       # mocha light node, waits for slot 3, asserts bech32m encodings
@@ -106,7 +250,7 @@ jobs:
           nohup ./target/release/ligate-node \
               --da-layer celestia \
               --rollup-config-path devnet-1/celestia.toml \
-              --genesis-config-dir devnet-1/genesis \
+              --genesis-config-dir "${GENESIS_DIR}" \
               --metrics-bind 127.0.0.1:9100 \
               > /tmp/ligate-node.log 2>&1 &
           NODE_PID=$!
@@ -154,17 +298,37 @@ jobs:
           echo "OK: slot bech32m encoding correct"
 
           # === Step 7: DA metrics ===
+          #
+          # Hard requirement: the metrics endpoint is up and serving a
+          # non-empty Prometheus body. The DA-finalization histogram is
+          # NOT hard-required: `ligate_da_finalization_latency_seconds_count`
+          # is lazily registered and only appears once a blob has been
+          # submitted AND finalized on Celestia. This smoke submits no
+          # transactions, so the sequencer never produces a batch to
+          # submit and the metric is legitimately absent. An actual
+          # submit -> finalize round-trip needs a tx-submitting smoke,
+          # tracked in ligate-chain#333.
+          #
+          # Metrics go to a file and are grepped from disk (no
+          # `echo "$VAR" | cmd` pipes) so an early-exiting consumer
+          # can't SIGPIPE the producer and trip `set -o pipefail`.
           echo "=== DA metrics ==="
-          METRICS=$(curl -sf http://127.0.0.1:9100/metrics)
-          if ! echo "$METRICS" | grep -q "ligate_da_finalization_latency_seconds_count"; then
-              echo "FAIL: ligate_da_finalization_latency_seconds_count metric missing" >&2
+          METRICS_FILE=/tmp/smoke-metrics.txt
+          curl -sf http://127.0.0.1:9100/metrics -o "$METRICS_FILE" || {
+              echo "FAIL: /metrics endpoint unreachable at http://127.0.0.1:9100/metrics" >&2
+              exit 1
+          }
+          if [ ! -s "$METRICS_FILE" ]; then
+              echo "FAIL: /metrics endpoint returned an empty body" >&2
               exit 1
           fi
-          DA_COUNT=$(echo "$METRICS" | awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}')
-          if [ -z "$DA_COUNT" ] || [ "$DA_COUNT" = "0" ]; then
-              echo "WARN: no DA finalizations recorded yet (smoke may not have run long enough)"
-          else
+          LIGATE_METRIC_LINES=$(grep -c '^ligate_' "$METRICS_FILE" || true)
+          echo "OK: /metrics endpoint up (${LIGATE_METRIC_LINES} ligate_* metric lines)"
+          DA_COUNT=$(awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}' "$METRICS_FILE")
+          if [ -n "$DA_COUNT" ]; then
               echo "OK: DA finalization count = $DA_COUNT"
+          else
+              echo "WARN: ligate_da_finalization_latency_seconds_count absent -- expected for this tx-less smoke; real submit->finalize coverage tracked in ligate-chain#333"
           fi
 
           echo "=== SMOKE PASSED ==="
