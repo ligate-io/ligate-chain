@@ -144,6 +144,10 @@ jobs:
       # Celestia DA address) go through the genesis-tool's substitution
       # map. `--da celestia` is the default; `generate` runs the same
       # validator the chain runs at startup against the output.
+      #
+      # `genesis_da_height` is patched in afterwards, not via the
+      # substitution map: it's a runtime value (a live Mocha height),
+      # not a static string the map can express.
       - name: Generate ephemeral genesis for CI smoke
         run: |
           set -euo pipefail
@@ -169,6 +173,25 @@ jobs:
               --substitutions /tmp/keys.toml \
               --output /tmp/genesis \
               --da celestia
+
+          # Anchor the ephemeral genesis to a live Mocha height. The
+          # checked-in `devnet-1/genesis/chain_state.json` ships
+          # `genesis_da_height: 0` (a placeholder; the real devnet-1
+          # launch pins it at launch time). Booting against Mocha with
+          # height 0 makes `ligate-node` request DA block 0, which
+          # Celestia rejects with "height is equal to 0". Back off a few
+          # blocks from the light node's synced tip so the anchor block
+          # is already in its store.
+          MOCHA_HEIGHT=$(celestia rpc header sync-state | jq -r '.height')
+          DA_HEIGHT=$((MOCHA_HEIGHT - 10))
+          if [ -z "$MOCHA_HEIGHT" ] || [ "$DA_HEIGHT" -lt 1 ]; then
+              echo "FAIL: no usable Mocha DA height (light node synced height: '${MOCHA_HEIGHT}')" >&2
+              exit 1
+          fi
+          echo "Mocha synced height ${MOCHA_HEIGHT}; anchoring genesis_da_height at ${DA_HEIGHT}"
+          jq --argjson h "$DA_HEIGHT" '.genesis_da_height = $h' \
+              /tmp/genesis/chain_state.json > /tmp/chain_state.patched.json
+          mv /tmp/chain_state.patched.json /tmp/genesis/chain_state.json
 
           echo "Ephemeral genesis ready at /tmp/genesis"
           echo "GENESIS_DIR=/tmp/genesis" >> "$GITHUB_ENV"
