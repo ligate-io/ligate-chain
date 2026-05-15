@@ -625,6 +625,7 @@ dependencies = [
  "attestation",
  "borsh",
  "ed25519-dalek",
+ "hex",
  "prometheus",
  "proptest",
  "schemars 0.8.22",

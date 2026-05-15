@@ -14,6 +14,12 @@ rust-version.workspace = true
 anyhow.workspace = true
 borsh.workspace = true
 ed25519-dalek.workspace = true
+# hex-encoding for the `expected_digest` field on
+# `AttestationError::InvalidSignature`, so attestors whose off-chain
+# digest differs from the chain's can read the chain's value out of
+# the error response directly. Matches `bootstrap-cli` / `genesis-tool`
+# pin (workspace doesn't share a `hex` entry).
+hex = "0.4"
 schemars.workspace = true
 serde.workspace = true
 sha2.workspace = true

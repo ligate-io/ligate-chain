@@ -406,7 +406,12 @@ fn discriminant_labels_are_stable_and_unique() {
         AttestationError::UnknownAttestorPubkey,
         AttestationError::InvalidAttestorPubkey,
         AttestationError::BadSignatureLength { actual: 0 },
-        AttestationError::InvalidSignature,
+        AttestationError::InvalidSignature {
+            pubkey: PubKey::from([0u8; 32]),
+            expected_digest: String::new(),
+            submitter: String::new(),
+            timestamp: 0,
+        },
         AttestationError::BelowThreshold { provided: 0, required: 0 },
         AttestationError::MissingAttestorSet,
         AttestationError::ChainNotConfigured,

@@ -195,18 +195,73 @@ The state transitions MUST enforce:
 
 ## Signed payload for attestations
 
-Attestors sign the canonical Borsh encoding of:
+Attestors sign `SHA-256(borsh(SignedAttestationPayload))` where:
 
-```
-SignedPayload {
-    schema_id:    [u8; 32],
-    payload_hash: [u8; 32],
-    submitter:    [u8; 32],
+```rust
+struct SignedAttestationPayload<S: Spec> {
+    schema_id:    SchemaId,    // [u8; 32]
+    payload_hash: PayloadHash, // [u8; 32]
+    submitter:    S::Address,  // MultiAddress<VmAddress>, enum
     timestamp:    u64,
 }
 ```
 
-Signatures do NOT cover the `signatures` field itself (that would be circular). Replay is prevented by the `(schema_id, payload_hash)` write-once invariant, the same pair can't be submitted twice, so the same signature can't be replayed.
+The signature is verified by the chain in `handle_submit_attestation`; if your off-chain digest doesn't match the chain's, the chain now surfaces the exact inputs it used (see `AttestationError::InvalidSignature`).
+
+### Wire format (read this if you're rolling your own signer)
+
+The Borsh encoding is the bytes that get SHA-256'd. **Total: 101 bytes** (NOT 100, see discriminator below):
+
+| Offset | Length | Field           | Notes |
+|--------|--------|-----------------|-------|
+| 0      | 32     | `schema_id`     | Raw 32 bytes (Borsh of `[u8; 32]` is the raw array, no length prefix). |
+| 32     | 32     | `payload_hash`  | Raw 32 bytes. |
+| 64     | 1      | submitter tag   | `0x00` for `MultiAddress::Standard`. **Easy to miss.** |
+| 65     | 28     | submitter addr  | The 28-byte `Address` payload inside `Standard`. |
+| 93     | 8      | `timestamp`     | u64 little-endian. Pinned to `0x0000000000000000` in v0 (chain hardcodes `timestamp = 0` until the runtime exposes block headers; tracked in [ligate-chain#TBD]). |
+
+The submitter byte is the most common stumble. `S::Address` resolves through `MockRollupSpec` to `MultiAddress<VmAddress>`, a two-variant enum (`Standard(Address)`, `Vm(VmAddress)`). Borsh prepends a 1-byte discriminator before the variant payload. For chain-native `lig1...` addresses you always want the `0x00` `Standard` variant.
+
+### Test vector
+
+Inputs (the exact values are also baked into the `attestation_digest` rustdoc as a doctest, so this stays in sync with the impl):
+
+| Field          | Value |
+|----------------|-------|
+| `schema_id`    | `lsc1zg3qygc(...)`, raw bytes `0x1c24...9486` |
+| `payload_hash` | `lph1he42sgwn(...)`, raw bytes `0xbe6a...13ac` |
+| `submitter`    | `lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac`, raw bytes `0x134b...441d` |
+| `timestamp`    | `0` |
+
+Borsh bytes (101 bytes, hex):
+
+```
+1c24a84b8307ff2a9e859218d76476932555b5214f8c1c555224b620f8b19486
+be6aa821d3f6c3405edcb7cddbcf419e00119e321c6fb46452281dafd55913ac
+00
+134b250b46a508d9b0bb3a5e16ba2c82a47e3dd483419ea6be3b441d
+0000000000000000
+```
+
+Expected digest (SHA-256 of the above):
+
+```
+b26c0c1698c07e97f3f426ccbdc61ae16dee6f13b780d59c612c7c2b6ba3a079
+```
+
+If you compute the digest in your off-chain signer and get something different, the most likely cause is the missing `0x00` byte before the submitter address. The next most likely is the timestamp not being 8 little-endian bytes (Borsh `u64` is always 8 LE).
+
+### Helpers
+
+Don't roll your own if you can avoid it. Use:
+
+- **Rust:** `ligate_client::attestation_digest::<S>(schema_id, payload_hash, submitter, timestamp)` + `ligate_client::sign_attestation(signing_key, &digest)`.
+- **CLI:** `ligate sign-attestation --schema <lsc1> --payload-hash <lph1> --submitter <lig1> --signer <role>` produces a ready-to-submit signature entry.
+- **TypeScript:** `@ligate/js`'s `signAttestation(...)` (same byte layout, verified against the Rust path via the cross-impl test in `packages/js/test/attestation-vector.test.ts`).
+
+### Replay
+
+Signatures don't cover the `signatures` field of `Attestation` (that would be circular). Replay is prevented by the `(schema_id, payload_hash)` write-once invariant: the same pair can't be submitted twice, so the same signature can't be replayed.
 
 ---
 
