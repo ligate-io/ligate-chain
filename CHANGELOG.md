@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- `devnet-1/genesis/` re-substituted with the round-2 operator key. The round-1 substitution (PR #251, 2026-05-08) replaced the public-seed bootstrap placeholder with `lig1rh9vcu879l36...`, but the private key for that address was never persisted to `~/.ligate-keys/` and is unrecoverable. No public-facing system ever read the round-1 `chain_hash` (devnet never came up against it), so this round-2 substitution has zero downstream blast radius -- partners haven't seen the round-1 hash anywhere. Round 2 also substitutes the all-zeros Celestia DA placeholder (`celestia1qqqqqq...zf30as`) with the real operator-controlled Mocha wallet (`celestia1mphanjz...`), which round 1 left untouched. The operator key is now persisted in three places to prevent recurrence: `~/.ligate-keys/devnet-1/operator.key` (chmod 600), `~/.config/ligate/secrets.env` as `LIGATE_DEVNET1_OPERATOR_KEY`, and GCP Secret Manager (`projects/utopian-spring-494915-q1/secrets/ligate-devnet-1-operator-key`). Closes the broken-key issue surfaced during the GCP devnet bring-up.
+
 ## [0.1.0-devnet] - 2026-05-15
 
 ### Changed
