@@ -1048,8 +1048,38 @@ pub enum AttestationError {
     },
 
     /// A signature did not verify against the canonical attestation digest.
-    #[error("signature did not verify against attestation digest")]
-    InvalidSignature,
+    ///
+    /// The carried fields surface the exact inputs the chain used to
+    /// re-derive the digest, so an attestor whose off-chain signer
+    /// produced something else can spot the mismatch without having to
+    /// reverse-engineer the protocol's wire format. The most common
+    /// cause of this error is omitting the `MultiAddress::Standard`
+    /// discriminator byte (`0x00`) between `payload_hash` and
+    /// `submitter` when borsh-encoding the `SignedAttestationPayload`
+    /// off-chain; see LIP-5 §wire-format for the byte-by-byte layout.
+    #[error(
+        "signature did not verify for pubkey {pubkey}: chain computed digest \
+         0x{expected_digest} from (submitter={submitter}, timestamp={timestamp}). \
+         If your off-chain digest differs, check the MultiAddress::Standard \
+         discriminator byte (0x00) before the submitter address. See LIP-5 \
+         wire-format appendix."
+    )]
+    InvalidSignature {
+        /// Pubkey whose signature failed to verify, in bech32m `lpk1...`.
+        pubkey: PubKey,
+        /// Lowercase hex of the digest the chain computed and tried
+        /// to verify the signature against (no `0x` prefix in the
+        /// stored field; the Display impl above prepends one).
+        expected_digest: String,
+        /// Bech32m `lig1...` of the tx submitter the chain used as
+        /// part of the digest. Equals `context.sender()` in the chain
+        /// at submission time.
+        submitter: String,
+        /// Block timestamp the chain used in the digest. Pinned to 0
+        /// in v0 because the runtime doesn't yet expose block headers
+        /// to module handlers.
+        timestamp: u64,
+    },
 
     /// Fewer valid signatures than the schema's attestor set requires.
     #[error("quorum not met: {provided} valid signatures, need {required}")]
@@ -1106,7 +1136,7 @@ impl AttestationError {
             Self::UnknownAttestorPubkey => "unknown_attestor_pubkey",
             Self::InvalidAttestorPubkey => "invalid_attestor_pubkey",
             Self::BadSignatureLength { .. } => "bad_signature_length",
-            Self::InvalidSignature => "invalid_signature",
+            Self::InvalidSignature { .. } => "invalid_signature",
             Self::BelowThreshold { .. } => "below_threshold",
             Self::MissingAttestorSet => "missing_attestor_set",
             Self::ChainNotConfigured => "chain_not_configured",
@@ -1563,7 +1593,7 @@ impl<S: Spec> AttestationModule<S> {
             SignedAttestationPayload::<S> { schema_id, payload_hash, submitter, timestamp }
                 .digest();
 
-        validate_signatures(&signatures, &attestor_set, &digest)?;
+        validate_signatures::<S>(&signatures, &attestor_set, &digest, &submitter, timestamp)?;
 
         // Charge the attestation fee BEFORE writing the attestation.
         // Split per `schema.fee_routing_bps`: builder share goes to
@@ -1719,10 +1749,12 @@ fn split_attestation_fee(total: Amount, bps: u16) -> (Amount, Amount) {
 /// Ed25519 is the only scheme accepted in v0. BLS aggregates or other
 /// schemes would be added as separate variants later; `AttestorSignature.sig`
 /// is `Vec<u8>` today precisely to leave room for that.
-fn validate_signatures(
+fn validate_signatures<S: Spec>(
     signatures: &[AttestorSignature],
     set: &AttestorSet,
     digest: &Hash32,
+    submitter: &S::Address,
+    timestamp: u64,
 ) -> anyhow::Result<()> {
     use std::collections::HashSet;
 
@@ -1750,7 +1782,17 @@ fn validate_signatures(
         let signature = Signature::from_bytes(&sig_bytes);
 
         if verifying_key.verify(digest, &signature).is_err() {
-            return Err(AttestationError::InvalidSignature.into());
+            // Surface the exact inputs the chain used so an attestor
+            // whose off-chain digest computation disagrees can spot
+            // the mismatch directly. See `AttestationError::InvalidSignature`
+            // for the rationale.
+            return Err(AttestationError::InvalidSignature {
+                pubkey: attested.pubkey,
+                expected_digest: hex::encode(digest),
+                submitter: submitter.to_string(),
+                timestamp,
+            }
+            .into());
         }
 
         valid = valid.saturating_add(1);

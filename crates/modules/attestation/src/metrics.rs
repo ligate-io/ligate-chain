@@ -21,6 +21,31 @@
 //! in `lib.rs` so the in-zkVM guest build doesn't pull `prometheus`
 //! for no reason. The host build always enables `native`, so
 //! `record_*` is always live there.
+//!
+//! # These counters are **per-process**, not chain state
+//!
+//! Every `record_*` call increments the in-process counter once.
+//! That includes calls made during state replay at node startup
+//! (Sovereign rollups rebuild in-memory state by re-running the
+//! STF over historical slots from DA on every boot). One on-chain
+//! registration can therefore appear as N >= 1 increments after
+//! N - 1 node restarts.
+//!
+//! Operator dashboards that want to answer "how many things are
+//! actually registered right now" should query the indexer's
+//! state-derived aggregates, not these counters:
+//!
+//! - `GET /v1/stats/totals` on `ligate-api`
+//! - `GET /v1/schemas`, `/v1/attestor-sets/{id}` (per-entity)
+//! - chain REST: `/v1/modules/attestation/state/schemas/` (direct)
+//!
+//! These counters remain useful for *event-rate* questions
+//! ("registrations per hour during devnet-1 week 1"), where the
+//! per-replay double-counting is bounded and dashboards typically
+//! apply `rate()` or `increase()` over a window. They are NOT
+//! useful as absolute "current registered count" gauges. See
+//! `ligate-io/ligate-api#TBD` for the operator-dashboard panels
+//! that moved from these counters to the api aggregates.
 
 use std::sync::OnceLock;
 
