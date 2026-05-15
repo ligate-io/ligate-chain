@@ -60,14 +60,16 @@ jobs:
           - target: aarch64-apple-darwin
             runner: macos-14
             archive_suffix: darwin-arm64
-          # Intel Mac. `macos-13` is the last GitHub-hosted Intel
-          # runner; `macos-14` and later are Apple Silicon only. Few
-          # operators run Intel Macs as servers, but contributors on
-          # 2018-2019 hardware still benefit from a downloadable
-          # binary instead of a from-source build. Tracking issue: #210.
-          - target: x86_64-apple-darwin
-            runner: macos-13
-            archive_suffix: darwin-amd64
+          # Intel Mac (`x86_64-apple-darwin` on `macos-13`) was
+          # removed 2026-05-15. GitHub's hosted Intel pool has 1-4h
+          # queue waits during EU/US business hours, which blocked the
+          # entire v0.1.0-devnet release since `release:` needs the
+          # full matrix. Operators run Linux servers; remaining macOS
+          # users are overwhelmingly Apple Silicon (`aarch64-apple-darwin`
+          # already shipped). Anyone on 2018-2019 Intel Mac hardware
+          # falls back to `cargo install --git`. Re-add if and when
+          # GitHub stabilises the Intel pool, or when a self-hosted
+          # runner is wired up. Original add: PR #227 (closes #210).
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -251,7 +253,10 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: release-notes.md
           files: release/*
-          # Treat tags ending in `-rc.N` / `-devnet` / `-testnet` as
-          # pre-release; full mainnet uses `vX.Y.Z` plain.
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          # Treat ONLY tags containing `-rc.` as pre-release (true
+          # release candidates). `-devnet` / `-testnet` tags are
+          # "current public network" releases -- pinned, canonical for
+          # that network's lifetime -- and ship as normal releases.
+          # Full mainnet uses `vX.Y.Z` plain.
+          prerelease: ${{ contains(github.ref_name, '-rc.') }}
           fail_on_unmatched_files: true
