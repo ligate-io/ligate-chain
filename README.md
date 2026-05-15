@@ -11,7 +11,7 @@
 
 <div align="center">
 
-[![CI](https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml/badge.svg)](https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml) [![Mocha smoke](https://github.com/ligate-io/ligate-chain/actions/workflows/mocha-smoke.yml/badge.svg)](https://github.com/ligate-io/ligate-chain/actions/workflows/mocha-smoke.yml) [![codecov](https://codecov.io/gh/ligate-io/ligate-chain/branch/main/graph/badge.svg)](https://codecov.io/gh/ligate-io/ligate-chain) [![Rust Report Card](https://rust-reportcard.xuri.me/badge/github.com/ligate-io/ligate-chain)](https://rust-reportcard.xuri.me/report/github.com/ligate-io/ligate-chain) [![Latest release](https://img.shields.io/github/v/tag/ligate-io/ligate-chain?sort=semver&label=release&color=A7D28C)](https://github.com/ligate-io/ligate-chain/releases) [![License: Apache-2.0 OR MIT](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](#license) [![Docs](https://img.shields.io/badge/docs-docs.ligate.io-A7D28C.svg)](https://docs.ligate.io) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ligate-io/ligate-chain) [![Pre-devnet](https://img.shields.io/badge/status-pre--devnet-E8833A.svg)](#development-status)
+[![CI](https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml/badge.svg)](https://github.com/ligate-io/ligate-chain/actions/workflows/ci.yml) [![Mocha smoke](https://github.com/ligate-io/ligate-chain/actions/workflows/mocha-smoke.yml/badge.svg)](https://github.com/ligate-io/ligate-chain/actions/workflows/mocha-smoke.yml) [![codecov](https://codecov.io/gh/ligate-io/ligate-chain/branch/main/graph/badge.svg)](https://codecov.io/gh/ligate-io/ligate-chain) [![Rust Report Card](https://rust-reportcard.xuri.me/badge/github.com/ligate-io/ligate-chain)](https://rust-reportcard.xuri.me/report/github.com/ligate-io/ligate-chain) [![Latest release](https://img.shields.io/github/v/tag/ligate-io/ligate-chain?sort=semver&label=release&color=A7D28C)](https://github.com/ligate-io/ligate-chain/releases) [![License: Apache-2.0 OR MIT](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-blue.svg)](#license) [![Docs](https://img.shields.io/badge/docs-docs.ligate.io-A7D28C.svg)](https://docs.ligate.io) [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ligate-io/ligate-chain) [![Devnet](https://img.shields.io/badge/status-devnet-A7D28C.svg)](#development-status)
 
 </div>
 
@@ -290,7 +290,7 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 
 ## Development status
 
-**Pre-devnet.** No public chain is running yet, but the protocol works end-to-end against a local Celestia mocha-testnet. As of Phase A:
+**Devnet.** `ligate-devnet-1` is live on Celestia Mocha-testnet. As of Phase A:
 
 - Attestation module: data types, state layout, call handlers, ed25519 signature validation, replay protection, fee routing.
 - Runtime: `ligate-stf` composes the curated module set on the upgraded Sovereign SDK.
