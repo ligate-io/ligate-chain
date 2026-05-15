@@ -25,9 +25,14 @@ jobs:
   fuzz:
     name: cargo fuzz
     runs-on: ubuntu-latest
-    # Cold build is ~5 min, then 7 targets × ~85s = ~10 min runs.
-    # 30 leaves headroom for the first-run cache miss.
-    timeout-minutes: 30
+    # Cold build is ~20 min (sanitizer-instrumented compile of the
+    # whole chain dep tree pulled in by `sov-test-utils` via the
+    # SDK-fork patch block added in #330), then 10 targets × ~60s =
+    # ~10 min runs. The previous 30-min cap got blown by the
+    # cache-save tail once #330 fattened the build; 60 leaves real
+    # headroom. Warm runs (post `cache-on-failure` below) should
+    # land in ~10-15 min.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
 
@@ -44,6 +49,13 @@ jobs:
           # workspace cache with sanitizer-flavoured builds.
           workspaces: |
             crates/modules/attestation/fuzz
+          # Save the cache even when the job fails or is cancelled.
+          # Default `false` discards the multi-GB sanitizer `target/`
+          # whenever a run times out or libfuzzer finds a crash, which
+          # forces a ~20 min cold rebuild on every subsequent nightly
+          # (same trap `mocha-smoke.yml` hit until the cache-on-failure
+          # fix landed there).
+          cache-on-failure: true
 
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
@@ -56,7 +68,7 @@ jobs:
       # runtime. Each target re-uses the build artifact from the
       # previous step so the only cost here is fuzzing time. The
       # REST extractor targets (rest_*) added in #157 share the
-      # budget; each is ~60s. Total still under the 30-min job cap.
+      # budget; each is ~60s. Total well under the 60-min job cap.
       - name: Run targets
         working-directory: crates/modules/attestation/fuzz
         run: |
