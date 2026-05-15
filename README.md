@@ -261,6 +261,17 @@ cargo audit
 
 Ignored advisories and their rationales are documented in [`audit.toml`](audit.toml). All current ignores are transitive dependencies pinned by the Sovereign SDK; they clear automatically on SDK upgrades.
 
+### Pre-commit hooks
+
+`.pre-commit-config.yaml` runs `cargo fmt --check` on every commit so formatting drift is caught locally instead of in CI. One-time setup per clone:
+
+```bash
+brew install pre-commit         # or: pip install pre-commit
+pre-commit install              # writes .git/hooks/pre-commit
+```
+
+Skip the hook for an emergency commit with `git commit --no-verify`; the same check still re-runs in CI.
+
 ## Protocol at a glance
 
 The v0 protocol has three entities. Full detail in [the spec](docs/protocol/attestation-v0.md).
