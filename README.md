@@ -4,8 +4,6 @@
   </a>
 </p>
 
-<h1 align="center">Ligate Chain</h1>
-
 <p align="center">
   <strong>The permissionless on-chain attestation protocol.</strong><br>
   A sovereign rollup on Celestia. AI provenance is the wedge use case, not the only one.
