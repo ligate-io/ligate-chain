@@ -130,7 +130,10 @@ max_allowed_node_distance_behind = 10
 rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 
 [sequencer.preferred]
-# TODO: drop once Sovereign-Labs/sovereign-sdk-wip#2814 lands.
+# Conscious choice per #293, option A. See `devnet-1/celestia.toml`
+# for the long-form explanation: preferred sequencer = SDK norm,
+# the flag below is an upstream-bug workaround we carry knowingly
+# at v0 single-sequencer scale. Proper fix tracked at #337.
 disable_state_root_consistency_checks = true
 recovery_strategy = "TryToSave"
 # 12s — one Celestia block of in-batch work.
