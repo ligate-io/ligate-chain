@@ -1,0 +1,36 @@
+# pre-commit-config.yaml for `ligate-chain`.
+#
+# Runs every-commit gates that CI later re-runs. Goal: catch the
+# common low-effort failures (mainly `cargo fmt` drift, since rustfmt
+# is strict and humans rarely produce its exact whitespace by hand)
+# before the commit leaves the developer machine, instead of after a
+# CI roundtrip.
+#
+# One-time setup, done once per clone:
+#
+#   brew install pre-commit          # or: pip install pre-commit
+#   pre-commit install               # writes .git/hooks/pre-commit
+#
+# After that, every `git commit` runs the hooks below. Bypass with
+# `--no-verify` in emergencies but the same checks then re-fire in CI.
+
+repos:
+  - repo: local
+    hooks:
+      # `cargo fmt --check` — same gate CI uses. Fast (~1s per file).
+      # Doesn't auto-format; failure tells the developer to run
+      # `cargo fmt --all` then re-commit.
+      - id: cargo-fmt
+        name: cargo fmt --all -- --check
+        description: Verify Rust formatting matches rustfmt.toml.
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # `cargo check`, `clippy`, `cargo deny`, `cargo audit`, and the
+      # DA-isolation + risc0 build-script harness are intentionally
+      # OUT of the pre-commit gate — they pull the full workspace
+      # through the SDK fork patch table and/or download advisory
+      # databases. Way too slow for every commit. CI runs them
+      # server-side where the caching is durable.
