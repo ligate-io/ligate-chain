@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://ligate.io">
-    <img src="docs/assets/lockup.svg" alt="Ligate Labs" width="220">
+    <img src="docs/assets/lockup.svg" alt="Ligate Chain" width="220">
   </a>
 </p>
 

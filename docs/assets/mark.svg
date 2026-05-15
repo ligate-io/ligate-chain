@@ -1,11 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none" role="img" aria-label="Ligate Labs mark">
-  <title>Ligate Labs mark</title>
-  <mask id="lm">
-    <rect width="48" height="48" fill="white"/>
-    <rect x="2.5" y="13.5" width="28" height="21" rx="10.5" fill="black"/>
-  </mask>
-  <g mask="url(#lm)">
-    <rect x="19" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
-  </g>
-  <rect x="4" y="15" width="25" height="18" rx="9" stroke="#A7D28C" stroke-width="3" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="112" viewBox="0 0 128 112" fill="none" role="img" aria-label="Ligate Chain mark">
+  <title>Ligate Chain mark</title>
+  <path d="M123.03 55.9332L115.623 68.7795L108.216 81.6154L100.819 94.4513L93.4121 107.277H34.2075L26.8004 94.4513L19.4037 81.6154H78.6187L86.0154 68.7795L93.4121 55.9332H123.03Z" stroke="#A7D28C" stroke-width="9.2" stroke-linejoin="round"/>
+  <path d="M49.0113 30.2718L41.6042 43.0973L34.2075 55.9332L26.8004 68.7795L19.4037 81.6154L11.9967 68.7795L4.59998 55.9332L11.9967 43.0973L19.4037 30.2718H49.0113Z" stroke="#A7D28C" stroke-width="9.2" stroke-linejoin="round"/>
+  <path d="M108.216 30.2718L100.819 43.0973L93.4121 55.9332H63.8046L71.2221 43.0973L78.6188 30.2718H49.0112L56.4079 17.4359L63.8046 4.60001H93.4121L100.819 17.4359L108.216 30.2718Z" stroke="#A7D28C" stroke-width="9.2" stroke-linejoin="round"/>
 </svg>
