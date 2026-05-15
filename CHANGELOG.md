@@ -1,12 +1,14 @@
 # Changelog
 
-All notable changes to Ligate Chain are tracked here. Pre-launch (devnet target Q2 2026); no semver releases yet, everything sits under `[Unreleased]`. The first tagged release will fold the Unreleased contents into a versioned section at devnet boot.
+All notable changes to Ligate Chain are tracked here. Pre-launch (devnet target Q2 2026). New work accumulates under `[Unreleased]`; tagged releases fold the contents into a versioned section. `v0.1.0-devnet` (2026-05-15) is the first such release.
 
 Format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/). Entries group as **Added** (new functionality), **Changed** (behaviour or API shifts on existing functionality), **Fixed** (bugfixes), **Security** (advisories, supply-chain, fuzz), and **Deps** (transitive bumps not otherwise interesting). Issue and PR numbers reference [`ligate-io/ligate-chain`](https://github.com/ligate-io/ligate-chain).
 
 This file is human-curated. Every PR adds an entry under `## [Unreleased]`; releases bump the buckets into a new `## [version] - YYYY-MM-DD` section.
 
 ## [Unreleased]
+
+## [0.1.0-devnet] - 2026-05-15
 
 ### Changed
 
