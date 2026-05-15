@@ -168,6 +168,15 @@ The cloud-init does the chassis. The operator still has to:
 
 - Place the `ligate-node` binary at `/opt/ligate/bin/ligate-node`. From a tag onward, the canonical artifact is a GitHub Release tarball (`ligate-node-${VERSION}-linux-amd64.tar.gz` or `linux-arm64.tar.gz` for the Linux server case; `darwin-arm64` and `darwin-amd64` are also published for developer tooling). The release workflow at `.github/workflows/release.yml` produces all four targets on every `v*` tag. Pre-tag operators build from source via `cargo build --release --bin ligate-node`.
 - Clone the chain repo's `devnet-1/` directory to `/opt/ligate/devnet-1/`.
+- **Pin `genesis_da_height` before first boot.** `devnet-1/genesis/chain_state.json` ships `genesis_da_height: 0` — a placeholder. Celestia rejects a request for DA block 0, so the chain cannot initialize against Mocha while it's `0` (this is exactly what the Mocha smoke gate surfaced; see [#331](https://github.com/ligate-io/ligate-chain/issues/331)). Set it to a recent **finalized** Mocha height:
+  ```bash
+  # Latest Mocha consensus height, minus a finality margin.
+  MOCHA_HEIGHT=$(curl -s https://rpc-mocha.pops.one/status | jq -r .result.sync_info.latest_block_height)
+  PIN=$((MOCHA_HEIGHT - 20))
+  jq ".genesis_da_height = $PIN" /opt/ligate/devnet-1/genesis/chain_state.json \
+      > /tmp/chain_state.json && mv /tmp/chain_state.json /opt/ligate/devnet-1/genesis/chain_state.json
+  ```
+  The chain starts reading DA from this height, so it must be recent — a stale value forces the node to sync months of Mocha history before producing its first slot. This is a launch-time value: re-pin it on every re-genesis, including `devnet-N` rotation after a Mocha reset (see the re-genesis playbook below).
 - Write `/etc/ligate/env` with the secrets (sequencer only):
   ```
   SOV_CELESTIA_RPC_AUTH_TOKEN=<from "celestia light auth admin">
