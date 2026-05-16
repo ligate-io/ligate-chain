@@ -1758,7 +1758,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 68
       },
@@ -1817,8 +1817,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 4,
         "y": 68
       },
       "id": 902,
@@ -1876,8 +1876,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 4,
+        "x": 8,
         "y": 68
       },
       "id": 903,
@@ -1908,7 +1908,7 @@
           "refId": "A"
         }
       ],
-      "title": "State disk used (/var/lib/ligate)",
+      "title": "/var/lib/ligate used",
       "type": "stat"
     },
     {
@@ -1935,8 +1935,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 12,
         "y": 68
       },
       "id": 904,
@@ -1967,7 +1967,7 @@
           "refId": "A"
         }
       ],
-      "title": "Load avg (1m)",
+      "title": "Load 1m",
       "type": "stat"
     },
     {
@@ -2111,6 +2111,124 @@
       ],
       "title": "Disk I/O (sdb = state disk)",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-ligate-prom"
+      },
+      "description": "Root fs (boot disk) fill %. Watch for /var/log runaway or unintended writes off the persistent disk.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 68
+      },
+      "id": 907,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-ligate-prom"
+          },
+          "expr": "(1 - (node_filesystem_avail_bytes{job=\"integrations/unix\",mountpoint=\"/\"} / node_filesystem_size_bytes{job=\"integrations/unix\",mountpoint=\"/\"})) * 100",
+          "instant": true,
+          "legendFormat": "",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "/ (boot disk) used",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-ligate-prom"
+      },
+      "description": "Seconds since last boot of the chain VM. Drops to ~0 on a reboot (planned restart, image refresh, scope-bump cycle).",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 68
+      },
+      "id": 908,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-ligate-prom"
+          },
+          "expr": "(time() - node_boot_time_seconds{job=\"integrations/unix\"})",
+          "instant": true,
+          "legendFormat": "",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Uptime",
+      "type": "stat"
     }
   ],
   "refresh": "15s",
@@ -2131,5 +2249,5 @@
   "timezone": "browser",
   "title": "Ligate Devnet \u2014 Operator view",
   "uid": "ligate-operator",
-  "version": 3
+  "version": 4
 }
