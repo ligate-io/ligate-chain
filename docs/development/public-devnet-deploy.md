@@ -47,6 +47,8 @@ Faucet and indexer **do not run on this VM** — they live in [`ligate-io/ligate
 
 Persistent data disk can be **live-resized without downtime** via `gcloud compute disks resize` + `resize2fs /dev/sdb`; ext4 supports online growth. Done on `ligate-devnet-1-sequencer` on 2026-05-16 (50GB → 150GB) when local snapshot accumulation projected to fill the original 50GB within ~24h.
 
+**OS choice: Ubuntu 24.04 LTS, not Debian 12.** The released `ligate-node` binary is built on Ubuntu 24.04 and links against GLIBC 2.39. Debian 12 ships GLIBC 2.36, so the binary fails to load with `version GLIBC_2.39 not found`. If you want Debian for some reason, build from source (`cargo build --release --bin ligate-node`) on the same Debian VM — but that pulls in a Rust toolchain + ~30 min of compile time. Ubuntu is the pragmatic default.
+
 ## Step 1: Provision the VM
 
 ```bash
@@ -54,8 +56,8 @@ gcloud compute instances create ligate-devnet-1-sequencer \
     --project=$YOUR_GCP_PROJECT \
     --zone=us-central1-a \
     --machine-type=e2-standard-4 \
-    --image-family=debian-12 \
-    --image-project=debian-cloud \
+    --image-family=ubuntu-2404-lts-amd64 \
+    --image-project=ubuntu-os-cloud \
     --boot-disk-size=20GB \
     --create-disk=name=ligate-data,size=150GB,type=pd-ssd \
     --tags=http-server,https-server \
@@ -169,11 +171,15 @@ runcmd:
   - chown ligate:ligate /var/lib/ligate/rocksdb
   # Install Rust + risc0 toolchain (sequencer only; follower can skip risc0)
   - sudo -u ligate bash -lc 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
-  # Install Celestia light node binary
+  # Install Celestia light node binary. Newer Celestia releases ship
+  # as a tar.gz (was a bare binary in earlier releases); extract and
+  # install the `celestia` binary.
   - |
-    CELESTIA_VERSION=v0.20.0
-    curl -L "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-linux-amd64" \
-      -o /usr/local/bin/celestia && chmod +x /usr/local/bin/celestia
+    CELESTIA_VERSION=v0.30.2
+    curl -fsSL "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-node_Linux_x86_64.tar.gz" \
+      -o /tmp/celestia.tar.gz
+    tar -xzf /tmp/celestia.tar.gz -C /tmp/
+    install -o root -g root -m 0755 /tmp/celestia /usr/local/bin/celestia
   - sudo -u ligate /usr/local/bin/celestia light init --p2p.network=mocha
   - systemctl daemon-reload
   - systemctl enable --now celestia-light.service
