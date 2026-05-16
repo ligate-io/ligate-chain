@@ -126,6 +126,7 @@ write_files:
 
       [Service]
       User=ligate
+      Group=ligate
       WorkingDirectory=/opt/ligate
       EnvironmentFile=/etc/ligate/env
       ExecStart=/opt/ligate/bin/ligate-node \
@@ -135,6 +136,11 @@ write_files:
           --metrics-bind 127.0.0.1:9100
       Restart=on-failure
       RestartSec=10
+      # RocksDB compaction + WAL flush on shutdown can take 2-3 min on a
+      # hot state DB. The systemd default of 90s triggered a SIGKILL
+      # during the v0.1.1-devnet swap on 2026-05-15 (chain#362). 300s
+      # gives headroom without leaving zombie processes around forever.
+      TimeoutStopSec=300
       LimitNOFILE=65536
 
       [Install]
