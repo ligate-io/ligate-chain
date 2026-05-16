@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "id": 1991709205872640,
+  "id": 1993125878185984,
   "panels": [
     {
       "collapsed": false,
@@ -14,7 +14,7 @@
       },
       "id": 100,
       "panels": [],
-      "title": "Chain identity",
+      "title": "Chain identity & live status",
       "type": "row"
     },
     {
@@ -113,7 +113,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 6,
         "y": 1
       },
@@ -160,7 +160,7 @@
           }
         }
       ],
-      "title": "Block height",
+      "title": "Chain head",
       "type": "stat"
     },
     {
@@ -168,7 +168,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "(chain head \u2212 indexer head). Steady-state should be 0-1.",
+      "description": "",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
@@ -179,6 +179,80 @@
               {
                 "color": "green",
                 "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 10,
+        "y": 1
+      },
+      "id": 103,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "indexer_height",
+              "text": "indexer_height",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/info",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Indexer head",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "(chain head \u2212 indexer head). Steady state 0-1.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
               },
               {
                 "color": "yellow",
@@ -196,11 +270,11 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 5,
+        "x": 14,
         "y": 1
       },
-      "id": 103,
+      "id": 104,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -243,7 +317,7 @@
           }
         }
       ],
-      "title": "Indexer lag (slots)",
+      "title": "Lag (slots)",
       "type": "stat"
     },
     {
@@ -252,6 +326,653 @@
         "uid": "afm64tqkoba4ga"
       },
       "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 15
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 1
+      },
+      "id": 105,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "indexer_lag_secs",
+              "text": "indexer_lag_secs",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/next-block-eta",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Lag (seconds)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 200,
+      "panels": [],
+      "title": "Block cadence",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "id": 201,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "mean_block_interval_secs",
+              "text": "mean_block_interval_secs",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/next-block-eta",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Mean interval (s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "id": 202,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "p95_block_interval_secs",
+              "text": "p95_block_interval_secs",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/next-block-eta",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "p95 interval (s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "If this exceeds 3x mean interval, blocks have stalled.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 6
+      },
+      "id": 203,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "seconds_since_last",
+              "text": "seconds_since_last",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/next-block-eta",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Seconds since last block",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "Negative = block is overdue.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 6
+      },
+      "id": 204,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "seconds_until_expected",
+              "text": "seconds_until_expected",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/next-block-eta",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Seconds until expected",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "id": 300,
+      "panels": [],
+      "title": "DA finality (observed, last 1h)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 11
+      },
+      "id": 301,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "p50_seconds",
+              "text": "p50_seconds",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/finality",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "p50 (s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 25
+              },
+              {
+                "color": "red",
+                "value": 40
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 11
+      },
+      "id": 302,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "p95_seconds",
+              "text": "p95_seconds",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/finality",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "p95 (s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 11
+      },
+      "id": 303,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "p99_seconds",
+              "text": "p99_seconds",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "afm64tqkoba4ga"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/finality",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "p99 (s)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "<20 = falls back to estimate.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
@@ -273,9 +994,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 1
+        "y": 11
       },
-      "id": 104,
+      "id": 304,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -294,8 +1015,8 @@
         {
           "columns": [
             {
-              "selector": "count",
-              "text": "count",
+              "selector": "sampled_count",
+              "text": "sampled_count",
               "type": "number"
             }
           ],
@@ -311,14 +1032,14 @@
           "root_selector": "",
           "source": "url",
           "type": "json",
-          "url": "/v1/stats/active-addresses?window=24h",
+          "url": "/v1/stats/finality",
           "url_options": {
             "data": "",
             "method": "GET"
           }
         }
       ],
-      "title": "Active wallets (24h)",
+      "title": "Sample count (1h)",
       "type": "stat"
     },
     {
@@ -327,9 +1048,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 15
       },
-      "id": 200,
+      "id": 400,
       "panels": [],
       "title": "Cumulative totals",
       "type": "row"
@@ -361,9 +1082,9 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 6
+        "y": 16
       },
-      "id": 201,
+      "id": 401,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -436,9 +1157,9 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 6
+        "y": 16
       },
-      "id": 202,
+      "id": 402,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -511,9 +1232,9 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 6
+        "y": 16
       },
-      "id": 203,
+      "id": 403,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -586,9 +1307,9 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 6
+        "y": 16
       },
-      "id": 204,
+      "id": 404,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -661,9 +1382,9 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 6
+        "y": 16
       },
-      "id": 205,
+      "id": 405,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -736,9 +1457,9 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 6
+        "y": 16
       },
-      "id": 206,
+      "id": 406,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -757,8 +1478,8 @@
         {
           "columns": [
             {
-              "selector": "indexed_at_slot",
-              "text": "indexed_at_slot",
+              "selector": "count",
+              "text": "count",
               "type": "number"
             }
           ],
@@ -774,14 +1495,14 @@
           "root_selector": "",
           "source": "url",
           "type": "json",
-          "url": "/v1/stats/totals",
+          "url": "/v1/stats/active-addresses?window=24h",
           "url_options": {
             "data": "",
             "method": "GET"
           }
         }
       ],
-      "title": "Indexed at slot",
+      "title": "Active wallets (24h)",
       "type": "stat"
     },
     {
@@ -790,11 +1511,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 20
       },
-      "id": 300,
+      "id": 500,
       "panels": [],
-      "title": "Token supply",
+      "title": "Token supply & treasury",
       "type": "row"
     },
     {
@@ -802,7 +1523,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "Total LGT issued at genesis. nano_LGT / 1e9.",
+      "description": "Total LGT issued at genesis. nano / 1e9.",
       "fieldConfig": {
         "defaults": {
           "decimals": 4,
@@ -823,9 +1544,9 @@
         "h": 4,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 21
       },
-      "id": 301,
+      "id": 501,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -890,7 +1611,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "Live treasury wallet balance. Fees from attestation calls accumulate here.",
+      "description": "Live treasury wallet. Fees accumulate here.",
       "fieldConfig": {
         "defaults": {
           "decimals": 4,
@@ -911,9 +1632,9 @@
         "h": 4,
         "w": 12,
         "x": 12,
-        "y": 11
+        "y": 21
       },
-      "id": 302,
+      "id": 502,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -979,9 +1700,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 25
       },
-      "id": 400,
+      "id": 600,
       "panels": [],
       "title": "Activity over time",
       "type": "row"
@@ -1012,9 +1733,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 26
       },
-      "id": 401,
+      "id": 601,
       "options": {
         "legend": {
           "calcs": [
@@ -1092,9 +1813,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 26
       },
-      "id": 402,
+      "id": 602,
       "options": {
         "legend": {
           "calcs": [
@@ -1157,9 +1878,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 24
+        "y": 34
       },
-      "id": 500,
+      "id": 700,
       "panels": [],
       "title": "Holder distribution",
       "type": "row"
@@ -1169,7 +1890,6 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -1200,9 +1920,9 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 35
       },
-      "id": 501,
+      "id": 701,
       "options": {
         "footer": {
           "show": false
@@ -1256,572 +1976,36 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 44
       },
-      "id": 600,
+      "id": 800,
       "panels": [],
-      "title": "DA finality performance",
+      "title": "Coverage notes",
       "type": "row"
     },
     {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "Median pending\u2192finalized observed (last 1h)",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "yellow",
-                "value": 20
-              },
-              {
-                "color": "red",
-                "value": 30
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 35
-      },
-      "id": 601,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "p50_seconds",
-              "text": "p50_seconds",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/finality",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "DA finality p50 (s)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "yellow",
-                "value": 25
-              },
-              {
-                "color": "red",
-                "value": 40
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 6,
-        "y": 35
-      },
-      "id": 602,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "p95_seconds",
-              "text": "p95_seconds",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/finality",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "DA finality p95 (s)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 12,
-        "y": 35
-      },
-      "id": 603,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "p99_seconds",
-              "text": "p99_seconds",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/finality",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "DA finality p99 (s)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "Number of finalization observations in the last hour. <20 = falls back to estimate.",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 18,
-        "y": 35
-      },
-      "id": 604,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "sampled_count",
-              "text": "sampled_count",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/finality",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "Sample count (1h)",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
+        "h": 6,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 45
       },
-      "id": 700,
-      "panels": [],
-      "title": "Block cadence",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 2,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 0,
-        "y": 40
-      },
-      "id": 701,
+      "id": 801,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
+        "content": "**This dashboard covers everything ligate-api can serve today (`api.ligate.io`).**\n\n**VM-level metrics live on the sibling [`Ligate VM \u2014 Host metrics`](/d/ligate-vm) dashboard** \u2014 CPU, memory, disk I/O, network throughput, systemd unit status, ligate-node process stats. Sourced from `node_exporter` via Grafana Cloud Agent pushing to `grafanacloud-ligate-prom`.\n\n**Chain-runtime metrics (mempool depth, RPC latency by endpoint, DA submission failure breakdown, attestation rejection reasons) are still pending.** They require Prometheus scraping the chain's `127.0.0.1:9100/metrics` endpoint inside the VM. Tracked in:\n- [ligate-chain#316](https://github.com/ligate-io/ligate-chain/issues/316) \u2014 Ops deploy punchlist\n- [ligate-chain#360](https://github.com/ligate-io/ligate-chain/issues/360) \u2014 Pre-mainnet security gap tracker\n\nOnce that scraper lands, the existing chain-side dashboard at `ops/grafana/ligate-node.json` re-imports as a third dashboard alongside this one + the VM one.",
+        "mode": "markdown"
       },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "mean_block_interval_secs",
-              "text": "mean_block_interval_secs",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/next-block-eta",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "Mean block interval (s)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 2,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 40
-      },
-      "id": 702,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "p95_block_interval_secs",
-              "text": "p95_block_interval_secs",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/next-block-eta",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "p95 block interval (s)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "afm64tqkoba4ga"
-      },
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 40
-      },
-      "id": 703,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "columns": [
-            {
-              "selector": "seconds_since_last",
-              "text": "seconds_since_last",
-              "type": "number"
-            }
-          ],
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
-          },
-          "filters": [],
-          "format": "table",
-          "global_query_id": "",
-          "parser": "backend",
-          "refId": "A",
-          "root_selector": "",
-          "source": "url",
-          "type": "json",
-          "url": "/v1/stats/next-block-eta",
-          "url_options": {
-            "data": "",
-            "method": "GET"
-          }
-        }
-      ],
-      "title": "Seconds since last block",
-      "type": "stat"
+      "title": "What's NOT on this dashboard",
+      "type": "text"
     }
   ],
-  "refresh": "30s",
+  "refresh": "15s",
   "schemaVersion": 39,
   "tags": [
     "ligate",
     "devnet-1",
-    "investor"
+    "application",
+    "chain"
   ],
   "templating": {
     "list": []
@@ -1831,7 +2015,7 @@
     "to": "now"
   },
   "timezone": "browser",
-  "title": "Ligate Devnet \u2014 Investor metrics",
-  "uid": "ligate-investor",
+  "title": "Ligate Devnet \u2014 Application & chain metrics",
+  "uid": "ligate-chain",
   "version": 1
 }
