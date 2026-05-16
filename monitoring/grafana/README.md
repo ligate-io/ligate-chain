@@ -19,10 +19,9 @@ What's currently scraped and queryable in `grafanacloud-ligate-prom`:
 - `process_*` — 7 process metrics from the `ligate-node` binary (cpu_seconds_total, resident_memory_bytes, open_fds, max_fds, threads, virtual_memory_bytes, start_time_seconds)
 - `rockbound_*` + `schemadb_*` — RocksDB hot-path latency / bytes histograms
 - `storage_*` — storage layer counters
+- `node_*` — 265 host-level series from Alloy's in-process `prometheus.exporter.unix` (CPU, memory, filesystem, network, disk I/O, load average, systemd unit state, boot time). Added 2026-05-16 per chain#363.
 
-8 rows: live status, throughput, block production over time, DA finality (single-pane + percentile time series), RPC latency + load, ligate-node process, RocksDB hot path, telemetry health.
-
-**Not on this dashboard yet:** host-level VM metrics (`node_*`). Alloy on `ligate-devnet-1-sequencer` doesn't have `prometheus.exporter.unix` configured. Tracked in [ligate-chain#363](https://github.com/ligate-io/ligate-chain/issues/363). When that lands, panels for host CPU / memory / disk / network either fold into this dashboard or move to a third `ligate-vm.json`.
+9 rows: live status, throughput, block production over time, DA finality (single-pane + percentile time series), RPC latency + load, ligate-node process, RocksDB hot path, telemetry health, host VM (CPU / RAM / state disk fill / load + network and disk-I/O time series).
 
 ## Investor dashboard (Infinity)
 
@@ -66,10 +65,13 @@ Commit so the repo stays the source of truth.
 
 ## Alloy config reference (the scraper)
 
-Lives on `ligate-devnet-1-sequencer` at `/etc/alloy/config.alloy`. Two
+Lives on `ligate-devnet-1-sequencer` at `/etc/alloy/config.alloy`. Five
 blocks today:
 
+- `local.file "gc_token"` — reads the Grafana Cloud API token from `/etc/alloy/grafana_cloud_token` (chmod 600) at agent start so it never appears in process listings
 - `prometheus.scrape "ligate_node"` — scrapes `127.0.0.1:9100` every 15s, forwards to `grafana_cloud`
-- `prometheus.remote_write "grafana_cloud"` — pushes to `https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push` with the token at `/etc/alloy/grafana_cloud_token`
+- `prometheus.exporter.unix "node"` — in-process node_exporter, default collector set minus the GCE-irrelevant ones (`ipvs`, `btrfs`, `infiniband`, `tapestats`, `zfs`). Added 2026-05-16 per chain#363
+- `prometheus.scrape "node"` — scrapes the in-process exporter targets above every 15s, same forward path
+- `prometheus.remote_write "grafana_cloud"` — pushes to `https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push` with the token, 12h local WAL buffer
 
-When VM-level metrics land (#363), add a `prometheus.exporter.unix` + matching `prometheus.scrape "node"` block. No agent reinstall needed — `sudo systemctl reload alloy` picks up config changes.
+`sudo systemctl reload alloy` picks up config changes; no agent reinstall needed.
