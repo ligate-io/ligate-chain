@@ -121,8 +121,11 @@ while ! curl -sf http://127.0.0.1:9100/metrics >/dev/null 2>&1; do
     fi
 done
 
-CURRENT_HEIGHT="$(curl -sf http://127.0.0.1:9100/metrics \
-                    | awk '/^ligate_block_height /{print $2; exit}')"
+# Buffer-then-parse via here-string to avoid `set -o pipefail` +
+# `awk … exit` SIGPIPE-ing curl. Same shape as in backup-rocksdb.sh.
+CURRENT_METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+CURRENT_HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${CURRENT_METRICS}")"
+[ -z "${CURRENT_HEIGHT}" ] && CURRENT_HEIGHT="unknown"
 echo "==> Node restarted; current block_height: ${CURRENT_HEIGHT}"
 echo "==> Expected from snapshot:               ${EXPECTED_HEIGHT}"
 echo

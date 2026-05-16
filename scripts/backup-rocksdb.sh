@@ -54,20 +54,31 @@ mkdir -p "${LIGATE_SNAPSHOT_DIR}/${TIER}"
 # `--delete` keeps the snapshot tidy if a file disappeared upstream.
 PREVIOUS_SNAPSHOT="$(ls -dt "${LIGATE_SNAPSHOT_DIR}/${TIER}"/* 2>/dev/null | head -1 || true)"
 
+# `--sparse` preserves sparseness on copy. RocksDB NOMT files contain
+# many sparse holes; without --sparse, rsync fills them with zeros on
+# the destination, inflating each snapshot ~4x on disk for nothing.
+# Tested: 1.2 GB physical → 5 GB after copy without --sparse,
+# vs 1.2 GB → 1.2 GB with --sparse.
 echo "==> Local snapshot: ${LOCAL_SNAPSHOT}"
 if [ -n "${PREVIOUS_SNAPSHOT}" ] && [ "${PREVIOUS_SNAPSHOT}" != "${LOCAL_SNAPSHOT}" ]; then
     echo "    using --link-dest=${PREVIOUS_SNAPSHOT}"
-    rsync -a --delete --link-dest="${PREVIOUS_SNAPSHOT}" \
+    rsync -a --sparse --delete --link-dest="${PREVIOUS_SNAPSHOT}" \
           "${LIGATE_STORAGE_DIR}/" "${LOCAL_SNAPSHOT}/"
 else
-    rsync -a --delete "${LIGATE_STORAGE_DIR}/" "${LOCAL_SNAPSHOT}/"
+    rsync -a --sparse --delete "${LIGATE_STORAGE_DIR}/" "${LOCAL_SNAPSHOT}/"
 fi
 
 # Write a manifest alongside so restore can verify checksum + height.
 HEIGHT_FILE="${LOCAL_SNAPSHOT}/.snapshot-manifest.json"
-HEIGHT="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null \
-            | awk '/^ligate_block_height /{print $2; exit}' \
-            || echo "unknown")"
+# Buffer-then-parse to avoid `set -o pipefail` + `awk … exit` SIGPIPE-ing
+# the writer of the pipe, which previously made HEIGHT capture BOTH
+# awk's match AND the `|| echo "unknown"` fallback (the manifest's
+# block_height field would contain a literal newline: `"15187\nunknown"`).
+# `<<<` here-string feeds awk via a temp file, not a pipe — no SIGPIPE
+# possible even when awk exits before the writer finishes.
+METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
+[ -z "${HEIGHT}" ] && HEIGHT="unknown"
 {
     echo "{"
     echo "  \"tier\": \"${TIER}\","
