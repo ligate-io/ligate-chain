@@ -158,6 +158,15 @@ runcmd:
     mkfs.ext4 -F $DEVICE
     echo "$DEVICE /var/lib/ligate ext4 defaults,nofail 0 2" >> /etc/fstab
     mount /var/lib/ligate
+  # Pre-create the RocksDB directory on the persistent disk so the
+  # operator's Step 3 symlink lands somewhere valid. Without this the
+  # chain writes state to /opt/ligate/devnet-1/data-celestia on the
+  # boot disk, and a VM image rebuild wipes the chain's local history.
+  # See "Migrating an existing host to the persistent disk" in
+  # docs/development/runbooks/backup-restore.md for the same path,
+  # but applied after-the-fact on hosts that booted without this step.
+  - mkdir -p /var/lib/ligate/rocksdb
+  - chown ligate:ligate /var/lib/ligate/rocksdb
   # Install Rust + risc0 toolchain (sequencer only; follower can skip risc0)
   - sudo -u ligate bash -lc 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
   # Install Celestia light node binary
@@ -176,6 +185,11 @@ The cloud-init does the chassis. The operator still has to:
 
 - Place the `ligate-node` binary at `/opt/ligate/bin/ligate-node`. From a tag onward, the canonical artifact is a GitHub Release tarball (`ligate-node-${VERSION}-linux-amd64.tar.gz` or `linux-arm64.tar.gz` for the Linux server case; `darwin-arm64` and `darwin-amd64` are also published for developer tooling). The release workflow at `.github/workflows/release.yml` produces all four targets on every `v*` tag. Pre-tag operators build from source via `cargo build --release --bin ligate-node`.
 - Clone the chain repo's `devnet-1/` directory to `/opt/ligate/devnet-1/`.
+- **Symlink the chain's storage path to the persistent disk** before first boot. The rollup config (`devnet-1/celestia.toml`) sets `[storage] path = "devnet-1/data-celestia"` relative to ligate-node's working directory (`/opt/ligate`). The cloud-init above pre-created `/var/lib/ligate/rocksdb` on the persistent disk; pointing the chain path at it is one command:
+  ```bash
+  sudo -u ligate ln -s /var/lib/ligate/rocksdb /opt/ligate/devnet-1/data-celestia
+  ```
+  Without this, the chain writes state to the 20 GB boot disk and a VM image rebuild loses chain history. Backups (per `docs/development/runbooks/backup-restore.md`) reduce the blast radius to ~15 minutes' RPO, but the persistent disk is the right home regardless. (Done after the fact on `ligate-devnet-1-sequencer` on 2026-05-16, runbook documents the in-place migration.)
 - **Pin `genesis_da_height` before first boot.** `devnet-1/genesis/chain_state.json` ships `genesis_da_height: 0` — a placeholder. Celestia rejects a request for DA block 0, so the chain cannot initialize against Mocha while it's `0` (this is exactly what the Mocha smoke gate surfaced; see [#331](https://github.com/ligate-io/ligate-chain/issues/331)). Set it to a recent **finalized** Mocha height:
   ```bash
   # Latest Mocha consensus height, minus a finality margin.
