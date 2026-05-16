@@ -1,6 +1,6 @@
 [Unit]
 Description=Ligate Chain RocksDB hourly backup
-Requires=ligate-backup.service
+Requires=ligate-backup@hourly.service
 
 [Timer]
 # 15-minute cadence per the issue scope; hourly tier files them under
@@ -12,7 +12,7 @@ Persistent=true
 # Anchor to the boundary minute (so timer fires at :00 :15 :30 :45,
 # not at process-start time + 15m).
 AccuracySec=1s
-Unit=ligate-backup.service
+Unit=ligate-backup@hourly.service
 
 [Install]
 WantedBy=timers.target
