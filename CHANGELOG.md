@@ -8,9 +8,26 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.1.1-devnet] - 2026-05-16
+
+Pre-launch alignment release. Two operator-visible changes (genesis re-substitution onto the round-2 operator key, sig-verify error UX) and a handful of infrastructure-side tightening (SDK fork pin alignment with the api repo, release-workflow tagging behaviour, pre-commit gate, brand mark refresh).
+
+**State-preservation note.** This release **does not change `attestation.json` fee config or any other genesis bytes that affect `chain_hash`.** Operators deploying this binary to an existing `devnet-1` VM keep their RocksDB state intact across the swap; no re-genesis required. Verified pre-release that `chain_hash` is unchanged from `v0.1.0-devnet`.
+
+### Added
+
+- `feat(attestation)`: signature-verification error path now surfaces both the canonical digest and the submitter address alongside the existing "signature invalid" message. Closes the debug-loop pain where attestation submitters got "sig invalid" with no way to cross-check which digest the chain re-computed versus what the off-chain signer produced. Pairs with a new `docs/protocol/attestation-v0.md` §wire-format appendix that documents the canonical LIP-5 test vector so client SDKs can byte-check their own digest computation against the reference. The `ligate-js` `v0.1.1-devnet` and `ligate-cli` `v0.1.2-devnet` releases both add cross-impl parity tests against the same vector. (#351)
+
 ### Changed
 
-- `devnet-1/genesis/` re-substituted with the round-2 operator key. The round-1 substitution (PR #251, 2026-05-08) replaced the public-seed bootstrap placeholder with `lig1rh9vcu879l36...`, but the private key for that address was never persisted to `~/.ligate-keys/` and is unrecoverable. No public-facing system ever read the round-1 `chain_hash` (devnet never came up against it), so this round-2 substitution has zero downstream blast radius -- partners haven't seen the round-1 hash anywhere. Round 2 also substitutes the all-zeros Celestia DA placeholder (`celestia1qqqqqq...zf30as`) with the real operator-controlled Mocha wallet (`celestia1mphanjz...`), which round 1 left untouched. The operator key is now persisted in three places to prevent recurrence: `~/.ligate-keys/devnet-1/operator.key` (chmod 600), `~/.config/ligate/secrets.env` as `LIGATE_DEVNET1_OPERATOR_KEY`, and GCP Secret Manager (`projects/utopian-spring-494915-q1/secrets/ligate-devnet-1-operator-key`). Closes the broken-key issue surfaced during the GCP devnet bring-up.
+- Brand mark refresh on chain `README.md`: new three-piece glyph + the "Ligate Chain" lockup, matching the marketing-side rebrand (R3). All-sage palette, no opacity drop on subsidiary text. (#341)
+- `.github/workflows/release.yml`: only tags matching `v*-rc.*` are flagged as GitHub-side prereleases now; bare `vX.Y.Z-devnet` ships as a normal release. Closes the bug where every `-devnet` tag was getting tagged "Pre-release" in the GitHub UI, which confused operators expecting `-devnet` to be the canonical devnet artifact. (#342)
+- `devnet-1/genesis/` re-substituted with the round-2 operator key. The round-1 substitution (PR #251, 2026-05-08) replaced the public-seed bootstrap placeholder with `lig1rh9vcu879l36...`, but the private key for that address was never persisted to `~/.ligate-keys/` and is unrecoverable. No public-facing system ever read the round-1 `chain_hash` (devnet never came up against it), so this round-2 substitution has zero downstream blast radius -- partners haven't seen the round-1 hash anywhere. Round 2 also substitutes the all-zeros Celestia DA placeholder (`celestia1qqqqqq...zf30as`) with the real operator-controlled Mocha wallet (`celestia1mphanjz...`), which round 1 left untouched. The operator key is now persisted in three places to prevent recurrence: `~/.ligate-keys/devnet-1/operator.key` (chmod 600), `~/.config/ligate/secrets.env` as `LIGATE_DEVNET1_OPERATOR_KEY`, and GCP Secret Manager (`projects/utopian-spring-494915-q1/secrets/ligate-devnet-1-operator-key`). Closes the broken-key issue surfaced during the GCP devnet bring-up. (#343)
+- `.pre-commit-config.yaml` added. Local `cargo fmt --check` runs at commit time so the same gate CI uses fires before the commit leaves the developer machine, instead of after a CI roundtrip. One-time setup: `pre-commit install`. Matches the `ligate-api` and `ligate-cli` repos. (#353)
+
+### Deps
+
+- SDK fork pin bumped to `ligate-io/sovereign-sdk@eab3f9d0` (was `49e9b2057`). Picks up the upstream `NodeClient::get_nonce_for_public_key` uniqueness-path fix. Realigns the [patch] table with `ligate-api` and `ligate-cli`, which both bumped to the same revision. Chain runtime behaviour unchanged (the fix is client-side, affecting how SDK-mediated callers fetch nonces — the chain itself isn't a NodeClient consumer in its hot path). (#352)
 
 ## [0.1.0-devnet] - 2026-05-15
 
