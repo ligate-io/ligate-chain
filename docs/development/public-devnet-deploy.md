@@ -36,14 +36,16 @@ Tracking issue: [#189](https://github.com/ligate-io/ligate-chain/issues/189). Si
 
 ## VM sizing
 
-| Role | GCP shape | vCPU | RAM | Disk | $/mo (sustained-use) |
-|---|---|---|---|---|---|
-| Sequencer | `e2-medium` | 2 | 4 GB | 50 GB SSD | ~25 USD |
-| Follower | `e2-medium` | 2 | 4 GB | 50 GB SSD | ~25 USD |
+| Role | GCP shape | vCPU | RAM | Boot disk | Data disk | $/mo (sustained-use) |
+|---|---|---|---|---|---|---|
+| Sequencer | `e2-standard-4` | 4 | 16 GB | 20 GB SSD | 150 GB SSD | ~135 USD |
+| Follower | `e2-medium` | 2 | 4 GB | 20 GB SSD | 100 GB SSD | ~30 USD |
 
-Sequencer sizing covers `ligate-node` + co-located Celestia light node only. Faucet and indexer **do not run on this VM** — they live in [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api), deployed to Railway alongside a Railway-managed Postgres. The Next.js explorer at `explorer.ligate.io` is yet another deploy on Vercel, talking to `api.ligate.io`. Follower sizing matches sequencer (no auxiliary services to host either way).
+Sequencer sizing covers `ligate-node` + co-located Celestia light node + the local backup snapshot stage (`/var/lib/ligate/snapshots/`, which keeps last 24 hourly + 7 daily + 4 weekly per `backup-rocksdb.sh` rotation). RocksDB NOMT files are sparse but rsync inflates them on copy, so each local snapshot is currently ~5GB; steady-state worst case for local snapshots is ~120GB (tracked under #359 followups; `--sparse` flag in the backup script would cut this ~4x).
 
-Both roles can drop to half their disk if you don't need history retention longer than a month; the chain's NOMT prunes aggressively. Conservative numbers above so you don't fight low-disk alerts in the first 90 days.
+Faucet and indexer **do not run on this VM** — they live in [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api), deployed to Railway alongside a Railway-managed Postgres. The Next.js explorer at `explorer.ligate.io` is yet another deploy on Vercel, talking to `api.ligate.io`. Follower sizing is smaller because followers don't keep the local backup stage (they restore from GCS or replay from DA if state is lost).
+
+Persistent data disk can be **live-resized without downtime** via `gcloud compute disks resize` + `resize2fs /dev/sdb`; ext4 supports online growth. Done on `ligate-devnet-1-sequencer` on 2026-05-16 (50GB → 150GB) when local snapshot accumulation projected to fill the original 50GB within ~24h.
 
 ## Step 1: Provision the VM
 
@@ -60,7 +62,7 @@ gcloud compute instances create ligate-devnet-1-sequencer \
     --metadata-from-file=user-data=cloud-init.yaml
 ```
 
-For a follower, swap `--machine-type=e2-medium`, `--create-disk=...,size=50GB`, and rename the instance.
+For a follower, swap `--machine-type=e2-medium`, `--create-disk=...,size=100GB`, and rename the instance.
 
 Reserve a static external IP and bind it:
 

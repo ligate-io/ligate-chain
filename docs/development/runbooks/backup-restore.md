@@ -299,6 +299,27 @@ sudo rm -rf /opt/ligate/devnet-1/data-celestia.MIGRATION-BACKUP-*
 
 ---
 
+## Resizing the persistent disk (online, no downtime)
+
+GCE persistent disks grow live, and ext4 resizes online — no chain stop needed.
+
+```sh
+# 1. Grow the GCE disk.
+gcloud compute disks resize ligate-data-v2 --zone us-central1-a --size 150GB
+
+# 2. Inside the VM, grow the ext4 filesystem to fill the new size.
+gcloud compute ssh ligate-devnet-1-sequencer --zone us-central1-a --command '
+  sudo resize2fs /dev/sdb
+  df -h /var/lib/ligate
+'
+```
+
+Done on `ligate-devnet-1-sequencer` 2026-05-16 (50GB → 150GB) when projected local snapshot accumulation (24 hourly × ~5GB) was on track to fill the original disk within ~24h. With the `--sparse` rsync fix (see followups) each snapshot drops from ~5GB to ~1.2GB and the 50GB disk would have been fine; 150GB is comfortable headroom either way.
+
+You can't shrink a GCE persistent disk, so size up cautiously. ext4 supports shrinking but only offline; not a path we'd take on this host.
+
+---
+
 ## Out of scope
 
 - **Multi-region replication.** A second GCS bucket in `us-east1` would survive a regional outage. Deferred to mainnet.
