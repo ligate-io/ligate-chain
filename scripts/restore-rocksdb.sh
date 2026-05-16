@@ -25,6 +25,15 @@ set -euo pipefail
 : "${GCS_BUCKET:?GCS_BUCKET must be set}"
 : "${HOSTNAME:=$(hostname -s)}"
 
+# When the script runs via `sudo -u ligate` from another user's
+# session, sudo preserves the caller's HOME — gcloud then tries to
+# read `${HOME}/.config/gcloud/active_config` which lives in the
+# caller's home and trips a permission error. Re-derive HOME from
+# the effective user so gcloud finds its config no matter how sudo
+# was invoked. Idempotent under systemd User=ligate (HOME is already
+# right) and under direct ligate-user invocation.
+export HOME="$(getent passwd "$(id -un)" | cut -d: -f6)"
+
 TIER="hourly"
 TIMESTAMP=""
 
@@ -79,7 +88,26 @@ mkdir -p "${LIGATE_STAGING_DIR}"
 rm -rf "${LIGATE_STAGING_DIR}/restored"
 echo "==> Downloading to ${LIGATE_STAGING_DIR}/restored"
 gcloud storage cp -r "${GCS_SOURCE}/" "${LIGATE_STAGING_DIR}/" --quiet
-mv "${LIGATE_STAGING_DIR}/${TIMESTAMP}" "${LIGATE_STAGING_DIR}/restored"
+
+# `gcloud storage cp -r SRC/ DST/` copies SRC as a CHILD of DST and
+# preserves the source directory's name inside DST. Combined with the
+# backup script's own `gcloud storage cp -r LOCAL_SNAPSHOT/ GCS_PREFIX/`
+# (which itself double-nests on upload — snapshots in GCS have layout
+# `<HOSTNAME>/<TIER>/<TS>/<TS>/...files...`), the download landing pad
+# is `${LIGATE_STAGING_DIR}/${TIMESTAMP}/${TIMESTAMP}/...`. Promote
+# the inner dir to `restored/` so the manifest path below stays sane
+# regardless of how many levels gcloud nests. Also handle the flat
+# layout for forward-compat if the backup script is later fixed to
+# upload without double-nesting.
+if [ -d "${LIGATE_STAGING_DIR}/${TIMESTAMP}/${TIMESTAMP}" ]; then
+    mv "${LIGATE_STAGING_DIR}/${TIMESTAMP}/${TIMESTAMP}" "${LIGATE_STAGING_DIR}/restored"
+    rmdir "${LIGATE_STAGING_DIR}/${TIMESTAMP}" 2>/dev/null || true
+elif [ -d "${LIGATE_STAGING_DIR}/${TIMESTAMP}" ]; then
+    mv "${LIGATE_STAGING_DIR}/${TIMESTAMP}" "${LIGATE_STAGING_DIR}/restored"
+else
+    echo "downloaded dir not found at ${LIGATE_STAGING_DIR}/${TIMESTAMP}" >&2
+    exit 1
+fi
 
 # ----- Verify manifest ---------------------------------------------
 MANIFEST="${LIGATE_STAGING_DIR}/restored/.snapshot-manifest.json"
