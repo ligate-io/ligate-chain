@@ -2,7 +2,7 @@
 
 **Status:** v0 — covers the GCS-backed rsync flow that ships in `scripts/` + `ops/backup/systemd/`. Companion to the broader operational layer ([`celestia-light-node.md`](./celestia-light-node.md), [`alerts/`](./alerts/)).
 
-`ligate-node` writes persistent state to RocksDB at `<storage>.path`. On the live devnet-1 sequencer this resolves to `/opt/ligate/devnet-1/data-celestia` (currently on `/dev/root`; migration to `/var/lib/ligate` persistent disk is a separate followup tracked under chain#359). Without backups, a single bad disk loses the chain's local history; recovery requires full DA replay from genesis, which on a multi-month devnet means hours of replay before we even hit any DA fetch quirks.
+`ligate-node` writes persistent state to RocksDB at `<storage>.path`. On the live devnet-1 sequencer that path is `/opt/ligate/devnet-1/data-celestia`, which is a symlink to `/var/lib/ligate/rocksdb` on the persistent data disk (`/dev/sdb`, 50 GB). The symlink approach keeps the rollup config (`devnet-1/celestia.toml`) host-portable while still landing the actual bytes on the persistent disk so a VM image rebuild doesn't wipe state. Without backups, a single bad disk still loses the chain's local history; recovery would require full DA replay from genesis, which on a multi-month devnet means hours of replay before we even hit any DA fetch quirks.
 
 This runbook covers: routine snapshotting to GCS, point-in-time restore from a snapshot, and the quarterly drill that proves the restore path actually works.
 
@@ -24,10 +24,11 @@ Backups give a known-good fast restore path. DA replay remains the ultimate-sour
 
 ```
 ┌─────────────────────────────┐         ┌──────────────────────┐
-│ /var/lib/ligate/rollup      │ rsync   │ /var/lib/ligate/     │
-│ (RocksDB write-active)      ├────────►│   snapshots/<tier>/  │
-│                             │ --link- │   <timestamp>/       │
-│                             │ dest    │  (hardlinked)        │
+│ /var/lib/ligate/rocksdb     │ rsync   │ /var/lib/ligate/     │
+│ (RocksDB write-active,      ├────────►│   snapshots/<tier>/  │
+│  symlinked from             │ --link- │   <timestamp>/       │
+│  /opt/ligate/devnet-1/      │ dest    │  (hardlinked)        │
+│  data-celestia)             │         │                      │
 └─────────────────────────────┘         └──────────┬───────────┘
                                                    │
                                                    │ gcloud storage cp -r
@@ -255,6 +256,70 @@ Exit codes encode the failure stage (1 = backup, 2 = restore, 3 = post-restore v
 
 ---
 
+## Migrating an existing host to the persistent disk
+
+If you're operating a host where chain state landed on `/dev/root` instead of the persistent disk (cloud-init didn't pre-create the symlink), here's the in-place migration. Done on `ligate-devnet-1-sequencer` on 2026-05-16 with ~3 min of chain downtime.
+
+```sh
+# 1. Stop the chain cleanly. TimeoutStopSec=300 gives RocksDB room
+#    to flush WAL + finish compaction.
+sudo systemctl stop ligate-node.service
+
+# 2. Stage the new home + rsync existing data over. Use --sparse to
+#    preserve sparseness on NOMT files (or accept ~4x bloat).
+sudo mkdir -p /var/lib/ligate/rocksdb
+sudo chown ligate:ligate /var/lib/ligate/rocksdb
+sudo -u ligate rsync -a --sparse --info=progress2 \
+    /opt/ligate/devnet-1/data-celestia/ \
+    /var/lib/ligate/rocksdb/
+
+# 3. Swap the original dir for a symlink pointing at the new home.
+#    Keep the original as .MIGRATION-BACKUP-<date> for at least 24h
+#    in case the new path has a config / permissions issue surface
+#    only after startup.
+sudo mv /opt/ligate/devnet-1/data-celestia \
+        /opt/ligate/devnet-1/data-celestia.MIGRATION-BACKUP-$(date -u +%Y%m%d)
+sudo ln -s /var/lib/ligate/rocksdb /opt/ligate/devnet-1/data-celestia
+sudo chown -h ligate:ligate /opt/ligate/devnet-1/data-celestia
+
+# 4. Start the chain. Verify head advances past the pre-stop height
+#    AND chain_hash is unchanged (symlink swap shouldn't touch state).
+sudo systemctl start ligate-node.service
+curl -s https://api.ligate.io/v1/info | jq
+
+# 5. Update /etc/ligate/backup.env: set LIGATE_STORAGE_DIR=/var/lib/ligate/rocksdb
+#    so the snapshot manifest records the physical path.
+
+# 6. Trigger one manual backup against the new path:
+sudo systemctl start ligate-backup@hourly.service
+
+# 7. After 24h of uneventful operation, reclaim the /dev/root space:
+sudo rm -rf /opt/ligate/devnet-1/data-celestia.MIGRATION-BACKUP-*
+```
+
+---
+
+## Resizing the persistent disk (online, no downtime)
+
+GCE persistent disks grow live, and ext4 resizes online — no chain stop needed.
+
+```sh
+# 1. Grow the GCE disk.
+gcloud compute disks resize ligate-data-v2 --zone us-central1-a --size 150GB
+
+# 2. Inside the VM, grow the ext4 filesystem to fill the new size.
+gcloud compute ssh ligate-devnet-1-sequencer --zone us-central1-a --command '
+  sudo resize2fs /dev/sdb
+  df -h /var/lib/ligate
+'
+```
+
+Done on `ligate-devnet-1-sequencer` 2026-05-16 (50GB → 150GB) when projected local snapshot accumulation (24 hourly × ~5GB) was on track to fill the original disk within ~24h. With the `--sparse` rsync fix (see followups) each snapshot drops from ~5GB to ~1.2GB and the 50GB disk would have been fine; 150GB is comfortable headroom either way.
+
+You can't shrink a GCE persistent disk, so size up cautiously. ext4 supports shrinking but only offline; not a path we'd take on this host.
+
+---
+
 ## Out of scope
 
 - **Multi-region replication.** A second GCS bucket in `us-east1` would survive a regional outage. Deferred to mainnet.
@@ -270,9 +335,10 @@ What's live on devnet-1 as of 2026-05-16 vs what's still pending:
 
 | Limitation | Impact | Tracked |
 |---|---|---|
-| Live chain data is at `/opt/ligate/devnet-1/data-celestia` (the `<storage>.path` from the rollup config TOML), which resolves under `/dev/root`. The persistent disk at `/var/lib/ligate` is mounted but unused. Backup script + manifest reflect the actual live path; future operators should migrate to `/var/lib/ligate/rocksdb` so a VM-image rebuild doesn't wipe chain state. | A VM image rebuild today would lose the chain state (still recoverable via DA replay or GCS restore, but the persistent disk's whole point is to avoid that). | chain#359 followups |
 | `backup-rocksdb.sh`'s `block_height` capture in the manifest can produce a multi-line value (height + `unknown`) because the script tries two height-extraction paths and writes both. Manifest is still parseable; the value is just ugly. | Cosmetic; restore doesn't depend on this field. | chain#359 followups |
+| `backup-rocksdb.sh` uses `rsync -a` without `--sparse`, so sparse files (RocksDB NOMT files contain many) inflate ~4x on copy. Doesn't affect chain operation but bloats local snapshot stage + GCS storage. | Disk-cost only; ~$4/mo extra storage at devnet scale. | chain#359 followups |
 | `ligate-node.service` is not enabled by default after first cloud-init boot — the original runbook left it as a manual `systemctl start` step. After every `gcloud compute instances stop|start`, the service must be re-enabled with `sudo systemctl enable --now ligate-node.service`. | One-time post-deploy step; now codified in §1 above. | n/a, fixed in the runbook |
+| Cloud-init in `public-devnet-deploy.md` doesn't pre-create the `/var/lib/ligate/rocksdb` directory + symlink at `/opt/ligate/devnet-1/data-celestia`. Until that lands, fresh deploys need a manual symlink step before first `ligate-node` start (else the chain writes to `/dev/root` again). | One-time step on fresh deploys. | chain#359 followups |
 
 ---
 
