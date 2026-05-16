@@ -119,15 +119,21 @@ sudo install -o ligate -g ligate -m 0755 \
 sudo install -o ligate -g ligate -m 0755 \
     scripts/restore-drill.sh /opt/ligate/scripts/
 
-# Place systemd units (the .service oneshot + the hourly timer; daily
-# / weekly timers depend on a template-unit refactor — see followups)
+# Place systemd units. ligate-backup@.service is a template unit;
+# the three timers each bind to an instance (hourly / daily / weekly)
+# whose name becomes %i, which the template sets as TIER.
 sudo install -o root -g root -m 0644 \
-    ops/backup/systemd/ligate-backup.service /etc/systemd/system/
+    ops/backup/systemd/ligate-backup@.service /etc/systemd/system/
 sudo install -o root -g root -m 0644 \
     ops/backup/systemd/ligate-backup-hourly.timer /etc/systemd/system/
+sudo install -o root -g root -m 0644 \
+    ops/backup/systemd/ligate-backup-daily.timer /etc/systemd/system/
+sudo install -o root -g root -m 0644 \
+    ops/backup/systemd/ligate-backup-weekly.timer /etc/systemd/system/
 
 # Drop the env file. Copy ops/backup/backup.env.example and fill in
-# the per-host fields. Keep chmod 600, owned root:root.
+# the per-host fields. Keep chmod 600, owned root:root. Note: TIER
+# is NOT in the envfile; it comes from the template instance name.
 sudo install -o root -g root -m 0600 \
     ops/backup/backup.env.example /etc/ligate/backup.env
 
@@ -136,24 +142,28 @@ sudo install -o root -g root -m 0600 \
 sudo mkdir -p /var/lib/ligate/snapshots
 sudo chown ligate:ligate /var/lib/ligate/snapshots
 
-# Enable the timer
+# Enable all three timers
 sudo systemctl daemon-reload
 sudo systemctl enable --now ligate-backup-hourly.timer
+sudo systemctl enable --now ligate-backup-daily.timer
+sudo systemctl enable --now ligate-backup-weekly.timer
 
 # Verify
-systemctl list-timers ligate-backup-hourly.timer
+systemctl list-timers 'ligate-backup-*.timer'
 ```
 
 ### 3. First manual backup (smoke test)
 
 ```sh
-# Trigger one run by hand. The oneshot returns when the upload
-# completes (~30-60s on a healthy devnet at ~1.2GB state).
-sudo systemctl start ligate-backup.service
-sudo journalctl -u ligate-backup.service --since "5 minutes ago" --no-pager
+# Trigger one run by hand against each tier. The oneshot returns
+# when the upload completes (~30-60s on a healthy devnet at ~1.2GB
+# state).
+sudo systemctl start ligate-backup@hourly.service
+sudo systemctl start ligate-backup@daily.service
+sudo journalctl -u 'ligate-backup@*.service' --since "5 minutes ago" --no-pager
 
 # Inspect what landed in GCS:
-gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/
+gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/
 
 # Check the per-snapshot manifest carries height + storage path:
 TS=$(gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/ \
@@ -168,15 +178,15 @@ gcloud storage cat \
 
 Handled by the systemd timers; no operator action required day-to-day. The timers fire at:
 
-| Timer | When | Tier | GCS retention |
+| Timer | Binds to | When | GCS retention |
 |---|---|---|---|
-| `ligate-backup-hourly.timer` | every 15 min | `hourly` | 7 days |
-| `ligate-backup-daily.timer` | 03:30 UTC nightly | `daily` | 60 days |
-| `ligate-backup-weekly.timer` | Sun 04:00 UTC | `weekly` | 1 year |
+| `ligate-backup-hourly.timer` | `ligate-backup@hourly.service` | every 15 min | 7 days |
+| `ligate-backup-daily.timer` | `ligate-backup@daily.service` | 03:30 UTC nightly | 60 days |
+| `ligate-backup-weekly.timer` | `ligate-backup@weekly.service` | Sun 04:00 UTC | 1 year |
 
-The `daily` and `weekly` runs use a systemd drop-in that overrides `TIER` on the executed unit. Local rotation keeps the snapshots directory bounded.
+The template unit `ligate-backup@.service` derives `TIER` from its instance name (`%i`), so the same service file backs all three tiers. Local rotation in `backup-rocksdb.sh` keeps the on-disk snapshots dir bounded per tier; GCS lifecycle in `ops/backup/gcs-lifecycle.json` keeps the bucket bounded by tier prefix.
 
-Observability: `journalctl -u ligate-backup.service` shows each run. Failures cause `systemctl is-failed` to report yes; pair with an Alertmanager rule (post-#268) for proactive notification.
+Observability: `journalctl -u 'ligate-backup@*.service'` shows each run. Failures cause `systemctl is-failed ligate-backup@<tier>.service` to report yes; pair with an Alertmanager rule (post-#268) for proactive notification.
 
 ---
 
@@ -260,7 +270,6 @@ What's live on devnet-1 as of 2026-05-16 vs what's still pending:
 
 | Limitation | Impact | Tracked |
 |---|---|---|
-| Only the `hourly` timer is wired today; `daily` / `weekly` timers exist but reuse the same oneshot service. Until we refactor to a template unit (`ligate-backup@.service` with `Environment=TIER=%i`), enabling those timers would just queue more hourly snapshots. | No long-retention tier yet. Hourly + GCS lifecycle still keep 7 days, which covers most recovery scenarios. | chain#359 followups |
 | Live chain data is at `/opt/ligate/devnet-1/data-celestia` (the `<storage>.path` from the rollup config TOML), which resolves under `/dev/root`. The persistent disk at `/var/lib/ligate` is mounted but unused. Backup script + manifest reflect the actual live path; future operators should migrate to `/var/lib/ligate/rocksdb` so a VM-image rebuild doesn't wipe chain state. | A VM image rebuild today would lose the chain state (still recoverable via DA replay or GCS restore, but the persistent disk's whole point is to avoid that). | chain#359 followups |
 | `backup-rocksdb.sh`'s `block_height` capture in the manifest can produce a multi-line value (height + `unknown`) because the script tries two height-extraction paths and writes both. Manifest is still parseable; the value is just ugly. | Cosmetic; restore doesn't depend on this field. | chain#359 followups |
 | `ligate-node.service` is not enabled by default after first cloud-init boot — the original runbook left it as a manual `systemctl start` step. After every `gcloud compute instances stop|start`, the service must be re-enabled with `sudo systemctl enable --now ligate-node.service`. | One-time post-deploy step; now codified in §1 above. | n/a, fixed in the runbook |

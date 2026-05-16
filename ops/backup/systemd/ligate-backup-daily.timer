@@ -1,12 +1,13 @@
 [Unit]
 Description=Ligate Chain RocksDB daily backup (keep-7 tier)
-Requires=ligate-backup.service
+Requires=ligate-backup@daily.service
 
 [Timer]
-# 03:30 UTC nightly. Tier flag set via drop-in below.
+# 03:30 UTC nightly. TIER=daily passed via the template instance
+# (ligate-backup@.service reads %i as TIER).
 OnCalendar=*-*-* 03:30:00
 Persistent=true
-Unit=ligate-backup.service
+Unit=ligate-backup@daily.service
 
 [Install]
 WantedBy=timers.target
