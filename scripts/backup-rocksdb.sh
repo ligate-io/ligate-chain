@@ -54,6 +54,45 @@ mkdir -p "${LIGATE_SNAPSHOT_DIR}/${TIER}"
 # `--delete` keeps the snapshot tidy if a file disappeared upstream.
 PREVIOUS_SNAPSHOT="$(ls -dt "${LIGATE_SNAPSHOT_DIR}/${TIER}"/* 2>/dev/null | head -1 || true)"
 
+# Capture the current block height BEFORE any cold-snapshot stop so
+# the manifest records the height the snapshot corresponds to. If we
+# read it after stopping the chain the metrics endpoint is gone and
+# the manifest ends up as "unknown". Same idiom as the post-rsync
+# block (the script writes the manifest there) — buffer-then-parse
+# via here-string to dodge the `set -o pipefail` + `awk … exit`
+# SIGPIPE issue.
+METRICS_PRESTOP="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+HEIGHT_PRESTOP="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS_PRESTOP}")"
+
+# Hot vs cold snapshot semantics:
+#
+# rsync of a live RocksDB+NOMT directory is best-effort — NOMT files
+# (bbn, ht, ln, meta, wal in user_nomt_db / kernel_nomt_db) can be
+# caught mid-write, producing a snapshot that triggers
+# `assertion failed: pn.0 < max_pn` in nomt-1.0.3's free-list
+# allocator when the chain tries to load it. RocksDB's own WAL
+# recovers from torn writes; NOMT's beatree allocator doesn't (as of
+# nomt-1.0.3; observed during the restore drill on 2026-05-16).
+#
+# Daily + weekly tiers (the "gold" snapshots used for real restore)
+# go COLD: stop ligate-node briefly, take a consistent point-in-time
+# rsync, restart. ~30-60s pause on a healthy state DB; runs at
+# off-peak hours per the timers (03:30 / 04:00 UTC).
+#
+# Hourly tier stays HOT (no pause) — best-effort, frequent, useful
+# for "last 6 hours" rollback if the chain itself didn't survive a
+# rough event. Restore is best-effort; the last clean cold daily
+# snapshot is always available as fallback.
+COLD=false
+case "$TIER" in
+    daily|weekly) COLD=true ;;
+esac
+
+if [ "$COLD" = "true" ]; then
+    echo "==> Cold snapshot: pausing ligate-node for a consistent rsync"
+    sudo systemctl stop ligate-node.service
+fi
+
 # `--sparse` preserves sparseness on copy. RocksDB NOMT files contain
 # many sparse holes; without --sparse, rsync fills them with zeros on
 # the destination, inflating each snapshot ~4x on disk for nothing.
@@ -68,17 +107,25 @@ else
     rsync -a --sparse --delete "${LIGATE_STORAGE_DIR}/" "${LOCAL_SNAPSHOT}/"
 fi
 
+if [ "$COLD" = "true" ]; then
+    echo "==> Restarting ligate-node"
+    sudo systemctl start ligate-node.service
+fi
+
 # Write a manifest alongside so restore can verify checksum + height.
 HEIGHT_FILE="${LOCAL_SNAPSHOT}/.snapshot-manifest.json"
-# Buffer-then-parse to avoid `set -o pipefail` + `awk … exit` SIGPIPE-ing
-# the writer of the pipe, which previously made HEIGHT capture BOTH
-# awk's match AND the `|| echo "unknown"` fallback (the manifest's
-# block_height field would contain a literal newline: `"15187\nunknown"`).
-# `<<<` here-string feeds awk via a temp file, not a pipe — no SIGPIPE
-# possible even when awk exits before the writer finishes.
-METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
-HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
-[ -z "${HEIGHT}" ] && HEIGHT="unknown"
+# Prefer the pre-stop height captured above (always the right
+# point-in-time number, especially for cold snapshots where the
+# metrics endpoint is gone after the systemctl stop). Fall back to
+# a fresh post-rsync read for the hot path, then "unknown" if
+# both failed.
+if [ -n "${HEIGHT_PRESTOP}" ]; then
+    HEIGHT="${HEIGHT_PRESTOP}"
+else
+    METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+    HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
+    [ -z "${HEIGHT}" ] && HEIGHT="unknown"
+fi
 {
     echo "{"
     echo "  \"tier\": \"${TIER}\","

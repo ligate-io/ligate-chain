@@ -212,7 +212,22 @@ The cloud-init does the chassis. The operator still has to:
   SOV_CELESTIA_SIGNER_KEY=<hex private key holding Mocha TIA>
   RUST_LOG=info,sov=info
   ```
-- `systemctl enable --now ligate-node.service`.
+  A **follower** uses a similar env but with a freshly-generated 32-byte hex key for `SOV_CELESTIA_SIGNER_KEY` (no Mocha TIA needed — followers don't submit blobs). The follower's DA address derived from that key won't match the registered preferred sequencer, which would normally fail the sequencer-bond identity check — pass `--mode follower` on the binary (see next bullet) and the check is skipped via the follower guard (chain#243 / #248).
+- `systemctl enable --now ligate-node.service`. For a **follower**, add `--mode follower` to the `ExecStart` line in `/etc/systemd/system/ligate-node.service` first. The full ExecStart becomes:
+  ```
+  ExecStart=/opt/ligate/bin/ligate-node \
+      --mode follower \
+      --da-layer celestia \
+      --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
+      --genesis-config-dir /opt/ligate/devnet-1/genesis
+  ```
+  This activates the follower guard (returns 503 on `POST /v1/sequencer/txs` so users get a clear "submit to the upstream sequencer" message) and skips the preferred-sequencer DA-address check that would otherwise refuse to start.
+- If you'll run cold backups (daily/weekly tiers stop ligate-node briefly for a consistent rsync — see `docs/development/runbooks/backup-restore.md`), install the sudoers drop-in:
+  ```bash
+  sudo install -o root -g root -m 0440 \
+      ops/backup/sudoers.d/ligate-backup /etc/sudoers.d/ligate-backup
+  ```
+  That allows the `ligate` user to `systemctl stop/start ligate-node.service` without a password prompt. Narrow scope; only those two commands, only on that one service.
 
 ## Step 2.5: NTP / clock sync (required)
 
