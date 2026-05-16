@@ -2,7 +2,7 @@
 
 **Status:** v0 — covers the GCS-backed rsync flow that ships in `scripts/` + `ops/backup/systemd/`. Companion to the broader operational layer ([`celestia-light-node.md`](./celestia-light-node.md), [`alerts/`](./alerts/)).
 
-`ligate-node` writes persistent state to RocksDB at `<storage>.path` (default `/var/lib/ligate/rollup`). Without backups, a single bad disk loses the chain's local history; recovery requires full DA replay from genesis, which on a multi-month devnet means hours of replay before we even hit any DA fetch quirks.
+`ligate-node` writes persistent state to RocksDB at `<storage>.path`. On the live devnet-1 sequencer this resolves to `/opt/ligate/devnet-1/data-celestia` (currently on `/dev/root`; migration to `/var/lib/ligate` persistent disk is a separate followup tracked under chain#359). Without backups, a single bad disk loses the chain's local history; recovery requires full DA replay from genesis, which on a multi-month devnet means hours of replay before we even hit any DA fetch quirks.
 
 This runbook covers: routine snapshotting to GCS, point-in-time restore from a snapshot, and the quarterly drill that proves the restore path actually works.
 
@@ -54,75 +54,112 @@ Two layers of pruning, each handles a different scope:
 
 ## One-time setup
 
-### 1. GCS bucket + service account
+### 1. GCS bucket + grant the chain VM write access
 
 ```sh
-# Pick a regional bucket close to the chain VM. Standard storage class.
+# Regional bucket close to the chain VM, standard storage class,
+# uniform IAM, public-access-prevention on.
 gcloud storage buckets create gs://ligate-devnet-1-backups \
+    --project=$YOUR_GCP_PROJECT \
     --location=us-central1 \
     --default-storage-class=STANDARD \
-    --uniform-bucket-level-access
+    --uniform-bucket-level-access \
+    --public-access-prevention
 
-# Apply the lifecycle policy
+# Apply the rotation policy (hourly: 7d, daily: 60d, weekly: 365d)
 gcloud storage buckets update gs://ligate-devnet-1-backups \
     --lifecycle-file=ops/backup/gcs-lifecycle.json
 
-# Create a service account scoped to the bucket for the chain VM
-gcloud iam service-accounts create ligate-backup \
-    --display-name="Ligate backup writer"
-
-# Grant write-only access to the bucket (not project-wide)
+# Grant the VM's default Compute Engine service account write access
+# on this bucket. (We can't issue a long-lived SA JSON key on this
+# project — org policy `constraints/iam.disableServiceAccountKeyCreation`
+# is enforced. Using the existing VM SA + a bucket-scoped IAM grant
+# avoids needing a key.)
+VM_SA=$(gcloud compute instances describe ligate-devnet-1-sequencer \
+        --zone us-central1-a --format='value(serviceAccounts[0].email)')
 gcloud storage buckets add-iam-policy-binding gs://ligate-devnet-1-backups \
-    --member="serviceAccount:ligate-backup@${GCP_PROJECT}.iam.gserviceaccount.com" \
+    --member="serviceAccount:$VM_SA" \
     --role="roles/storage.objectAdmin"
+```
 
-# Issue a key for the chain VM
-gcloud iam service-accounts keys create /etc/ligate/backup-sa.json \
-    --iam-account=ligate-backup@${GCP_PROJECT}.iam.gserviceaccount.com
+The VM's default service account ships with `devstorage.read_only` scope only. Add `devstorage.read_write` (cycle of stop → set-service-account → start; ~2 min of chain downtime):
+
+```sh
+gcloud compute instances stop ligate-devnet-1-sequencer --zone us-central1-a
+
+gcloud compute instances set-service-account ligate-devnet-1-sequencer \
+    --zone us-central1-a \
+    --service-account "$VM_SA" \
+    --scopes "https://www.googleapis.com/auth/devstorage.read_write,\
+https://www.googleapis.com/auth/logging.write,\
+https://www.googleapis.com/auth/monitoring.write,\
+https://www.googleapis.com/auth/pubsub,\
+https://www.googleapis.com/auth/service.management.readonly,\
+https://www.googleapis.com/auth/servicecontrol,\
+https://www.googleapis.com/auth/trace.append"
+
+gcloud compute instances start ligate-devnet-1-sequencer --zone us-central1-a
+
+# After start: re-enable + start ligate-node (it's not enabled by default
+# because the cloud-init only installs the unit; first-boot left it
+# disabled. Subsequent boots auto-start once enabled.)
+gcloud compute ssh ligate-devnet-1-sequencer --zone us-central1-a --command '
+    sudo systemctl enable --now ligate-node.service
+'
 ```
 
 ### 2. Configure the chain VM
 
 ```sh
 # Place scripts on the VM
-sudo install -m 0755 scripts/backup-rocksdb.sh /opt/ligate/scripts/
-sudo install -m 0755 scripts/restore-rocksdb.sh /opt/ligate/scripts/
-sudo install -m 0755 scripts/restore-drill.sh /opt/ligate/scripts/
+sudo install -o ligate -g ligate -m 0755 \
+    scripts/backup-rocksdb.sh /opt/ligate/scripts/
+sudo install -o ligate -g ligate -m 0755 \
+    scripts/restore-rocksdb.sh /opt/ligate/scripts/
+sudo install -o ligate -g ligate -m 0755 \
+    scripts/restore-drill.sh /opt/ligate/scripts/
 
-# Place systemd units
-sudo install -m 0644 ops/backup/systemd/*.service /etc/systemd/system/
-sudo install -m 0644 ops/backup/systemd/*.timer /etc/systemd/system/
+# Place systemd units (the .service oneshot + the hourly timer; daily
+# / weekly timers depend on a template-unit refactor — see followups)
+sudo install -o root -g root -m 0644 \
+    ops/backup/systemd/ligate-backup.service /etc/systemd/system/
+sudo install -o root -g root -m 0644 \
+    ops/backup/systemd/ligate-backup-hourly.timer /etc/systemd/system/
 
-# Configure env
-sudo tee /etc/ligate/backup.env <<EOF
-GCS_BUCKET=ligate-devnet-1-backups
-LIGATE_STORAGE_DIR=/var/lib/ligate/rollup
-GOOGLE_APPLICATION_CREDENTIALS=/etc/ligate/backup-sa.json
-EOF
-sudo chmod 0600 /etc/ligate/backup.env
-sudo chown ligate:ligate /etc/ligate/backup.env
+# Drop the env file. Copy ops/backup/backup.env.example and fill in
+# the per-host fields. Keep chmod 600, owned root:root.
+sudo install -o root -g root -m 0600 \
+    ops/backup/backup.env.example /etc/ligate/backup.env
 
-# Enable the timers
+# Stage dir for rsync --link-dest chains (must be on the persistent
+# disk so dedupe survives VM rebuilds)
+sudo mkdir -p /var/lib/ligate/snapshots
+sudo chown ligate:ligate /var/lib/ligate/snapshots
+
+# Enable the timer
 sudo systemctl daemon-reload
 sudo systemctl enable --now ligate-backup-hourly.timer
-sudo systemctl enable --now ligate-backup-daily.timer
-sudo systemctl enable --now ligate-backup-weekly.timer
 
 # Verify
-systemctl list-timers ligate-backup-*.timer
+systemctl list-timers ligate-backup-hourly.timer
 ```
 
 ### 3. First manual backup (smoke test)
 
 ```sh
-# Run once by hand to confirm the chain has write access + the rsync
-# completes:
-sudo -u ligate \
-    GCS_BUCKET=ligate-devnet-1-backups \
-    /opt/ligate/scripts/backup-rocksdb.sh
+# Trigger one run by hand. The oneshot returns when the upload
+# completes (~30-60s on a healthy devnet at ~1.2GB state).
+sudo systemctl start ligate-backup.service
+sudo journalctl -u ligate-backup.service --since "5 minutes ago" --no-pager
 
-# Inspect:
-gcloud storage ls gs://ligate-devnet-1-backups/$(hostname -s)/hourly/
+# Inspect what landed in GCS:
+gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/
+
+# Check the per-snapshot manifest carries height + storage path:
+TS=$(gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/ \
+       | tail -1 | awk -F/ '{print $(NF-1)}')
+gcloud storage cat \
+    "gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/$TS/$TS/.snapshot-manifest.json"
 ```
 
 ---
@@ -214,6 +251,19 @@ Exit codes encode the failure stage (1 = backup, 2 = restore, 3 = post-restore v
 - **Encrypted-at-rest backups.** Devnet writes plaintext anyway; mainnet revisits with operator-side encryption keys.
 - **Sequencer / attestor key backup.** Separate operational concern; covered in [`sequencer-key-rotation.md`](./sequencer-key-rotation.md) + [`da-signer-rotation.md`](./da-signer-rotation.md).
 - **Cross-chain backup (DA replay)**. The DA layer IS the off-chain backup; this runbook is the fast-path. Replay-from-DA is the slow-path fallback.
+
+---
+
+## Known limitations (post-launch followups)
+
+What's live on devnet-1 as of 2026-05-16 vs what's still pending:
+
+| Limitation | Impact | Tracked |
+|---|---|---|
+| Only the `hourly` timer is wired today; `daily` / `weekly` timers exist but reuse the same oneshot service. Until we refactor to a template unit (`ligate-backup@.service` with `Environment=TIER=%i`), enabling those timers would just queue more hourly snapshots. | No long-retention tier yet. Hourly + GCS lifecycle still keep 7 days, which covers most recovery scenarios. | chain#359 followups |
+| Live chain data is at `/opt/ligate/devnet-1/data-celestia` (the `<storage>.path` from the rollup config TOML), which resolves under `/dev/root`. The persistent disk at `/var/lib/ligate` is mounted but unused. Backup script + manifest reflect the actual live path; future operators should migrate to `/var/lib/ligate/rocksdb` so a VM-image rebuild doesn't wipe chain state. | A VM image rebuild today would lose the chain state (still recoverable via DA replay or GCS restore, but the persistent disk's whole point is to avoid that). | chain#359 followups |
+| `backup-rocksdb.sh`'s `block_height` capture in the manifest can produce a multi-line value (height + `unknown`) because the script tries two height-extraction paths and writes both. Manifest is still parseable; the value is just ugly. | Cosmetic; restore doesn't depend on this field. | chain#359 followups |
+| `ligate-node.service` is not enabled by default after first cloud-init boot — the original runbook left it as a manual `systemctl start` step. After every `gcloud compute instances stop|start`, the service must be re-enabled with `sudo systemctl enable --now ligate-node.service`. | One-time post-deploy step; now codified in §1 above. | n/a, fixed in the runbook |
 
 ---
 
