@@ -55,14 +55,22 @@ mkdir -p "${LIGATE_SNAPSHOT_DIR}/${TIER}"
 PREVIOUS_SNAPSHOT="$(ls -dt "${LIGATE_SNAPSHOT_DIR}/${TIER}"/* 2>/dev/null | head -1 || true)"
 
 # Capture the current block height BEFORE any cold-snapshot stop so
-# the manifest records the height the snapshot corresponds to. If we
-# read it after stopping the chain the metrics endpoint is gone and
-# the manifest ends up as "unknown". Same idiom as the post-rsync
-# block (the script writes the manifest there) — buffer-then-parse
-# via here-string to dodge the `set -o pipefail` + `awk … exit`
-# SIGPIPE issue.
-METRICS_PRESTOP="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
-HEIGHT_PRESTOP="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS_PRESTOP}")"
+# the manifest records the height the snapshot corresponds to.
+#
+# Source preference: chain RPC (`/v1/ledger/slots/latest .number`)
+# over the Prometheus metrics gauge (`ligate_block_height`). The RPC
+# returns the real head height as soon as the HTTP server is up,
+# while the metrics gauge isn't populated until the chain replays
+# enough state to set it — observed empty for ~2 min after a
+# cold-backup-induced restart on 2026-05-17 04:00 UTC, which made
+# the manifest record "unknown" even though the chain was healthy.
+# RPC fallback to metrics, fallback to "unknown".
+HEIGHT_PRESTOP="$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/latest 2>/dev/null \
+                    | jq -r '.number // empty' 2>/dev/null)"
+if [ -z "${HEIGHT_PRESTOP}" ]; then
+    METRICS_PRESTOP="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+    HEIGHT_PRESTOP="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS_PRESTOP}")"
+fi
 
 # Hot vs cold snapshot semantics:
 #
@@ -156,8 +164,15 @@ HEIGHT_FILE="${LOCAL_SNAPSHOT}/.snapshot-manifest.json"
 if [ -n "${HEIGHT_PRESTOP}" ]; then
     HEIGHT="${HEIGHT_PRESTOP}"
 else
-    METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
-    HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
+    # Same source preference as the pre-stop capture: RPC over
+    # metrics gauge. Chain is back up by now (post-rsync, post-cold
+    # restart in the cold path; never stopped in the hot path).
+    HEIGHT="$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/latest 2>/dev/null \
+                | jq -r '.number // empty' 2>/dev/null)"
+    if [ -z "${HEIGHT}" ]; then
+        METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+        HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
+    fi
     [ -z "${HEIGHT}" ] && HEIGHT="unknown"
 fi
 {
