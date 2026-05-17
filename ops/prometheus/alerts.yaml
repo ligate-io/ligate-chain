@@ -167,30 +167,42 @@ groups:
   - name: ligate-node.cost
     interval: 5m
     rules:
-      # TIA balance warning + page tiers. Sources from the Celestia
-      # light node's own /metrics endpoint (the chain doesn't expose
-      # this directly; the light node is the local authority on its
-      # wallet balance).
+      # TIA balance warning + page tiers. Sources from the
+      # celestia-tia-exporter sidecar (see ops/exporters/celestia-tia/),
+      # which polls state.BalanceForAddress against the chain-recorded
+      # `seq_da_address` and exposes the gauge for Alloy to scrape.
       #
       # Thresholds calibrated against `da-signer-rotation.md`'s
-      # "TIA balance monitoring" section:
-      # - 50 TIA = ~30 days at our submission cadence (warn-level)
-      # - 12 TIA = ~7 days runway (page-level — operator should
-      #   already be topping up by now)
+      # "TIA balance monitoring" section, AND against the observed
+      # devnet burn rate of ~0.15-0.5 TIA/day (much lower than the
+      # mainnet-volume 5/day estimate the runbook was written against).
+      #
+      # - 10 TIA warn: tightened from 50 on 2026-05-17 because the
+      #   wallet was sitting at ~12.95 TIA pre-top-up and the alert
+      #   would have fired continuously for days. Restore to 50 after
+      #   the next treasury top-up so we recover the early-warning
+      #   margin. Tracking: ligate-io/ligate-chain followup issue.
+      # - 12 TIA page: unchanged. At observed burn rates this still
+      #   gives a multi-day window before submission halts, and below
+      #   12 TIA we genuinely need eyes on it regardless of the warn
+      #   threshold.
       - alert: TIABalanceLow
         expr: |
-          (celestia_node_da_signer_balance_utia / 1e6) < 50
+          (celestia_node_da_signer_balance_utia / 1e6) < 10
         for: 30m
         labels:
           severity: warn
           component: chain
         annotations:
-          summary: "TIA balance below 50 (~30 days runway) on {{ $labels.instance }}"
+          summary: "TIA balance below 10 on {{ $labels.instance }} (top-up pending)"
           description: |
-            DA signer wallet has dropped below 50 TIA, roughly 30 days
-            of expected blob-fee burn. Plan a top-up from treasury in
-            the next week. Procedure:
-            docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
+            DA signer wallet has dropped below 10 TIA. At observed
+            devnet burn (~0.15-0.5 TIA/day) this still gives weeks of
+            runway, but the threshold was tightened from 50 to 10
+            specifically so we'd hear from this alert again only when
+            the pre-top-up window has closed. Top up from treasury and
+            restore the warn threshold to 50.
+            Procedure: docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
           runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
 
       - alert: TIABalanceCritical
