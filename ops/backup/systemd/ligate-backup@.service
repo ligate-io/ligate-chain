@@ -19,7 +19,7 @@ EnvironmentFile=/etc/ligate/backup.env
 # `backup.env` provides at minimum:
 #   GCS_BUCKET=ligate-devnet-1-backups
 #   LIGATE_STORAGE_DIR=...   (override; default is /var/lib/ligate/rollup)
-# It does NOT set TIER any more — that comes from %i below and would
+# It does NOT set TIER any more (that comes from %i below) and would
 # be silently overwritten if also in the envfile.
 Environment=TIER=%i
 ExecStart=/opt/ligate/scripts/backup-rocksdb.sh

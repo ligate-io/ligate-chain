@@ -26,7 +26,7 @@ set -euo pipefail
 : "${HOSTNAME:=$(hostname -s)}"
 
 # When the script runs via `sudo -u ligate` from another user's
-# session, sudo preserves the caller's HOME — gcloud then tries to
+# session, sudo preserves the caller's HOME; gcloud then tries to
 # read `${HOME}/.config/gcloud/active_config` which lives in the
 # caller's home and trips a permission error. Re-derive HOME from
 # the effective user so gcloud finds its config no matter how sudo
@@ -92,7 +92,7 @@ gcloud storage cp -r "${GCS_SOURCE}/" "${LIGATE_STAGING_DIR}/" --quiet
 # `gcloud storage cp -r SRC/ DST/` copies SRC as a CHILD of DST and
 # preserves the source directory's name inside DST. Combined with the
 # backup script's own `gcloud storage cp -r LOCAL_SNAPSHOT/ GCS_PREFIX/`
-# (which itself double-nests on upload — snapshots in GCS have layout
+# (which itself double-nests on upload: snapshots in GCS have layout
 # `<HOSTNAME>/<TIER>/<TS>/<TS>/...files...`), the download landing pad
 # is `${LIGATE_STAGING_DIR}/${TIMESTAMP}/${TIMESTAMP}/...`. Promote
 # the inner dir to `restored/` so the manifest path below stays sane
