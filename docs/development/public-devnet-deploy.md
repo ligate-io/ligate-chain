@@ -142,7 +142,7 @@ write_files:
       RestartSec=10
       # RocksDB compaction + WAL flush on shutdown can take 2-3 min on a
       # hot state DB. The systemd default of 90s triggered a SIGKILL
-      # during the v0.1.1-devnet swap on 2026-05-15 (chain#362). 300s
+      # during the v0.1.1-devnet swap on 2026-05-16 (chain#362). 300s
       # gives headroom without leaving zombie processes around forever.
       TimeoutStopSec=300
       LimitNOFILE=65536
