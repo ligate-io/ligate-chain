@@ -1,20 +1,33 @@
 {
-  "title": "Ligate devnet-1 — cost monitoring",
+  "title": "Ligate devnet-1 \u2014 cost monitoring",
   "uid": "ligate-devnet-1-cost",
-  "tags": ["ligate", "devnet-1", "cost"],
+  "tags": [
+    "ligate",
+    "devnet-1",
+    "cost"
+  ],
   "timezone": "utc",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "1m",
-  "time": { "from": "now-7d", "to": "now" },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "instance",
         "type": "query",
-        "datasource": "Prometheus",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "grafanacloud-prom"
+        },
         "query": "label_values(up{job=\"celestia-light\"}, instance)",
-        "current": { "text": "All", "value": "$__all" },
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
         "includeAll": true,
         "refresh": 2
       },
@@ -22,7 +35,10 @@
         "name": "window",
         "type": "custom",
         "query": "1h,24h,7d",
-        "current": { "text": "24h", "value": "24h" }
+        "current": {
+          "text": "24h",
+          "value": "24h"
+        }
       }
     ]
   },
@@ -31,8 +47,16 @@
       "id": 1,
       "type": "stat",
       "title": "Current TIA balance",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "targets": [
         {
           "expr": "celestia_node_da_signer_balance_utia{instance=~\"$instance\"} / 1e6",
@@ -42,7 +66,11 @@
       "options": {
         "colorMode": "value",
         "graphMode": "area",
-        "reduceOptions": { "calcs": ["lastNotNull"] }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -51,9 +79,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "green", "value": 50 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
             ]
           }
         }
@@ -64,8 +101,16 @@
       "id": 2,
       "type": "timeseries",
       "title": "TIA balance trend",
-      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "targets": [
         {
           "expr": "celestia_node_da_signer_balance_utia{instance=~\"$instance\"} / 1e6",
@@ -75,7 +120,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "none",
-          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10
+          }
         }
       },
       "description": "TIA balance over the dashboard's time range. A consistent downward slope is expected (blob submission burns TIA); a flat line indicates no submissions are happening (which would coincide with chain stall alerts)."
@@ -84,8 +132,16 @@
       "id": 3,
       "type": "stat",
       "title": "TIA draw-down rate (per $window)",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
-      "datasource": "Prometheus",
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
       "targets": [
         {
           "expr": "rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[$window]) * -1 * 60 * 60 * 24 / 1e6",
@@ -94,7 +150,11 @@
       ],
       "options": {
         "colorMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"] }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -108,13 +168,23 @@
       "id": 10,
       "type": "row",
       "title": "GCP infra",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 }
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      }
     },
     {
       "id": 11,
       "type": "stat",
       "title": "VM-hours this month",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 9
+      },
       "datasource": "GCP-BigQuery",
       "targets": [
         {
@@ -128,7 +198,12 @@
       "id": 12,
       "type": "stat",
       "title": "GCS storage GB-months",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 9
+      },
       "datasource": "GCP-BigQuery",
       "targets": [
         {
@@ -142,7 +217,12 @@
       "id": 13,
       "type": "stat",
       "title": "Network egress GB",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 9
+      },
       "datasource": "GCP-BigQuery",
       "targets": [
         {
@@ -156,7 +236,12 @@
       "id": 14,
       "type": "stat",
       "title": "Estimated month-to-date $USD",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 9
+      },
       "datasource": "GCP-BigQuery",
       "targets": [
         {
@@ -166,7 +251,11 @@
       ],
       "options": {
         "colorMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"] }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -175,14 +264,23 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 200 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
             ]
           }
         }
       },
-      "description": "Total billed cost this calendar month so far. Yellow at $50, red at $200 — devnet's expected envelope is ~$30-$50/mo. Spike here is the first signal something's misconfigured."
+      "description": "Total billed cost this calendar month so far. Yellow at $50, red at $200 \u2014 devnet's expected envelope is ~$30-$50/mo. Spike here is the first signal something's misconfigured."
     }
   ]
 }
