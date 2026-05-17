@@ -602,7 +602,9 @@ impl<S: Spec> SignedAttestationPayload<S> {
 pub enum CallMessage<S: Spec> {
     /// Register a new [`AttestorSet`].
     ///
-    /// Costs `ATTESTOR_SET_FEE` $LGT (governance, default 10 $LGT).
+    /// Costs `ATTESTOR_SET_FEE` $LGT (governance parameter). On
+    /// devnet-1 genesis this is `50_000_000` nano-LGT = 0.05 $LGT
+    /// (see `devnet-1/genesis/attestation.json`).
     /// Derivation: `SHA-256(borsh(members) ‖ threshold)`. Rejected if a
     /// set with the derived id already exists.
     ///
@@ -633,7 +635,9 @@ pub enum CallMessage<S: Spec> {
 
     /// Register a new [`Schema`].
     ///
-    /// Costs `SCHEMA_REGISTRATION_FEE` $LGT (governance, default 100 $LGT).
+    /// Costs `SCHEMA_REGISTRATION_FEE` $LGT (governance parameter). On
+    /// devnet-1 genesis this is `100_000_000` nano-LGT = 0.1 $LGT
+    /// (see `devnet-1/genesis/attestation.json`).
     /// Owner is the transaction submitter. `attestor_set` must reference
     /// an already-registered [`AttestorSet`]. `fee_routing_bps` must be
     /// ≤ `DEFAULT_MAX_BUILDER_BPS` (5000 in v0). `fee_routing_addr` must be
@@ -680,7 +684,9 @@ pub enum CallMessage<S: Spec> {
 
     /// Submit a new [`Attestation`] under an existing schema.
     ///
-    /// Costs `ATTESTATION_FEE` $LGT (governance, default 0.001 $LGT),
+    /// Costs `ATTESTATION_FEE` $LGT (governance parameter). On devnet-1
+    /// genesis this is `100_000` nano-LGT = 0.0001 $LGT (see
+    /// `devnet-1/genesis/attestation.json`),
     /// split per [`Schema::fee_routing_bps`]. Signatures are validated
     /// against the schema's [`AttestorSet`] at submission time.
     ///
@@ -851,20 +857,32 @@ pub struct AttestationModule<S: Spec> {
 pub const DEFAULT_MAX_BUILDER_BPS: u16 = 5000;
 
 /// Default attestation fee in $LGT, in the chain's smallest unit.
-/// Placeholder constant. Real fee sizing is a governance parameter set
-/// at launch. Documented here for reference against the spec.
+/// Compile-time fallback used only when the genesis config omits the
+/// field; devnet-1 genesis sets every fee explicitly. Real fee sizing
+/// is a governance parameter set at launch.
 ///
 /// `$LGT` uses **9 decimals** (Solana lamport convention). The smallest
 /// representable unit is `1 nano` = `0.000000001 $LGT`. The new SDK
 /// uses [`sov_bank::Amount`] (a `u128` newtype) for token amounts;
 /// our defaults still fit comfortably in `u64`, but using `Amount`
 /// for state values + helpers keeps types aligned with bank.
-pub const DEFAULT_ATTESTATION_FEE_LGT_NANOS: Amount = Amount::new(1_000_000); // 0.001 $LGT
+///
+/// Note: this constant (`1_000_000` nano = 0.001 $LGT) is the
+/// compile-time fallback only. Devnet-1 genesis configures
+/// `attestation_fee = 100_000` nano = 0.0001 $LGT
+/// (`devnet-1/genesis/attestation.json`).
+pub const DEFAULT_ATTESTATION_FEE_LGT_NANOS: Amount = Amount::new(1_000_000);
 
-/// Default schema-registration fee. 100 $LGT at 9 decimals.
+/// Default schema-registration fee. Compile-time fallback only;
+/// devnet-1 genesis configures
+/// `schema_registration_fee = 100_000_000` nano = 0.1 $LGT
+/// (`devnet-1/genesis/attestation.json`).
 pub const DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_NANOS: Amount = Amount::new(100_000_000_000);
 
-/// Default attestor-set registration fee. 10 $LGT at 9 decimals.
+/// Default attestor-set registration fee. Compile-time fallback only;
+/// devnet-1 genesis configures
+/// `attestor_set_fee = 50_000_000` nano = 0.05 $LGT
+/// (`devnet-1/genesis/attestation.json`).
 pub const DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS: Amount = Amount::new(10_000_000_000);
 
 // ============================================================================

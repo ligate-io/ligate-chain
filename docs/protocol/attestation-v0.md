@@ -273,9 +273,11 @@ All amounts in $LGT.
 
 | Event | Fee | Split |
 |---|---|---|
-| `RegisterAttestorSet` | `ATTESTOR_SET_FEE` (governance, default 10 $LGT) | 100% treasury |
-| `RegisterSchema` | `SCHEMA_REGISTRATION_FEE` (governance, default 100 $LGT) | 100% treasury |
-| `SubmitAttestation` | `ATTESTATION_FEE` (governance, default 0.001 $LGT) | See below |
+| `RegisterAttestorSet` | `ATTESTOR_SET_FEE` (governance; devnet-1 genesis 0.05 $LGT) | 100% treasury |
+| `RegisterSchema` | `SCHEMA_REGISTRATION_FEE` (governance; devnet-1 genesis 0.1 $LGT) | 100% treasury |
+| `SubmitAttestation` | `ATTESTATION_FEE` (governance; devnet-1 genesis 0.0001 $LGT) | See below |
+
+Devnet-1 genesis values live in `devnet-1/genesis/attestation.json` and are stored in nano-LGT (9 decimals); e.g. `attestation_fee = "100000"` nano = 0.0001 $LGT.
 
 ### Attestation fee split
 

@@ -156,8 +156,10 @@ set of per-module genesis JSONs (today: `bank.json`, `accounts.json`,
 4. Treasury address (receives all registration fees and the non-builder
    share of attestation fees).
 5. Fee constants: `ATTESTOR_SET_FEE`, `SCHEMA_REGISTRATION_FEE`,
-   `ATTESTATION_FEE`. Protocol defaults (10 / 100 / 0.001 $LGT) unless
-   agreed otherwise on the call.
+   `ATTESTATION_FEE`. Devnet-1 genesis values (0.05 / 0.1 / 0.0001
+   $LGT, expressed in nano-LGT at 9 decimals in
+   `devnet-1/genesis/attestation.json`) unless agreed otherwise on the
+   call.
 
 **Output**
 

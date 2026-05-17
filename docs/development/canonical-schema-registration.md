@@ -2,7 +2,7 @@
 
 How Ligate Labs registers `themisra.proof-of-prompt/v1` (and future first-party schemas) on the chain after genesis.
 
-This is **post-genesis** work — runs once on a freshly-booted `ligate-devnet-1` (or any future devnet / mainnet boot), uses the same on-chain `RegisterAttestorSet` + `RegisterSchema` calls any third party would use, costs the registration fees the chain charges (~110 LGT total in v0).
+This is **post-genesis** work — runs once on a freshly-booted `ligate-devnet-1` (or any future devnet / mainnet boot), uses the same on-chain `RegisterAttestorSet` + `RegisterSchema` calls any third party would use, costs the registration fees the chain charges (`attestor_set_fee` 0.05 LGT + `schema_registration_fee` 0.1 LGT = ~0.15 LGT total per ceremony in v0). Fees in the genesis JSON are expressed in nano-LGT (9 decimals).
 
 Tracking issue: [#231](https://github.com/ligate-io/ligate-chain/issues/231).
 
@@ -21,7 +21,7 @@ The trade-off: a ~30-second window between block 0 and the block where `Register
 
 - Node booted, `/v1/rollup/info` returning a non-zero `chain_hash`, blocks producing every ~12s.
 - Operator host has the workspace built (`cargo build --release -p ligate-bootstrap-cli` once, ~20s warm).
-- Operator key file on disk (e.g. `/etc/ligate/keys/themisra-bootstrap.key`), funded with at least 200 LGT (covers `ATTESTOR_SET_FEE` + `SCHEMA_REGISTRATION_FEE` + a few txs of headroom).
+- Operator key file on disk (e.g. `/etc/ligate/keys/themisra-bootstrap.key`), funded with at least 1 LGT (covers `attestor_set_fee` 0.05 LGT + `schema_registration_fee` 0.1 LGT plus generous tx-fee headroom).
 - `devnet-1/canonical-schemas.toml` exists (copy of the `.example` with real attestor pubkeys filled in).
 
 ## Step 1 — Build + sanity-check
@@ -125,7 +125,7 @@ themisra.proof-of-prompt v1
 
 - **`HTTP 503` from sequencer on submit**: the node is in `--mode follower` (chain #248). Re-target `--rpc` at the canonical sequencer host.
 - **`timed out waiting for tx ... to be included`**: check the node is producing blocks (`grep "Sealed slot" /var/log/ligate-node.log`). The tx may still land later; query `/v1/ledger/txs/{hash}` manually to confirm.
-- **`CannotReserveGas("Insufficient balance")`**: the signer key's address has fewer than ~110 LGT. Faucet-drip more, retry.
+- **`CannotReserveGas("Insufficient balance")`**: the signer key's address has fewer than ~0.15 LGT (the ceremony fee total: 0.05 attestor-set + 0.1 schema-reg). Faucet-drip more, retry.
 - **`payload_shape_hash` mismatch with documented value**: the local schema file drifted from the canonical form. Restore it from `git show main:docs/protocol/schemas/...` or apply prettier; the binary's canonical-form check (BOM / CRLF / trailing newline) catches the common drift.
 - **Schema name conflict**: schema_id is namespaced by owner address, so `(your_addr, "themisra.proof-of-prompt", 1)` is a different id than `(ligate_labs_addr, "themisra.proof-of-prompt", 1)`. There's no global namespace lock; the canonical Themisra schema is "the one owned by Ligate Labs's published address."
 
