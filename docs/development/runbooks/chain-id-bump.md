@@ -21,6 +21,24 @@ If none of these fire, it's a soft fork. Ship through normal release channels an
 
 ---
 
+## Re-genesis variants (and the DA-replay gotcha)
+
+This runbook's main flow assumes a **chain-id bump** (`ligate-devnet-N → ligate-devnet-N+1`): fresh genesis, new DA namespace, no shared history. That's the clean cut.
+
+You may also need a **re-genesis WITHOUT a chain-id bump** if you ship a wire-format change that requires fresh state but you want to keep the network identity. The v0.2.0 cut on 2026-05-17 was this case: `AttestationId` collapsed from compound `<schema_id>:<payload_hash>` to single `lat1...` bech32m; on-chain state was wiped but `chain_id` stayed `ligate-devnet-1`.
+
+When you re-genesis with the SAME `chain_id` AND the same DA namespace:
+
+- **The chain replays all historical Celestia blobs on next boot.** They're immutable on Mocha; you can't unsubmit them. The new binary processes them under the new code paths and reconstructs equivalent state (with the new wire format). For the v0.2.0 cut this was actually a clean outcome: all 4 schemas + 2 attestor sets + 8 attestations re-emerged as `lat1...`-keyed records without re-running the bootstrap ceremony.
+- **`chain_hash` may or may not shift**, depending on whether the genesis state-root computation depends on the changed type identity. v0.2.0 left `chain_hash` unchanged (genesis was empty for the affected maps, so the state-tree root was identical). Verify post-restart: `curl https://rpc.ligate.io/v1/rollup/info | jq .chain_hash` and compare against the docs/`constants.toml` pin.
+- **To get a TRULY clean restart with no historical replay**, either:
+  - **Advance `genesis_da_height`** in `devnet-1/celestia.toml` past the prior chain's last-submitted blob (find it via the Celestia explorer for the `lig-dvn-tb` namespace). The chain then skips reading older blobs.
+  - **OR rotate to a fresh DA namespace** (e.g. `lig-dvn-tb-2`). New namespace = no historical blobs to replay.
+
+If you don't take one of those steps and you DO want clean state, the DA replay will reconstruct the old activity under the new code. Treat that as expected, not a bug.
+
+---
+
 ## Pre-bump checklist (T-7 days)
 
 ### Engineering
@@ -117,6 +135,36 @@ Two independent operators confirm the first new-chain block is identical between
 - Faucet: confirm `curl https://faucet.ligate.io/health` returns the new `chain_id` field.
 - Indexer: confirm `curl https://api.ligate.io/v1/info` returns the new `chain_id` and `indexer_height` advancing past 0.
 - Explorer: spot-check `explorer.ligate.io` renders the new latest block.
+
+**If you re-genesised with the same `chain_id` (the v0.2.0 case): you MUST also wipe the api's Postgres + restart the api process.** The api's TRUNCATE migration only covers the `attestations` table; the other 6 tables (`slots`, `transactions`, `attestor_sets`, `schemas`, `address_summaries`, `indexer_state`) keep their pre-wipe rows, AND the api's in-memory cursor `indexer_state.last_indexed_height` caches the pre-wipe height. The api will silently stop ingesting because the chain has "regressed" below its cached cursor.
+
+Recovery (do these in order):
+
+```sh
+# 1. Connect to the api's Railway Postgres (DATABASE_PUBLIC_URL from
+#    `railway variable list --service Postgres`).
+PGURL='postgresql://postgres:...@yamanote.proxy.rlwy.net:.../railway'
+
+# 2. TRUNCATE every indexer-managed table. Keep `_sqlx_migrations`.
+psql "$PGURL" -c "
+  TRUNCATE TABLE slots, transactions, attestor_sets, schemas,
+                 attestations, address_summaries, indexer_state
+  RESTART IDENTITY CASCADE;
+"
+
+# 3. Force the api to redeploy so the in-memory cursor resets. The
+#    new container will read an empty `indexer_state`, log
+#    'fresh db; starting at slot 1', and re-ingest from genesis.
+railway redeploy --service ligate-api --yes
+
+# 4. Verify (within ~1 min of redeploy):
+curl -s https://api.ligate.io/v1/info | jq
+# expect: indexer_height growing from 0, head_lag_slots decreasing
+```
+
+Indexer catch-up rate is ~1.5 slots/sec at devnet load; full catch-up to a 30k-slot chain takes ~5-6 hours. Don't fold this into the announcement timeline; the chain itself is fine in the meantime, just the api dashboards lag.
+
+If chain-id ALSO bumped (the canonical hard-fork path), the steps above are still required (a fresh schema migration isn't a substitute for wiping the pre-bump state).
 
 ### T-0:30 — Public announcement
 
