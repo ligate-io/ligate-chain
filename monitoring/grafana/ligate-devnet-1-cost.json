@@ -170,6 +170,7 @@
         }
       },
       "description": "TIA burned per day, averaged over $window. Negative draw-down (positive sign here after the *-1) means balance is decreasing. Compare against the alert threshold (50 TIA/30 days = ~1.67 TIA/day baseline; spikes above 5 TIA/day suggest abuse or backfill anomaly)."
+<<<<<<< Updated upstream
     },
     {
       "id": 10,
@@ -290,4 +291,9 @@
       "description": "Total billed cost this calendar month so far. Yellow at $50, red at $200 \u2014 devnet's expected envelope is ~$30-$50/mo. Spike here is the first signal something's misconfigured."
     }
   ]
+=======
+    }
+  ],
+  "description": "\n\nGCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) removed 2026-05-18 pending GCP billing wiring decision. See chain follow-up issue."
+>>>>>>> Stashed changes
 }
