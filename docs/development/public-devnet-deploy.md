@@ -288,16 +288,52 @@ rpc.ligate.io {
         reverse_proxy 127.0.0.1:12346
     }
 
-    # Swagger UI hot-fix: the bundled swagger-initializer.js hardcodes
-    # `url: "/openapi-v3.json"` (absolute, no /v1/ prefix). The spec
-    # actually lives at /v1/openapi-v3.json (the chain mounts
+    # Swagger UI hot-fix #1: the bundled swagger-initializer.js
+    # hardcodes `url: "/openapi-v3.json"` (absolute, no /v1/ prefix).
+    # The spec actually lives at /v1/openapi-v3.json (the chain mounts
     # everything under /v1). Rewrite the request internally so the
     # browser request succeeds without touching the chain binary.
-    # Drop this block once the upstream swagger-ui config in
-    # Sovereign SDK points at the right path.
     handle /openapi-v3.json {
         rewrite * /v1/openapi-v3.json
         reverse_proxy 127.0.0.1:12346
+    }
+
+    # Swagger UI hot-fix #2: utoipa (the SDK's openapi-spec generator)
+    # hardcodes `openapi: "3.1.0"` as a single-variant enum that the
+    # chain can't downgrade from code. The bundled swagger-ui assets
+    # the chain ships are an older build that refuses to render any
+    # spec declaring 3.1.x, even when the content has no 3.1-only
+    # features. Override the bundled assets with swagger-ui-dist@5+
+    # served from disk; the modern bundle renders 3.1 natively.
+    #
+    # Install the assets (one-time):
+    #   sudo mkdir -p /var/www/swagger-ui
+    #   curl -sL https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.tar.gz \
+    #     | sudo tar -xz --strip-components=2 -C /var/www/swagger-ui \
+    #       swagger-ui-5.17.14/dist
+    #   sudo tee /var/www/swagger-ui/swagger-initializer.js >/dev/null <<'EOF'
+    #   window.onload = function() {
+    #     window.ui = SwaggerUIBundle({
+    #       url: "/openapi-v3.json",
+    #       dom_id: "#swagger-ui",
+    #       deepLinking: true,
+    #       layout: "StandaloneLayout",
+    #       presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+    #       plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+    #     });
+    #   };
+    #   EOF
+    #   sudo chown -R caddy:caddy /var/www/swagger-ui
+    #
+    # Drop this handle + the /var/www/swagger-ui assets once Sovereign
+    # SDK bumps its bundled swagger-ui to 5+ (tracking: ligate-io/ligate-chain#394).
+    handle_path /v1/swagger-ui/* {
+        root * /var/www/swagger-ui
+        try_files {path} /index.html
+        file_server
+    }
+    handle /v1/swagger-ui {
+        redir /v1/swagger-ui/ 308
     }
 
     # Block the Prometheus surface from being public.

@@ -8,14 +8,14 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
-### Added
+## [0.2.1] - 2026-05-18
 
-- `docs/development/runbooks/alerts/discord-setup.md`: paste-and-go wiring for chain alerts to the `#chain-alerts` channel in the Ligate Labs Discord via Grafana Cloud Alerting's native Discord contact point. Covers the webhook creation flow, the Grafana Cloud contact-point + notification-policy setup, the rule-import path from `ops/prometheus/alerts.yaml` (worked example for `BlockHeightStall`), a `curl` smoke test against the webhook, and a `systemctl stop ligate-node` end-to-end test that exercises the full Prometheus rule → Grafana contact point → Discord path. Page-severity alerts fire `@here` mentions; warn-severity is channel-only. Documents the `alertmanager-discord` bridge sidecar as the fallback path for operators running their own Alertmanager (followers, third-party partners). Tracks [#268](https://github.com/ligate-io/ligate-chain/issues/268).
+Cosmetic + operator-UX patch release. `chain_hash` unchanged; safe binary swap in place.
 
-### Changed
+### Fixed
 
-- `ops/prometheus/alertmanager.yaml`: adds a Discord receiver via `webhook_configs` pointing at the `alertmanager-discord` bridge sidecar (`http://127.0.0.1:9094/`), wired into both the `default` and `info-only` receivers so Discord posts ride alongside the existing Slack posts. Slack + email receivers retained as alternates; no behaviour change for operators not running the bridge. Header comment now flags the file as the SELF-HOSTED FALLBACK path and points readers at `discord-setup.md` for the canonical Grafana Cloud route.
-- `docs/development/runbooks/alerts/README.md`: notification-wiring section now points at `discord-setup.md`; per-alert table extended with the three TIA alerts (`TIABalanceLow`, `TIABalanceCritical`, `TIADrawdownSpike`) that were already in `alerts.yaml` but missing from the table; deploy section split into Grafana Cloud (canonical) and self-hosted Alertmanager (fallback) tracks. Each per-alert runbook header now links to `discord-setup.md` and notes whether the alert mentions `@here`.
+- `crates/stf/src/runtime.rs`: openapi-spec `info` block title + description now actually override (previously only version/contact/license persisted while title + description silently reverted to the Sovereign SDK defaults "Sovereign SDK Rollup JSON API" / "Sovereign SDK Runtime, Ledger and Sequencer JSON API"). Root cause: `Info::new(title, version)` constructor's title field was clobbered downstream; switching to direct field assignment (`spec.info.title = "..."` etc.) starting from the existing info struct makes every override stick. The served spec now correctly identifies the chain as Ligate Chain across every info field. Closes ligate-io/ligate-chain#393.
+- `docs/development/public-devnet-deploy.md`: Caddy reverse-proxy section now documents serving swagger-ui-dist@5+ from `/var/www/swagger-ui/` at `/v1/swagger-ui/*` instead of proxying the chain's bundled bundle. The chain's bundled swagger-ui ships an older build that refuses to render any spec declaring `openapi: "3.1.0"`, which is what utoipa hardcodes (single-variant enum, can't be downgraded from the chain code). The Caddy override loads a 5+ bundle from disk that renders 3.1 specs natively, restoring the `/v1/swagger-ui/` endpoint. Drop this Caddy override once Sovereign SDK upgrades its bundled swagger-ui. Closes ligate-io/ligate-chain#394.
 
 ## [0.2.0] - 2026-05-17
 
