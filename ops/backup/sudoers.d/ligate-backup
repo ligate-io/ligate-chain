@@ -1,0 +1,14 @@
+# Allow the `ligate` user to start/stop ligate-node.service WITHOUT
+# password prompt. Used by scripts/backup-rocksdb.sh in cold-snapshot
+# mode (daily + weekly tiers): the backup runs as `ligate`, briefly
+# stops ligate-node for a consistent rsync of the NOMT/RocksDB
+# directory, then starts it back. Scope is narrow: only the two
+# commands needed, only on ligate-node.service, only NOPASSWD.
+#
+# Install on the chain VM with:
+#   sudo install -o root -g root -m 0440 \
+#       ops/backup/sudoers.d/ligate-backup /etc/sudoers.d/ligate-backup
+#
+# `visudo -c -f /etc/sudoers.d/ligate-backup` validates syntax.
+# `/etc/sudoers.d/` files must be mode 0440 owned root:root.
+ligate ALL=(root) NOPASSWD: /usr/bin/systemctl stop ligate-node.service, /usr/bin/systemctl start ligate-node.service
