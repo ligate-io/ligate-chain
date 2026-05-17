@@ -130,8 +130,8 @@ $EDITOR devnet-1/canonical-schemas.toml  # fill in real attestor pubkeys
 cargo run --release -p ligate-bootstrap-cli -- register-canonical-schemas \
     --config devnet-1/canonical-schemas.toml \
     --signer-key ~/.ligate-keys/devnet-1/operator.key \
-    --rpc http://localhost:12346 \
-    --chain-id 4321
+    --rpc https://rpc.ligate.io \
+    --chain-id 4242
 ```
 
 Idempotent: re-runs skip already-landed registrations. Full runbook (verification, troubleshooting, adding future schemas) at [`docs/development/canonical-schema-registration.md`](../docs/development/canonical-schema-registration.md).
