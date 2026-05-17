@@ -10,7 +10,7 @@
 #   1. Take a consistent point-in-time snapshot of the storage
 #      directory by `rsync --link-dest` against the previous local
 #      snapshot. Cheap (hardlinks unchanged files) and atomic enough
-#      for our purposes — ligate-node uses RocksDB's WAL so partial
+#      for our purposes: ligate-node uses RocksDB's WAL so partial
 #      writes don't corrupt the on-disk state.
 #   2. Upload the snapshot dir to `gs://$GCS_BUCKET/<host>/<timestamp>/`
 #      via `gcloud storage cp -r`. Idempotent on re-runs.
@@ -29,7 +29,7 @@ set -euo pipefail
 : "${GCS_BUCKET:?GCS_BUCKET must be set (e.g. ligate-devnet-1-backups)}"
 : "${HOSTNAME:=$(hostname -s)}"
 
-# Snapshot tag — hour for routine runs, day for the daily-keep tier,
+# Snapshot tag: hour for routine runs, day for the daily-keep tier,
 # week for the weekly-keep tier. Daily and weekly tiers are written
 # by the same script on its respective trigger (the systemd timer
 # config lives in `ops/backup/systemd/`).
@@ -55,18 +55,26 @@ mkdir -p "${LIGATE_SNAPSHOT_DIR}/${TIER}"
 PREVIOUS_SNAPSHOT="$(ls -dt "${LIGATE_SNAPSHOT_DIR}/${TIER}"/* 2>/dev/null | head -1 || true)"
 
 # Capture the current block height BEFORE any cold-snapshot stop so
-# the manifest records the height the snapshot corresponds to. If we
-# read it after stopping the chain the metrics endpoint is gone and
-# the manifest ends up as "unknown". Same idiom as the post-rsync
-# block (the script writes the manifest there) — buffer-then-parse
-# via here-string to dodge the `set -o pipefail` + `awk … exit`
-# SIGPIPE issue.
-METRICS_PRESTOP="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
-HEIGHT_PRESTOP="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS_PRESTOP}")"
+# the manifest records the height the snapshot corresponds to.
+#
+# Source preference: chain RPC (`/v1/ledger/slots/latest .number`)
+# over the Prometheus metrics gauge (`ligate_block_height`). The RPC
+# returns the real head height as soon as the HTTP server is up,
+# while the metrics gauge isn't populated until the chain replays
+# enough state to set it. Observed empty for ~2 min after a
+# cold-backup-induced restart on 2026-05-17 04:00 UTC, which made
+# the manifest record "unknown" even though the chain was healthy.
+# RPC fallback to metrics, fallback to "unknown".
+HEIGHT_PRESTOP="$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/latest 2>/dev/null \
+                    | jq -r '.number // empty' 2>/dev/null)"
+if [ -z "${HEIGHT_PRESTOP}" ]; then
+    METRICS_PRESTOP="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+    HEIGHT_PRESTOP="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS_PRESTOP}")"
+fi
 
 # Hot vs cold snapshot semantics:
 #
-# rsync of a live RocksDB+NOMT directory is best-effort — NOMT files
+# rsync of a live RocksDB+NOMT directory is best-effort: NOMT files
 # (bbn, ht, ln, meta, wal in user_nomt_db / kernel_nomt_db) can be
 # caught mid-write, producing a snapshot that triggers
 # `assertion failed: pn.0 < max_pn` in nomt-1.0.3's free-list
@@ -79,7 +87,7 @@ HEIGHT_PRESTOP="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS_P
 # rsync, restart. ~30-60s pause on a healthy state DB; runs at
 # off-peak hours per the timers (03:30 / 04:00 UTC).
 #
-# Hourly tier stays HOT (no pause) — best-effort, frequent, useful
+# Hourly tier stays HOT (no pause): best-effort, frequent, useful
 # for "last 6 hours" rollback if the chain itself didn't survive a
 # rough event. Restore is best-effort; the last clean cold daily
 # snapshot is always available as fallback.
@@ -90,7 +98,41 @@ esac
 
 if [ "$COLD" = "true" ]; then
     echo "==> Cold snapshot: pausing ligate-node for a consistent rsync"
-    sudo systemctl stop ligate-node.service
+    # Two-part shutdown to dodge two bugs:
+    #
+    # 1. Upstream Sovereign SDK hang: ligate-node logs "shutdown
+    #    complete" within ~1s of SIGTERM but the process doesn't
+    #    actually exit (surfaced 2026-05-17 03:30 UTC when the first
+    #    scheduled daily backup hit `TimeoutStopSec=300` and took
+    #    ~5.5 min of chain downtime). SIGKILL is safe in practice:
+    #    RocksDB + NOMT WALs recover cleanly on next start,
+    #    chain_hash unchanged across the forced-kill events we've
+    #    observed.
+    #
+    # 2. systemd auto-restart from `Restart=on-failure`: a bare
+    #    `systemctl kill` makes systemd see the process exit as a
+    #    failure and restart ligate-node automatically: the rsync
+    #    then runs against a LIVE chain again, defeating the cold
+    #    snapshot. Using `systemctl stop --no-block` tells systemd
+    #    "we are intentionally stopping, don't restart", then we
+    #    escalate to SIGKILL once the SIGTERM grace window expires.
+    sudo systemctl stop --no-block ligate-node.service
+    # Give graceful-shutdown logs ~3s to flush. The chain finishes
+    # its shutdown sequence well within 1s; 3s is a defensive margin.
+    sleep 3
+    # Escalate: SIGKILL the process if it hasn't exited yet (it
+    # almost certainly hasn't, per bug #1). systemd is in "stopping"
+    # state from the --no-block stop above, so this doesn't trigger
+    # the Restart=on-failure path.
+    sudo systemctl kill --signal=SIGKILL ligate-node.service 2>/dev/null || true
+    # Wait for the unit to actually transition to inactive/failed so
+    # the rsync runs against a quiescent storage directory.
+    for _ in $(seq 1 30); do
+        STATE=$(systemctl show ligate-node.service -p ActiveState --value)
+        [ "$STATE" = "inactive" ] || [ "$STATE" = "failed" ] && break
+        sleep 0.5
+    done
+    echo "    ligate-node stopped (state=${STATE:-unknown})"
 fi
 
 # `--sparse` preserves sparseness on copy. RocksDB NOMT files contain
@@ -122,8 +164,15 @@ HEIGHT_FILE="${LOCAL_SNAPSHOT}/.snapshot-manifest.json"
 if [ -n "${HEIGHT_PRESTOP}" ]; then
     HEIGHT="${HEIGHT_PRESTOP}"
 else
-    METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
-    HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
+    # Same source preference as the pre-stop capture: RPC over
+    # metrics gauge. Chain is back up by now (post-rsync, post-cold
+    # restart in the cold path; never stopped in the hot path).
+    HEIGHT="$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/latest 2>/dev/null \
+                | jq -r '.number // empty' 2>/dev/null)"
+    if [ -z "${HEIGHT}" ]; then
+        METRICS="$(curl -sf http://127.0.0.1:9100/metrics 2>/dev/null || true)"
+        HEIGHT="$(awk '/^ligate_block_height /{print $2; exit}' <<< "${METRICS}")"
+    fi
     [ -z "${HEIGHT}" ] && HEIGHT="unknown"
 fi
 {

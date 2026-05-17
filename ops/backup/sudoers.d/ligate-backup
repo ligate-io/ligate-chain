@@ -1,9 +1,17 @@
-# Allow the `ligate` user to start/stop ligate-node.service WITHOUT
+# Allow the `ligate` user to manage ligate-node.service WITHOUT
 # password prompt. Used by scripts/backup-rocksdb.sh in cold-snapshot
 # mode (daily + weekly tiers): the backup runs as `ligate`, briefly
 # stops ligate-node for a consistent rsync of the NOMT/RocksDB
-# directory, then starts it back. Scope is narrow: only the two
-# commands needed, only on ligate-node.service, only NOPASSWD.
+# directory, then starts it back.
+#
+# Why three commands not two: ligate-node logs "shutdown complete"
+# within ~1s of SIGTERM but the process doesn't actually exit
+# (upstream Sovereign SDK hang surfaced 2026-05-17 03:30 UTC). The
+# script escalates to SIGKILL after a brief SIGTERM grace window
+# instead of waiting `TimeoutStopSec=300` and eating ~5 min of
+# chain downtime per backup. `systemctl kill` is needed for that
+# escalation path; `systemctl start` is needed to bring the chain
+# back after the rsync.
 #
 # Install on the chain VM with:
 #   sudo install -o root -g root -m 0440 \
@@ -11,4 +19,4 @@
 #
 # `visudo -c -f /etc/sudoers.d/ligate-backup` validates syntax.
 # `/etc/sudoers.d/` files must be mode 0440 owned root:root.
-ligate ALL=(root) NOPASSWD: /usr/bin/systemctl stop ligate-node.service, /usr/bin/systemctl start ligate-node.service
+ligate ALL=(root) NOPASSWD: /usr/bin/systemctl start ligate-node.service, /usr/bin/systemctl stop ligate-node.service, /usr/bin/systemctl stop --no-block ligate-node.service, /usr/bin/systemctl kill ligate-node.service, /usr/bin/systemctl kill --signal=SIGTERM ligate-node.service, /usr/bin/systemctl kill --signal=SIGKILL ligate-node.service
