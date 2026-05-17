@@ -8,9 +8,13 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
-## [0.1.2-devnet] - 2026-05-17
+## [0.1.2] - 2026-05-17
 
-Launch-eve hardening pass: chain ops infrastructure (backups, monitoring, persistent-disk migration, runbook fixes) plus the workspace version bump that makes the binary self-report `0.1.2-devnet` instead of the workspace-default `0.0.1`. No state-breaking changes; `chain_hash` unchanged. Operators upgrading from `v0.1.1-devnet` swap the binary in place — no re-genesis.
+Launch-eve hardening pass: chain ops infrastructure (backups, monitoring, persistent-disk migration, runbook fixes) plus the workspace version bump that makes the binary self-report its real version (was `0.0.1` regardless of git tag).
+
+**Versioning convention change.** Dropping the `-devnet` suffix from release tags starting with this release. Past tags (`v0.1.0-devnet`, `v0.1.1-devnet`) stay as-is for archaeology, but going forward the convention is clean semver: `v0.1.2`, `v0.1.3`, ..., `v1.0.0-rc.1`, `v1.0.0` for mainnet GA. The `v0.x.y` numbering already signals pre-1.0 / unstable; `-devnet` was redundant AND semver-wrong (it's a pre-release identifier meaning "before 0.1.2 stable" but we were treating it as a final release). Network identity belongs in `chain_id` (`ligate-devnet-1`, future `ligate-testnet-1` / `ligate-mainnet-1`) and genesis directory names, not in the binary's semver. This matches how every mature chain does it (Solana, Aptos, Cosmos, etc. — only Sui prefixes tags with network name, and that's because they have divergent release trains per network, which we don't). Companion repos (`ligate-cli`, `ligate-js`, `ligate-api`) adopt the same convention at their next release.
+
+No state-breaking changes; `chain_hash` unchanged. Operators upgrading from `v0.1.1-devnet` swap the binary in place — no re-genesis.
 
 **State-preservation note.** `attestation.json` / genesis bytes / `chain_hash` all unchanged from `v0.1.1-devnet`. Operators deploying this binary to an existing `devnet-1` VM keep their RocksDB state intact across the swap.
 

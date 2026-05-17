@@ -14,10 +14,21 @@ name: Release
 #
 # Tracking issue: #194.
 #
-# Tagging convention:
-#   - Pre-devnet:  `v0.0.X` per chain-side change set.
-#   - At devnet:   `v0.1.0-devnet` and freeze.
-#   - Mainnet:     `v1.0.0` and forward.
+# Tagging convention (clean semver, no network-name suffix):
+#   - Pre-mainnet:     `v0.x.y` (the `v0.x` numbering itself signals
+#                      "pre-1.0, unstable"; nothing else needed).
+#   - Mainnet RC:      `v1.0.0-rc.1`, `v1.0.0-rc.2`, ...
+#   - Mainnet GA:      `v1.0.0` and forward.
+#
+# Network identity (`chain_id = "ligate-devnet-1"`, future
+# `"ligate-testnet-1"` / `"ligate-mainnet-1"`) lives in the genesis
+# config and chain spec, NOT in the binary tag — the same `ligate-node`
+# binary boots whichever network it's pointed at via
+# `--rollup-config-path` + `--genesis-config-dir`. Matches the pattern
+# every mature chain uses (Solana, Aptos, Cosmos, etc.).
+#
+# Historical tags `v0.1.0-devnet` and `v0.1.1-devnet` predate this
+# convention and stay as-is.
 #
 # This workflow does NOT include cosign signing for v0; add as a
 # follow-up if downstream consumers want provenance verification.
