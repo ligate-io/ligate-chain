@@ -242,13 +242,11 @@ where
         // /v1/swagger-ui/ shows what's actually serving the API.
         let mut spec = self.0.openapi_spec()?;
         use sov_modules_api::prelude::utoipa::openapi::{Contact, Info, License};
-        let mut info = Info::new(
-            "Ligate Chain JSON API",
-            env!("CARGO_PKG_VERSION"),
-        );
+        let mut info = Info::new("Ligate Chain JSON API", env!("CARGO_PKG_VERSION"));
         info.description = Some(
-            "REST API for Ligate Chain — an attestation-native rollup on Celestia. \
-             Mounts the chain's ledger, runtime, and sequencer surfaces under /v1.".to_string(),
+            "REST API for Ligate Chain — the attestation-native rollup. \
+             Mounts the chain's ledger, runtime, and sequencer surfaces under /v1."
+                .to_string(),
         );
         let mut contact = Contact::new();
         contact.name = Some("Ligate Labs".to_string());
