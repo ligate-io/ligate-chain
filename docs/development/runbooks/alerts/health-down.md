@@ -1,6 +1,6 @@
 # `HealthDown`
 
-**Severity: page**
+**Severity: page** (page-severity alerts post to `#chain-alerts` with an `@here` mention; wiring details in [`discord-setup.md`](./discord-setup.md))
 
 ## What fired
 
