@@ -142,15 +142,15 @@ async fn run(args: Args) -> Result<()> {
                     let id = chain_id.unwrap_or_else(|| {
                         // `chain_id` in /rollup/info is the human-readable
                         // string ("ligate-devnet-1"); the chain signs txs
-                        // against a u64 numeric id from
-                        // `chain_state.json`. Until /rollup/info also
+                        // against a u64 numeric id defined as `CHAIN_ID`
+                        // in `constants.toml`. Until /rollup/info also
                         // exposes the numeric form, operators must pass
                         // --chain-id explicitly. Default to 0 with a loud
                         // warning so a typo'd run fails-fast at submit.
                         eprintln!(
                             "warning: --chain-id not set, and /rollup/info returned only \
                              the string id `{}`. Pass --chain-id <u64> matching \
-                             chain_state.json. Defaulting to 0; submit will likely fail.",
+                             CHAIN_ID in constants.toml. Defaulting to 0; submit will likely fail.",
                             info.chain_id
                         );
                         0

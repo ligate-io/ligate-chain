@@ -57,10 +57,10 @@ Don't commit the filled-in file. `devnet-1/.gitignore` already excludes it.
     --config devnet-1/canonical-schemas.toml \
     --signer-key /etc/ligate/keys/themisra-bootstrap.key \
     --rpc http://localhost:12346 \
-    --chain-id 4321
+    --chain-id 4242
 ```
 
-`--chain-id` is the numeric chain id from `chain_state.json` (NOT the human-readable `ligate-devnet-1` string). `--chain-hash` is fetched from `GET /v1/rollup/info` automatically; pass `--chain-hash <64-char-hex>` to override.
+`--chain-id` is the numeric `CHAIN_ID` defined in `constants.toml` (NOT the human-readable `ligate-devnet-1` string). `--chain-hash` is fetched from `GET /v1/rollup/info` automatically; pass `--chain-hash <64-char-hex>` to override (the flag expects hex, optionally with a `0x` prefix; not the bech32m `lsch1…` form).
 
 Expected output (success path):
 

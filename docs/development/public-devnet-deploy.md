@@ -355,13 +355,13 @@ cp devnet-1/canonical-schemas.toml.example devnet-1/canonical-schemas.toml
 $EDITOR devnet-1/canonical-schemas.toml  # fill in real attestor pubkeys
 
 # 2. Run the ceremony binary. Auto-fetches chain_hash from /v1/rollup/info.
-#    --chain-id is the numeric u64 from chain_state.json (NOT the
-#    "ligate-devnet-1" string).
+#    --chain-id is the numeric u64 CHAIN_ID from constants.toml (NOT
+#    the "ligate-devnet-1" human-readable string).
 cargo run --release -p ligate-bootstrap-cli -- register-canonical-schemas \
     --config devnet-1/canonical-schemas.toml \
     --signer-key ~/.ligate-keys/devnet-1/operator.key \
     --rpc https://rpc.ligate.io \
-    --chain-id 4321
+    --chain-id 4242
 
 # 3. Verify the schema landed.
 curl https://rpc.ligate.io/v1/modules/attestation/schemas/lsc1...
