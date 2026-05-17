@@ -240,21 +240,44 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Read the section between `## [Unreleased]` and the next
-          # `## ` heading. That's the bucket of entries this release
-          # represents.
-          awk '
-            /^## \[Unreleased\]/ {capture=1; next}
+          # Find the CHANGELOG section that matches the tag being built
+          # (e.g. tag `v0.1.3` → `## [0.1.3] - YYYY-MM-DD`). Our release
+          # hygiene folds `[Unreleased]` INTO the new version section
+          # BEFORE tagging (Keep-a-Changelog standard), so by tag-push
+          # time `[Unreleased]` is empty and the entries live under the
+          # versioned header. Extract that block.
+          #
+          # If the tag is `v*-rc.N` or some other non-version-named tag
+          # we couldn't classify, fall back to `[Unreleased]` so we
+          # don't ship blank release bodies (the historic bug that
+          # silently shipped v0.1.2 with an empty body).
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+
+          # Try the version-specific section first.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" {capture=1; next}
             /^## / {if (capture) {capture=0}}
             capture==1 {print}
           ' CHANGELOG.md > release-notes.md
 
-          # If empty, fall back to a one-liner.
-          if ! [[ -s release-notes.md ]]; then
-            echo "_(No changelog entries; see commit history.)_" > release-notes.md
+          # If empty, try `[Unreleased]` (covers RC tags or pre-fold
+          # workflow dispatches).
+          if [[ "$(wc -c < release-notes.md | tr -d ' ')" -le 1 ]]; then
+            awk '
+              /^## \[Unreleased\]/ {capture=1; next}
+              /^## / {if (capture) {capture=0}}
+              capture==1 {print}
+            ' CHANGELOG.md > release-notes.md
           fi
 
-          echo "Release notes preview:"
+          # If STILL empty/whitespace-only, fall back to a one-liner so
+          # the release page never ships a blank body.
+          if [[ "$(wc -c < release-notes.md | tr -d ' ')" -le 1 ]]; then
+            echo "_(No changelog entries found for ${VERSION}; see commit history.)_" > release-notes.md
+          fi
+
+          echo "Release notes preview (${VERSION}):"
           head -40 release-notes.md
 
       - name: Create GitHub Release
