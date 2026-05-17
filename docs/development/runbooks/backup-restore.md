@@ -73,7 +73,7 @@ gcloud storage buckets update gs://ligate-devnet-1-backups \
 
 # Grant the VM's default Compute Engine service account write access
 # on this bucket. (We can't issue a long-lived SA JSON key on this
-# project — org policy `constraints/iam.disableServiceAccountKeyCreation`
+# project; org policy `constraints/iam.disableServiceAccountKeyCreation`
 # is enforced. Using the existing VM SA + a bucket-scoped IAM grant
 # avoids needing a key.)
 VM_SA=$(gcloud compute instances describe ligate-devnet-1-sequencer \
@@ -301,7 +301,7 @@ sudo rm -rf /opt/ligate/devnet-1/data-celestia.MIGRATION-BACKUP-*
 
 ## Resizing the persistent disk (online, no downtime)
 
-GCE persistent disks grow live, and ext4 resizes online — no chain stop needed.
+GCE persistent disks grow live, and ext4 resizes online; no chain stop needed.
 
 ```sh
 # 1. Grow the GCE disk.
@@ -337,7 +337,7 @@ What's live on devnet-1 as of 2026-05-16 vs what's still pending:
 |---|---|---|
 | `backup-rocksdb.sh`'s `block_height` capture in the manifest can produce a multi-line value (height + `unknown`) because the script tries two height-extraction paths and writes both. Manifest is still parseable; the value is just ugly. | Cosmetic; restore doesn't depend on this field. | chain#359 followups |
 | `backup-rocksdb.sh` uses `rsync -a` without `--sparse`, so sparse files (RocksDB NOMT files contain many) inflate ~4x on copy. Doesn't affect chain operation but bloats local snapshot stage + GCS storage. | Disk-cost only; ~$4/mo extra storage at devnet scale. | chain#359 followups |
-| `ligate-node.service` is not enabled by default after first cloud-init boot — the original runbook left it as a manual `systemctl start` step. After every `gcloud compute instances stop|start`, the service must be re-enabled with `sudo systemctl enable --now ligate-node.service`. | One-time post-deploy step; now codified in §1 above. | n/a, fixed in the runbook |
+| `ligate-node.service` is not enabled by default after first cloud-init boot; the original runbook left it as a manual `systemctl start` step. After every `gcloud compute instances stop|start`, the service must be re-enabled with `sudo systemctl enable --now ligate-node.service`. | One-time post-deploy step; now codified in §1 above. | n/a, fixed in the runbook |
 | Cloud-init in `public-devnet-deploy.md` doesn't pre-create the `/var/lib/ligate/rocksdb` directory + symlink at `/opt/ligate/devnet-1/data-celestia`. Until that lands, fresh deploys need a manual symlink step before first `ligate-node` start (else the chain writes to `/dev/root` again). | One-time step on fresh deploys. | chain#359 followups |
 
 ---
