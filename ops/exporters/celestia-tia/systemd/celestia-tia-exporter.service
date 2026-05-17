@@ -1,0 +1,23 @@
+[Unit]
+Description=Celestia DA-signer TIA balance Prometheus exporter
+After=celestia-light.service network-online.target
+Wants=celestia-light.service
+
+[Service]
+Type=simple
+User=ligate
+Group=ligate
+EnvironmentFile=/etc/ligate/celestia-tia-exporter.env
+ExecStart=/usr/bin/python3 /opt/ligate/exporters/celestia-tia/celestia-tia-exporter.py
+Restart=on-failure
+RestartSec=10
+# Defense in depth: this process only needs network localhost + filesystem
+# access to LIGHT_NODE_STORE (read) to mint auth tokens. Lock everything else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
