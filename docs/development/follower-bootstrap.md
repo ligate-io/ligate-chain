@@ -123,7 +123,7 @@ Once the node is back up:
 
 ```bash
 # 1. Chain identity matches
-curl -s http://127.0.0.1:12346/v1/info | jq '.chain_id, .chain_hash'
+curl -s http://127.0.0.1:12346/v1/rollup/info | jq '.chain_id, .chain_hash'
 # Expected: matches the manifest's chain_id + the canonical chain_hash
 # for that chain (you can cross-check via the public RPC at rpc.ligate.io).
 

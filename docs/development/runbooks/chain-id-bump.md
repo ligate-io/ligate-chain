@@ -31,7 +31,7 @@ If none of these fire, it's a soft fork. Ship through normal release channels an
 - [ ] New genesis files prepared at `devnet/genesis-${NEW_CHAIN_ID}/`. Includes:
   - Updated `chain_id` in `genesis.json`
   - Same sequencer registry as the outgoing chain (unless rotating per [`sequencer-key-rotation.md`](./sequencer-key-rotation.md))
-  - Canonical Themisra schemas (via `ligate-bootstrap-cli` if re-registering)
+  - Canonical Themisra schemas (via `ligate-bootstrap` binary, or `cargo run -p ligate-bootstrap-cli`, if re-registering)
 - [ ] `devnet/rollup.toml` updated to point at the new genesis dir and chain id
 
 ### Operations

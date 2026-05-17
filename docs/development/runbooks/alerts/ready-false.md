@@ -27,8 +27,9 @@ Expression:
 # 1. What does /ready actually say?
 curl -i http://127.0.0.1:12346/v1/ready
 
-# 2. Catch-up state
-curl -s http://127.0.0.1:12346/v1/info | jq '{indexer_height, head_height, head_lag_slots}'
+# 2. Chain identity (cheap sanity check the RPC is up at all)
+curl -s http://127.0.0.1:12346/v1/rollup/info | jq '{chain_id, chain_hash, version}'
+# (Indexer/head lag fields live on the api crate's /v1/info, not on chain RPC.)
 
 # 3. Recent DA-side activity
 journalctl -u ligate-node --since "-5 minutes" | grep -iE "da|celestia|blob"

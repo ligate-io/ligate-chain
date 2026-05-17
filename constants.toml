@@ -91,16 +91,15 @@ GAS_TOKEN_ID = { bech32 = "token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2
 
 # **The Ligate HRP.** This is the whole reason we did the SDK upgrade
 # (#59). Every account address minted on this chain is bech32-encoded
-# with this prefix. Per #46, the Ligate-side identifier ladder is:
+# with this prefix. Per #46, the Ligate-side identifier ladder
+# **shipped in v0** is:
 #   lig1   - account addresses (THIS CONSTANT)
 #   lpk1   - public keys (separate, encoded by client-rs)
 #   lsc1   - schema ids (computed by attestation module, encoded by client-rs)
 #   las1   - attestor-set ids
-#   lat1   - attestation ids
-#   ltx1   - tx hashes
 #   lph1   - payload hashes
-#   lcc1   - NFT collection ids (when `nft` module ships in v1)
-#   ltk1   - fungible token denominations (when `tokens` module ships in v1)
+# Planned for v0.2.0 (not yet wired):
+#   lat1   - attestation ids
 ADDRESS_PREFIX = { const = "lig" }
 
 # Gas costs for state access. Mirrored from SDK demo defaults; revisit

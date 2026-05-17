@@ -86,7 +86,7 @@ ligate transfer --signer dev --to lig1xyz... --amount 1.0 \
 cargo run --bin ligate-node -- --da-layer celestia --mode follower
 ```
 
-Followers' `POST /v1/sequencer/txs` endpoint is currently still mounted but submissions don't propagate (the would-be blob is filtered at the STF level because the DA address isn't in the registry). Point clients at the upstream sequencer (`https://rpc.ligate.io` for public devnet) for transaction submission. A native 503 on the follower's submission endpoint is tracked as a follow-up under [#243](https://github.com/ligate-io/ligate-chain/issues/243).
+Followers' `POST /v1/sequencer/txs` endpoint returns a native 503 with a JSON body directing clients to the upstream sequencer (`https://rpc.ligate.io` for public devnet). The guard is wired only in follower mode (see `crates/rollup/src/follower_guard.rs`); sequencers see zero overhead.
 
 A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`devnet/README.md`](devnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 

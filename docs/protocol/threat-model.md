@@ -89,7 +89,7 @@ These attack the protocol primitive itself: schemas, attestor sets, attestations
 
 **Attack:** flood the chain with worthless attestations to degrade availability or storage.
 
-**Defense:** per-attestation fee (default 0.001 `$LGT`) plus one-time registration fees (`SCHEMA_REGISTRATION_FEE` 100 `$LGT`, `ATTESTOR_SET_FEE` 10 `$LGT`). Costs scale linearly with volume.
+**Defense:** per-attestation fee (devnet-1 genesis: 0.0001 `$LGT`) plus one-time registration fees (`SCHEMA_REGISTRATION_FEE` 0.1 `$LGT`, `ATTESTOR_SET_FEE` 0.05 `$LGT`). Fees are stored in nano-LGT (9 decimals) in `devnet-1/genesis/attestation.json`. Costs scale linearly with volume.
 
 **Where:** [`attestation-v0.md` §Fees](attestation-v0.md#fees); enforced via `sov-bank` integration in `crates/modules/attestation/src/lib.rs`.
 

@@ -41,7 +41,7 @@ Verify the binary speaks to the public devnet:
 $ ligate --rpc https://rpc.ligate.io info
 chain_id:   ligate-devnet-1
 chain_hash: lsch1amq80arndh6zehd4gu3kg6x66vh3l45z924dr6pzeevkxp649heqe5c70v
-version:    0.1.0-devnet
+version:    0.1.3
 ```
 
 Set `LIGATE_RPC=https://rpc.ligate.io` in your shell so subsequent commands don't need `--rpc`.
@@ -115,7 +115,7 @@ $ curl -s https://api.ligate.io/v1/schemas/lsc1abc... | jq
   "attestor_set_id": "las1xyz...",
   "fee_routing_bps": 0,
   "fee_routing_addr": null,
-  "payload_shape_hash": "0xdeadbeef...",
+  "payload_shape_hash": "deadbeef...",
   "registered_at": { "block_height": 12345, "tx_hash": "ltx1...", "timestamp": "2026-05-12T01:23:45.678Z" },
   "attestation_count": 1234
 }

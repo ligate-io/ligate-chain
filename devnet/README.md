@@ -90,10 +90,12 @@ lands before any retail wallet UX.
 ## $LGT layout
 
 - 9 decimals (Solana-style nano units).
-- Genesis supply: 120M LGT.
-  - Bootstrap: 100M LGT.
-  - Anvil #1: 10M LGT.
-  - Anvil #2: 10M LGT.
+- Genesis supply: 1,000,000,000 LGT (1B), per
+  `devnet/genesis/bank.json`:
+  - Bootstrap (`lig1h72nh5c7…`): 899,990,000 LGT (~900M).
+  - Demo #1 (`lig1d0vqhk…`): 50,000,000 LGT (50M).
+  - Demo #2 (`lig1njjery…`): 50,000,000 LGT (50M).
+  - Local dev key (`lig132yw8ht…`): 10,000 LGT.
 - `lgt_token_id` is the deterministic `config_gas_token_id()` from
   `constants.toml`. The genesis loader cross-checks this against
   `attestation.lgt_token_id` and refuses to boot on mismatch.
