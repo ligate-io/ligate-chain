@@ -285,7 +285,7 @@ sudo chown -h ligate:ligate /opt/ligate/devnet-1/data-celestia
 # 4. Start the chain. Verify head advances past the pre-stop height
 #    AND chain_hash is unchanged (symlink swap shouldn't touch state).
 sudo systemctl start ligate-node.service
-curl -s https://api.ligate.io/v1/info | jq
+curl -s https://rpc.ligate.io/v1/rollup/info | jq
 
 # 5. Update /etc/ligate/backup.env: set LIGATE_STORAGE_DIR=/var/lib/ligate/rocksdb
 #    so the snapshot manifest records the physical path.

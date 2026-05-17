@@ -49,7 +49,7 @@ Acceptable when state is disposable (devnet still bootstrapping, no partner data
 
 3. **Generate the new key.**
    ```sh
-   ligate-genesis-tool generate-key --role sequencer --out devnet/genesis/keys/
+   ligate-genesis-tool keys generate --roles sequencer --output devnet/genesis/keys/
    # writes sequencer.key (mode 0600) + sequencer.address
    ```
 
