@@ -288,6 +288,18 @@ rpc.ligate.io {
         reverse_proxy 127.0.0.1:12346
     }
 
+    # Swagger UI hot-fix: the bundled swagger-initializer.js hardcodes
+    # `url: "/openapi-v3.json"` (absolute, no /v1/ prefix). The spec
+    # actually lives at /v1/openapi-v3.json (the chain mounts
+    # everything under /v1). Rewrite the request internally so the
+    # browser request succeeds without touching the chain binary.
+    # Drop this block once the upstream swagger-ui config in
+    # Sovereign SDK points at the right path.
+    handle /openapi-v3.json {
+        rewrite * /v1/openapi-v3.json
+        reverse_proxy 127.0.0.1:12346
+    }
+
     # Block the Prometheus surface from being public.
     # Operators scrape it from inside the VPC over 9100.
     handle /metrics {
@@ -295,6 +307,8 @@ rpc.ligate.io {
     }
 }
 ```
+
+Production also wraps the above with a `(cloudflare_only)` macro that 403s any request whose source IP isn't in Cloudflare's published edge ranges. See `/etc/caddy/Caddyfile` on `ligate-devnet-1-sequencer` (or the CF-IP list at <https://www.cloudflare.com/ips-v4/>) for the macro. Skip for non-Cloudflare deploys.
 
 Install + enable:
 
