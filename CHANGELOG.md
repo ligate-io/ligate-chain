@@ -25,6 +25,7 @@ Same-day follow-up to v0.1.2. Four PRs: cold-backup downtime fix, swagger UI wir
 ### Fixed
 
 - Swagger UI at `https://rpc.ligate.io/v1/swagger-ui/` previously rendered blank because the bundled `swagger-initializer.js` hardcodes its OpenAPI spec URL as `/openapi-v3.json` (without the `/v1` prefix the chain actually serves it under). Fixed operator-side with a Caddy `handle /openapi-v3.json { rewrite * /v1/openapi-v3.json; reverse_proxy 127.0.0.1:12346 }` block; the chain binary itself doesn't change. Caddyfile snippet codified in `docs/development/public-devnet-deploy.md`. (#376)
+- `.github/workflows/release.yml`: changelog-excerpt step now extracts from the version-specific section (`## [X.Y.Z]`) that matches the tag being built, instead of `## [Unreleased]`. Our release hygiene folds `[Unreleased]` into the new versioned section BEFORE tagging (Keep-a-Changelog standard), which meant the workflow was reading an empty `[Unreleased]` block and silently shipping releases with one-byte bodies (v0.1.2 was the first visible casualty; backfilled manually after the fact). Fallback chain: versioned section → `[Unreleased]` → one-liner placeholder, so future releases never ship blank.
 
 ## [0.1.2] - 2026-05-17
 
