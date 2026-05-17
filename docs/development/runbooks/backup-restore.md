@@ -2,7 +2,7 @@
 
 **Status:** v0 — covers the GCS-backed rsync flow that ships in `scripts/` + `ops/backup/systemd/`. Companion to the broader operational layer ([`celestia-light-node.md`](./celestia-light-node.md), [`alerts/`](./alerts/)).
 
-`ligate-node` writes persistent state to RocksDB at `<storage>.path`. On the live devnet-1 sequencer that path is `/opt/ligate/devnet-1/data-celestia`, which is a symlink to `/var/lib/ligate/rocksdb` on the persistent data disk (`/dev/sdb`, 50 GB). The symlink approach keeps the rollup config (`devnet-1/celestia.toml`) host-portable while still landing the actual bytes on the persistent disk so a VM image rebuild doesn't wipe state. Without backups, a single bad disk still loses the chain's local history; recovery would require full DA replay from genesis, which on a multi-month devnet means hours of replay before we even hit any DA fetch quirks.
+`ligate-node` writes persistent state to RocksDB at `<storage>.path`. On the live devnet-1 sequencer that path is `/opt/ligate/devnet-1/data-celestia`, which is a symlink to `/var/lib/ligate/rocksdb` on the persistent data disk (`/dev/sdb`, 150 GB after the in-place resize documented below). The symlink approach keeps the rollup config (`devnet-1/celestia.toml`) host-portable while still landing the actual bytes on the persistent disk so a VM image rebuild doesn't wipe state. Without backups, a single bad disk still loses the chain's local history; recovery would require full DA replay from genesis, which on a multi-month devnet means hours of replay before we even hit any DA fetch quirks.
 
 This runbook covers: routine snapshotting to GCS, point-in-time restore from a snapshot, and the quarterly drill that proves the restore path actually works.
 

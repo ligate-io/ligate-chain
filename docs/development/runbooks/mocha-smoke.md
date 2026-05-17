@@ -29,7 +29,7 @@ Anything not on this list is out of scope for this smoke — covered elsewhere i
 - A non-prod VM (or local machine) per [`public-devnet-deploy.md`](../public-devnet-deploy.md). Don't run this against the production sequencer.
 - A funded Mocha TIA wallet (≥10 TIA recommended for safety margin; the smoke uses fractions of a TIA but you want headroom for retries).
 - The Mocha-flavoured chain config at `devnet-1/celestia.toml` with `[da].signer_private_key` pointing at the funded wallet.
-- Celestia light node v0.20+ co-located, syncing Mocha (per [`celestia-light-node.md`](./celestia-light-node.md)).
+- Celestia light node v0.30.2 co-located, syncing Mocha (per [`celestia-light-node.md`](./celestia-light-node.md)).
 - `ligate-cli` installed locally (or available on the smoke VM).
 
 ---
