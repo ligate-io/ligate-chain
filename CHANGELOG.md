@@ -8,6 +8,24 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-17
+
+Same-day follow-up to v0.1.2. Four PRs: cold-backup downtime fix, swagger UI wiring, OpenAPI spec branding override, and a prose-style scrub (em dashes out across the docs landed in v0.1.2). `chain_hash` unchanged; binary swap is in-place.
+
+**State-preservation note.** `attestation.json` / genesis bytes / `chain_hash` all unchanged from `v0.1.2`. Operators deploying this binary keep their RocksDB state intact.
+
+### Changed
+
+- `crates/stf/src/runtime.rs`: `openapi_spec()` now overrides the upstream Sovereign SDK `info` block with Ligate Chain identity. Title becomes `Ligate Chain JSON API`, contact becomes `Ligate Labs <hello@ligate.io>`, version pulls from `env!("CARGO_PKG_VERSION")` (so it tracks the workspace version instead of being hardcoded to `0.1.0`), license set to `Apache-2.0 OR MIT`. Description is DA-agnostic per the project's DA-isolation policy. Visible via `curl https://rpc.ligate.io/v1/openapi-v3.json | jq .info` and on the swagger UI page header. (#377)
+- `scripts/backup-rocksdb.sh`: cold-snapshot path (daily + weekly tiers) now uses `systemctl stop --no-block` followed by SIGKILL escalation after a 3s grace window. Fixes a 5-min cold-backup downtime caused by two stacked bugs: (1) upstream Sovereign SDK shutdown hang where the process logs "shutdown complete" within ~1s but doesn't actually exit, eating `TimeoutStopSec=300`; (2) using bare `systemctl kill` triggered `Restart=on-failure` auto-restart, defeating the cold snapshot by re-starting the chain mid-rsync. Verified live: cold backup downtime dropped from 5.5 min to 32 s. (#375)
+- `scripts/backup-rocksdb.sh`: manifest height capture now prefers the chain RPC (`/v1/ledger/slots/latest`) over the Prometheus metrics gauge (`ligate_block_height`). RPC returns the real head height as soon as the HTTP server is up; the metrics gauge takes ~2 min to populate after a cold-backup restart, which made the post-restore manifest record `"unknown"` even though the chain was healthy. (#375)
+- `ops/backup/sudoers.d/ligate-backup`: extended NOPASSWD rule set to allow `systemctl stop --no-block`, `kill`, `kill --signal=SIGTERM`, `kill --signal=SIGKILL` against `ligate-node.service`. sudo matches by exact arg list, so each escalation variant needs its own rule. Same narrow service scope. (#375)
+- Documentation prose: em dashes replaced with colons / semicolons / parens across CHANGELOG `[0.1.2]` section, `docs/development/public-devnet-deploy.md`, `docs/development/runbooks/backup-restore.md`, `monitoring/grafana/README.md`, `ops/backup/systemd/ligate-backup@.service`, and `scripts/restore-rocksdb.sh`. No semantic shifts. (#378)
+
+### Fixed
+
+- Swagger UI at `https://rpc.ligate.io/v1/swagger-ui/` previously rendered blank because the bundled `swagger-initializer.js` hardcodes its OpenAPI spec URL as `/openapi-v3.json` (without the `/v1` prefix the chain actually serves it under). Fixed operator-side with a Caddy `handle /openapi-v3.json { rewrite * /v1/openapi-v3.json; reverse_proxy 127.0.0.1:12346 }` block; the chain binary itself doesn't change. Caddyfile snippet codified in `docs/development/public-devnet-deploy.md`. (#376)
+
 ## [0.1.2] - 2026-05-17
 
 Launch-eve hardening pass: chain ops infrastructure (backups, monitoring, persistent-disk migration, runbook fixes) plus the workspace version bump that makes the binary self-report its real version (was `0.0.1` regardless of git tag).
