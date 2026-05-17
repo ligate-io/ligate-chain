@@ -23,13 +23,20 @@
           "type": "prometheus",
           "uid": "grafanacloud-prom"
         },
-        "query": "label_values(up{job=\"celestia-light\"}, instance)",
+        "query": "label_values(celestia_node_da_signer_balance_utia, instance)",
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
         },
         "includeAll": true,
-        "refresh": 2
+        "refresh": 2,
+        "definition": "label_values(celestia_node_da_signer_balance_utia, instance)",
+        "allValue": ".*"
       },
       {
         "name": "window",
