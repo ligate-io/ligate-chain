@@ -1,9 +1,9 @@
 //! REST extractor fuzz target for `/attestations/{attestation_id}`.
 //!
-//! `AttestationId` is the compound `<schema_id>:<payload_hash>` form,
-//! so the path extractor exercises both the colon-delimited parse
-//! AND the underlying two-identifier decoders. Strictly more surface
-//! than the `rest_schema_path` and `rest_attestor_set_path` siblings.
+//! Since v0.2.0, `AttestationId` is a single 32-byte bech32m id with
+//! the `lat` HRP (`lat1...`); this fuzz target exercises the same
+//! macro-generated `FromStr` path as `SchemaId` / `AttestorSetId` /
+//! `PayloadHash`, with adversarial percent-encoded inputs in the URL.
 //!
 //! Tracking issue: ligate-io/ligate-chain#157.
 
@@ -41,9 +41,9 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     if s.len() > 8192 {
-        // `AttestationId` is roughly 2x the size of a single id
-        // (schema + payload), so the cap doubles vs the single-id
-        // siblings to give the fuzzer headroom for "long but valid".
+        // 8KB cap: well beyond any plausible bech32 `lat1...` length
+        // (~63 chars), enough headroom for percent-encoded adversarial
+        // inputs the URL parser might still accept.
         return;
     }
     let encoded: String = s

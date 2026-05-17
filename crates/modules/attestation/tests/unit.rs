@@ -295,15 +295,31 @@ fn attestor_set_derive_id_depends_on_members() {
     assert_ne!(a, b);
 }
 
-// ----- AttestationId compound ------------------------------------------------
+// ----- AttestationId (lat1...) -----------------------------------------------
 
 #[test]
-fn attestation_id_from_pair_concats_correctly() {
+fn attestation_id_from_pair_is_deterministic_sha256() {
+    use sha2::{Digest, Sha256};
     let sid = sample_schema_id(0xAA);
     let ph = sample_payload_hash(0xBB);
     let id = AttestationId::from_pair(&sid, &ph);
-    assert_eq!(id.schema_id, sid);
-    assert_eq!(id.payload_hash, ph);
+
+    let mut hasher = Sha256::new();
+    hasher.update(sid.as_bytes());
+    hasher.update(ph.as_bytes());
+    let expected: [u8; 32] = hasher.finalize().into();
+    assert_eq!(id.as_bytes(), &expected);
+}
+
+#[test]
+fn attestation_id_from_pair_is_position_sensitive() {
+    // Swapping the two inputs must produce a different id; otherwise
+    // attestations under different (schema, payload) pairs could collide.
+    let a = sample_schema_id(0x11);
+    let b = sample_payload_hash(0x22);
+    let id_ab = AttestationId::from_pair(&a, &PayloadHash::from(*b.as_bytes()));
+    let id_ba = AttestationId::from_pair(&SchemaId::from(*b.as_bytes()), &PayloadHash::from(*a.as_bytes()));
+    assert_ne!(id_ab, id_ba);
 }
 
 #[test]

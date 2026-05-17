@@ -1,5 +1,5 @@
-//! Fuzz `AttestationId::from_str` (the colon-separated
-//! `<lsc1...>:<lph1...>` form used in REST paths).
+//! Fuzz `AttestationId::from_str` (the single-bech32 `lat1...` form
+//! used in REST paths since v0.2.0).
 //!
 //! On a successful parse, also assert Display round-trips back to
 //! the same string. This catches asymmetric parsing bugs where
