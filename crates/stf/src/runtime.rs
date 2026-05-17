@@ -234,6 +234,27 @@ where
     }
 
     fn openapi_spec(&self) -> Option<sov_modules_api::prelude::utoipa::openapi::OpenApi> {
-        self.0.openapi_spec()
+        // Sovereign SDK's default `openapi_spec()` populates the `info`
+        // block with upstream branding (title "Sovereign SDK Rollup JSON
+        // API", contact info@sovereign.xyz, etc.) and pins the version
+        // string to "0.1.0" regardless of our Cargo.toml. Override the
+        // info section with Ligate Chain identity so the swagger UI at
+        // /v1/swagger-ui/ shows what's actually serving the API.
+        let mut spec = self.0.openapi_spec()?;
+        use sov_modules_api::prelude::utoipa::openapi::{Contact, Info, License};
+        let mut info = Info::new("Ligate Chain JSON API", env!("CARGO_PKG_VERSION"));
+        info.description = Some(
+            "REST API for Ligate Chain, the attestation-native rollup. \
+             Mounts the chain's ledger, runtime, and sequencer surfaces under /v1."
+                .to_string(),
+        );
+        let mut contact = Contact::new();
+        contact.name = Some("Ligate Labs".to_string());
+        contact.email = Some("hello@ligate.io".to_string());
+        contact.url = Some("https://github.com/ligate-io/ligate-chain".to_string());
+        info.contact = Some(contact);
+        info.license = Some(License::new("Apache-2.0 OR MIT"));
+        spec.info = info;
+        Some(spec)
     }
 }
