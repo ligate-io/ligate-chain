@@ -318,7 +318,8 @@ fn attestation_id_from_pair_is_position_sensitive() {
     let a = sample_schema_id(0x11);
     let b = sample_payload_hash(0x22);
     let id_ab = AttestationId::from_pair(&a, &PayloadHash::from(*b.as_bytes()));
-    let id_ba = AttestationId::from_pair(&SchemaId::from(*b.as_bytes()), &PayloadHash::from(*a.as_bytes()));
+    let id_ba =
+        AttestationId::from_pair(&SchemaId::from(*b.as_bytes()), &PayloadHash::from(*a.as_bytes()));
     assert_ne!(id_ab, id_ba);
 }
 
