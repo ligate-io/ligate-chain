@@ -40,8 +40,8 @@ Verify the binary speaks to the public devnet:
 ```bash
 $ ligate --rpc https://rpc.ligate.io info
 chain_id:   ligate-devnet-1
-chain_hash: lsch1amq80arndh6zehd4gu3kg6x66vh3l45z924dr6pzeevkxp649heqe5c70v
-version:    0.1.3
+chain_hash: __NEW_CHAIN_HASH_PENDING_REGENESIS__
+version:    0.2.0
 ```
 
 Set `LIGATE_RPC=https://rpc.ligate.io` in your shell so subsequent commands don't need `--rpc`.
