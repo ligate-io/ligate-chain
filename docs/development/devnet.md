@@ -109,8 +109,10 @@ You will need:
   will pick this up automatically on `cargo build`.
 - **RocksDB system dependencies** (required transitively by the Sovereign
   SDK state stores):
-  - Ubuntu / Debian: `sudo apt install clang libclang-dev librocksdb-dev`
-  - macOS: `brew install rocksdb` (Apple Silicon and Intel)
+  - Ubuntu / Debian: `sudo apt install clang libclang-dev` (the
+    workspace's `librocksdb-sys` builds the C++ library statically;
+    no system `librocksdb-dev` package needed)
+  - macOS: nothing to install (Apple's libclang ships with Xcode CLT)
 - **Celestia light node** running against `mocha`, reachable on its local
   RPC. See the [Celestia light-node docs](https://docs.celestia.org/how-to-guides/light-node)
   for install steps. The sequencer and any full nodes need this; attestor
@@ -271,14 +273,14 @@ The end-to-end flow for a single Themisra attestation on devnet:
 5. **Query**. Read the attestation back via REST:
 
    ```
-   GET /modules/attestation/attestations/{schemaId}:{payloadHash}
+   GET /v1/modules/attestation/attestations/{schemaId}:{payloadHash}
    ```
 
    Returns the on-chain record: schema ID, payload hash, submitter,
    timestamp, validated signatures. Companion endpoints:
-   `GET /modules/attestation/schemas/{schemaId}` and
-   `GET /modules/attestation/attestor-sets/{attestorSetId}`. Wired in
-   PR #93. Range / by-submitter / aggregation queries land in the
+   `GET /v1/modules/attestation/schemas/{schemaId}` and
+   `GET /v1/modules/attestation/attestor-sets/{attestorSetId}`. Wired
+   in PR #93. Range / by-submitter / aggregation queries land in the
    indexer service (#91), not the node.
 
 The `(schema_id, payload_hash)` pair is write-once. Resubmitting the same
@@ -443,7 +445,7 @@ The chain itself is live: `Schema`, `AttestorSet`, `Attestation`, the
 `CallMessage` enum, state transitions, ed25519 signature validation,
 fee routing, runtime composition, Celestia DA, and the Risc0 inner
 zkVM are all implemented against Sovereign SDK rev
-`f89964c66bcfb6a31712e43278378b54c33d3779`. The gaps above are
+`f6cd64749edc56428fbeb7f22702458b0afb698a`. The gaps above are
 **around** the chain: hosted infrastructure, ops tooling, indexing,
 and the v1 economic-trust module set.
 

@@ -461,7 +461,7 @@ Custom routes do not currently support historical queries; they always read the 
 
 | Path | Returns |
 |---|---|
-| `GET /modules` | A list of every mounted module |
+| `GET /v1/modules` | A list of every mounted module |
 | `GET /v1/modules/{moduleName}` | Metadata for one module: state-item names, custom-route paths |
 
 Use `/v1/modules/{moduleName}` to inspect a module's state surface without grepping the runtime composition by hand.
