@@ -131,8 +131,14 @@ fn snapshot_pubkey() {
     );
 }
 
-// --- AttestationId compound id ---------------------------------------------
-
+// --- AttestationId (lat1...) ----------------------------------------------
+//
+// v0.2.0 wire-format change: AttestationId is now a single 32-byte hash
+// `SHA-256(schema_id_bytes ‖ payload_hash_bytes)` with the `lat` bech32
+// prefix, replacing the 64-byte compound `(schema_id, payload_hash)`
+// struct used in v0.1.x. The snapshot value below is the SHA-256 of
+// `[0x11; 32] ‖ [0x33; 32]`; if you change `AttestationId::from_pair`
+// (or the bech32 HRP) you'll see this hex change.
 #[test]
 fn snapshot_attestation_id() {
     let id =
@@ -140,8 +146,7 @@ fn snapshot_attestation_id() {
     assert_snapshot(
         "AttestationId",
         &id,
-        "1111111111111111111111111111111111111111111111111111111111111111\
-         3333333333333333333333333333333333333333333333333333333333333333",
+        "b0dcb09af5496e779e60b21109a718475091191efc7a8638b01d51c622fc9128",
     );
 }
 

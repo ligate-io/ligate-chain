@@ -207,8 +207,8 @@ proptest! {
     #[test]
     fn attestation_id_str_decoder_never_panics(s in ".*") {
         // Arbitrary UTF-8 strings; FromStr must error cleanly on
-        // anything that's not a valid `<schema_id>:<payload_hash>`
-        // pair, not panic.
+        // anything that's not a valid `lat1...` bech32m string, not
+        // panic.
         let _: Result<AttestationId, _> = s.parse();
     }
 }

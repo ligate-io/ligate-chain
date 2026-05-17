@@ -148,10 +148,12 @@ The chain's REST API is **point lookups only by design**. Three endpoints, all s
 ```
 GET /modules/attestation/schemas/{schema_id}                       -> Schema | 404
 GET /modules/attestation/attestor-sets/{attestor_set_id}           -> AttestorSet | 404
-GET /modules/attestation/attestations/{schema_id}:{payload_hash}   -> Attestation | 404
+GET /modules/attestation/attestations/{attestation_id}             -> Attestation | 404
 ```
 
 Wired in [PR #93](https://github.com/ligate-io/ligate-chain/pull/93) (closes the read-side of [#21](https://github.com/ligate-io/ligate-chain/issues/21)). 400 on malformed Bech32, 404 on missing key, 200 with typed JSON body otherwise.
+
+`attestation_id` is a single bech32m string with the `lat` HRP (`lat1…`), derived as `SHA-256(schema_id_bytes ‖ payload_hash_bytes)`. Pre-v0.2.0 used the compound `<schema_id>:<payload_hash>` (`lsc1…:lph1…`) form; the v0.2.0 cut collapsed it to a single bech32 string for consistency with `lsc`/`las`/`lph`/`lpk`. The schema and payload-hash components remain queryable from the returned `Attestation` body.
 
 ### What's deliberately not here
 

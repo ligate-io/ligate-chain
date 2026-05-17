@@ -7,19 +7,20 @@
 //! - `GET /schemas/{schemaId}` — fetch one schema
 //! - `GET /attestor-sets/{attestorSetId}` — fetch one attestor set
 //! - `GET /attestations/{attestationId}` — fetch one attestation by
-//!   `<schemaId>:<payloadHash>`
+//!   its `lat1…` bech32m id (v0.2.0+; was the colon-joined
+//!   `<schemaId>:<payloadHash>` form pre-v0.2.0).
 //!
 //! `list_by_schema` is intentionally **not** in this module. The
-//! attestation `StateMap<AttestationId, Attestation<S>>` is keyed by a
-//! 64-byte compound id, which is fine for point lookups but bad for
-//! filter-by-schema iteration without a secondary index. Adding the
-//! index touches the write path on `SubmitAttestation` plus the
-//! storage schema, so it ships separately. See the follow-up issue
-//! linked from #21.
+//! attestation `StateMap<AttestationId, Attestation<S>>` is keyed by
+//! the receipt id (32 bytes since v0.2.0), which is fine for point
+//! lookups but bad for filter-by-schema iteration without a secondary
+//! index. Adding the index touches the write path on
+//! `SubmitAttestation` plus the storage schema, so it ships
+//! separately. See the follow-up issue linked from #21.
 //!
 //! All three routes return a typed JSON body, 404 on missing key, 400
 //! on malformed id. Paths use the canonical Bech32 string forms
-//! (`lsc1…`, `las1…`, `lsc1…:lph1…`) since those are the strings the
+//! (`lsc1…`, `las1…`, `lat1…`) since those are the strings the
 //! protocol exposes everywhere else (genesis files, attestation
 //! receipts, error messages).
 

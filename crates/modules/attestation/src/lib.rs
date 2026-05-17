@@ -177,38 +177,28 @@ mod pubkey_mod {
 }
 pub use pubkey_mod::{PubKey, PubKeyBech32};
 
-/// Compound attestation receipt identifier: `(schema_id, payload_hash)`.
-///
-/// Hand-rolled (rather than macro-generated like the 32-byte id types)
-/// because Serde's blanket array impls don't cover `[u8; 64]`. Storing
-/// the two halves as separate fields sidesteps that without losing the
-/// "single typed key" property the state-map layer needs.
-///
-/// Display/FromStr roundtrip uses a `<schema_id>:<payload_hash>`
-/// colon-separated form, where each side is the bech32 encoding of
-/// the underlying `SchemaId` / `PayloadHash`. Suitable for explorer
-/// URLs and CLI surfaces; bech32 round-trips through it cleanly.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Eq,
-    Hash,
-    BorshSerialize,
-    BorshDeserialize,
-    Serialize,
-    Deserialize,
-)]
-pub struct AttestationId {
-    /// Schema this attestation is bound to.
-    pub schema_id: SchemaId,
-    /// Caller-computed digest of the off-chain payload.
-    pub payload_hash: PayloadHash,
+// AttestationId: a single 32-byte hash with the `lat` bech32 prefix,
+// derived from the `(schema_id, payload_hash)` pair via SHA-256.
+//
+// Convention shift from v0.1.x: prior versions used a compound
+// `<schema_id>:<payload_hash>` (colon-joined `lsc1...:lph1...`)
+// display form backed by a hand-rolled 64-byte struct. v0.2.0
+// collapses this to a single 32-byte hash for consistency with the
+// rest of the typed-id family (`lsc`/`las`/`lph`/`lpk`). The two
+// components remain recoverable from the stored [`Attestation`]
+// record (it keeps `schema_id` and `payload_hash` as fields).
+mod attestation_id_mod {
+    sov_modules_api::impl_hash32_type!(AttestationId, AttestationIdBech32, "lat");
 }
+pub use attestation_id_mod::{AttestationId, AttestationIdBech32};
 
 impl AttestationId {
     /// Build an [`AttestationId`] from its `(schema_id, payload_hash)` pair.
+    ///
+    /// Computed as `SHA-256(schema_id_bytes ‖ payload_hash_bytes)` where
+    /// each side is the raw 32-byte underlying hash, NOT the bech32
+    /// display form. This makes the receipt id deterministic and
+    /// independent of any future change to the bech32 encoding.
     ///
     /// # Example
     ///
@@ -221,46 +211,20 @@ impl AttestationId {
     /// let payload_hash = PayloadHash::from([0x33u8; 32]);
     /// let id = AttestationId::from_pair(&schema_id, &payload_hash);
     ///
-    /// // Display-form is `<schema_id>:<payload_hash>` with both halves
-    /// // bech32-encoded, suitable for explorer URLs and CLI surfaces.
+    /// // Display form is a single bech32m string with the `lat` HRP.
     /// let s = id.to_string();
-    /// assert!(s.contains(':'));
+    /// assert!(s.starts_with("lat1"));
     ///
     /// // Round-trips cleanly through FromStr.
     /// let parsed = AttestationId::from_str(&s).expect("display form parses");
     /// assert_eq!(parsed, id);
     /// ```
     pub fn from_pair(schema_id: &SchemaId, payload_hash: &PayloadHash) -> Self {
-        Self { schema_id: *schema_id, payload_hash: *payload_hash }
-    }
-}
-
-impl core::fmt::Display for AttestationId {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}:{}", self.schema_id, self.payload_hash)
-    }
-}
-
-impl core::str::FromStr for AttestationId {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (sid, ph) = s
-            .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("expected `<schema_id>:<payload_hash>`"))?;
-        Ok(Self { schema_id: SchemaId::from_str(sid)?, payload_hash: PayloadHash::from_str(ph)? })
-    }
-}
-
-impl schemars::JsonSchema for AttestationId {
-    fn schema_name() -> String {
-        "AttestationId".to_string()
-    }
-
-    fn json_schema(gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        // Surface as a string in the schema; we'll regex-validate the
-        // colon-separated form when the REST API hits real users.
-        <String as schemars::JsonSchema>::json_schema(gen)
+        let mut hasher = Sha256::new();
+        hasher.update(schema_id.as_bytes());
+        hasher.update(payload_hash.as_bytes());
+        let digest: [u8; 32] = hasher.finalize().into();
+        Self::from(digest)
     }
 }
 

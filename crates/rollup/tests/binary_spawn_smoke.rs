@@ -416,8 +416,9 @@ async fn wait_for_attestation(
     schema_id: &SchemaId,
     payload_hash: &PayloadHash,
 ) {
-    // Compound id per the chain's REST route: `{schemaId}:{payloadHash}`.
-    let url = format!("{base}/v1/modules/attestation/attestations/{schema_id}:{payload_hash}");
+    // Single bech32 id per the v0.2.0 REST route: `{lat1...}`.
+    let id = attestation::AttestationId::from_pair(schema_id, payload_hash);
+    let url = format!("{base}/v1/modules/attestation/attestations/{id}");
     poll_for_200(client, &url, "attestation").await;
 }
 

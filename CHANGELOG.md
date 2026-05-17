@@ -8,6 +8,28 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-17
+
+**Breaking wire-format change.** `AttestationId` is now a single 32-byte hash with the `lat` bech32m prefix (`lat1…`), replacing the pre-v0.2.0 compound `<schema_id>:<payload_hash>` (`lsc1…:lph1…`) form. The on-chain `StateMap<AttestationId, Attestation<S>>` key encoding therefore changes, which means **this release requires a re-genesis** on any chain that has already submitted attestations. devnet-1 is being re-genesised as part of this cut; no historic devnet state survives.
+
+`AttestationId::from_pair(schema_id, payload_hash)` is the canonical constructor: computes `SHA-256(schema_id_bytes ‖ payload_hash_bytes)` and wraps the result in the macro-generated `lat`-prefixed newtype. The `(schema_id, payload_hash)` components remain queryable: they are still stored as fields on the `Attestation<S>` value returned by `GET /v1/modules/attestation/attestations/{lat1…}`.
+
+Why this ships now: the v0.1.x compound id was the odd duck in an otherwise uniform `lsc`/`las`/`lph`/`lpk`/`lat` typed-id family (every other Ligate identifier is a single bech32m string). The compound form was hand-rolled around a Serde-blanket-impl gap on `[u8; 64]`; switching to the 32-byte hash collapses display width by half (~60 chars vs ~120), drops the `:` URL-encoding edge case, and gives partners a single regex to validate against. The migration cost is fully borne pre-public-announce; no external partner has hit live devnet yet.
+
+### Changed
+
+- `crates/modules/attestation/src/lib.rs`: `AttestationId` replaced with the macro-generated newtype `mod attestation_id_mod { impl_hash32_type!(AttestationId, AttestationIdBech32, "lat"); }`. `from_pair` now derives a 32-byte SHA-256 digest of `schema_id ‖ payload_hash` instead of storing the two halves as separate struct fields. Display becomes `lat1…`. The old `Display::fmt` (`{schema_id}:{payload_hash}`) + hand-rolled `FromStr` / `JsonSchema` impls are gone (the macro provides the equivalents).
+- `crates/modules/attestation/src/query.rs`: route doc updated; the `Path<AttestationId>` extractor now expects a single `lat1…` segment (the underlying `AttestationId::from_str` is macro-generated bech32m).
+- `crates/modules/attestation/tests/borsh_snapshot.rs`: `AttestationId` snapshot updated to the new 32-byte hash (`b0dcb09af5496e779e60b21109a718475091191efc7a8638b01d51c622fc9128` = `SHA-256([0x11; 32] ‖ [0x33; 32])`). Any wire-format drift will break this test.
+- `crates/modules/attestation/tests/unit.rs`: replaced the field-access invariants (`id.schema_id == sid`, `id.payload_hash == ph`) with a determinism check (matches direct `Sha256::new().update(...)` computation) and a position-sensitivity check (`from_pair(a, b) != from_pair(b, a)` catches collisions across mirrored inputs).
+- `crates/rollup/tests/binary_spawn_smoke.rs`: REST polling URL now uses `format!("{base}/v1/.../attestations/{id}", id = AttestationId::from_pair(...))` instead of literal `{schema_id}:{payload_hash}` interpolation.
+- `docs/protocol/attestation-v0.md`: appendix REST table + section explaining the new `lat1…` id derivation.
+- `crates/modules/attestation/fuzz/fuzz_targets/{rest_attestation_path,attestation_id_parse}.rs`: harness module docs updated to describe the bech32m single-id parse surface.
+
+### Migration
+
+Re-genesis required on any node that booted against `v0.1.x` and has at least one attestation in state. Steps documented in `docs/development/runbooks/chain-id-bump.md`; in practice for devnet-1: stop the node, wipe `LIGATE_STORAGE_DIR`, restart with the new binary against the same `devnet-1/genesis/` (genesis bytes unchanged), re-run the bootstrap-cli ceremony to re-register canonical schemas + attestor sets. `chain_hash` MAY shift if the state-tree's empty-map type identity is part of the genesis root computation; verify against the post-restart `/v1/rollup/info` output and re-pin `constants.toml` accordingly.
+
 ## [0.1.3] - 2026-05-17
 
 Same-day follow-up to v0.1.2. Four PRs: cold-backup downtime fix, swagger UI wiring, OpenAPI spec branding override, and a prose-style scrub (em dashes out across the docs landed in v0.1.2). `chain_hash` unchanged; binary swap is in-place.
