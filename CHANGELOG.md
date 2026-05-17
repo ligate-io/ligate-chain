@@ -8,6 +8,36 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.1.2-devnet] - 2026-05-17
+
+Launch-eve hardening pass: chain ops infrastructure (backups, monitoring, persistent-disk migration, runbook fixes) plus the workspace version bump that makes the binary self-report `0.1.2-devnet` instead of the workspace-default `0.0.1`. No state-breaking changes; `chain_hash` unchanged. Operators upgrading from `v0.1.1-devnet` swap the binary in place — no re-genesis.
+
+**State-preservation note.** `attestation.json` / genesis bytes / `chain_hash` all unchanged from `v0.1.1-devnet`. Operators deploying this binary to an existing `devnet-1` VM keep their RocksDB state intact across the swap.
+
+### Added
+
+- `monitoring/grafana/`: two production dashboards committed to repo as canonical source. `ligate-operator.json` (Prometheus-backed, 9 rows including the new Host VM row with CPU / RAM / state disk / root disk / load / uptime / network + disk-I/O timeseries) and `ligate-investor.json` (Infinity-backed business metrics). Re-import + export procedures documented in `monitoring/grafana/README.md`. (#361)
+- `ops/backup/`: scheduled RocksDB snapshots to a private GCS bucket actually deployed end-to-end. Hourly tier (every 15 min, 7d retention via lifecycle), daily tier (03:30 UTC, 60d), weekly tier (Sun 04:00 UTC, 365d). systemd template unit (`ligate-backup@.service` with `Environment=TIER=%i`) so each timer fires under its own tier prefix in GCS. (#365, #366)
+- `monitoring/grafana/ligate-operator.json` gains 6 host-VM stat panels powered by Alloy's `prometheus.exporter.unix` (CPU%, RAM%, persistent-disk fill %, boot-disk fill %, load1, uptime). (#364, #370)
+- `ops/backup/sudoers.d/ligate-backup`: narrow drop-in granting the `ligate` user `NOPASSWD` for `systemctl stop|start ligate-node.service` only. Required for the cold-snapshot path used by daily + weekly tiers. (#372)
+- `docs/development/public-devnet-deploy.md` gains a `--mode follower` operator step (the follower guard from #243/#248 was already in code; the runbook just didn't mention it). Same step adds the sudoers install for cold-backup-capable hosts. (#372)
+
+### Changed
+
+- `scripts/backup-rocksdb.sh`: daily + weekly tiers now run in **cold** mode (briefly stop ligate-node for a consistent rsync). Fixes a NOMT mid-write inconsistency that caused `nomt-1.0.3` to panic on restore (`assertion failed: pn.0 < max_pn` in the beatree free-list allocator) on snapshots taken while NOMT was writing `bbn`/`ht`/`ln`/`meta`/`wal`. Hourly stays hot/best-effort for fast rollback. Pre-stop height capture so the manifest records the snapshot's real height even on cold runs. (#372)
+- `scripts/backup-rocksdb.sh`: `rsync -a --sparse` (was `-a` alone) preserves NOMT sparse-file holes on copy — each local snapshot now ~1.2 GB instead of ~5 GB. (#368)
+- `scripts/backup-rocksdb.sh`: SIGPIPE bug in the manifest height-capture pipeline. `set -o pipefail` + `awk '… exit'` was making `curl` exit non-zero, which fired the `|| echo "unknown"` fallback AND captured awk's output, producing `"block_height": "15187\nunknown"` (literal newline in the JSON string value). Switched to a `<<<` here-string so awk reads from a temp file instead of a live pipe — no SIGPIPE possible regardless of when awk exits. (#368)
+- `scripts/restore-rocksdb.sh`: handles both flat and double-nested GCS object layouts. `backup-rocksdb.sh` uploads via `gcloud storage cp -r SRC/ DST/`, which double-nests the timestamp (`<HOSTNAME>/<TIER>/<TS>/<TS>/...`). Restore now detects and flattens. Also re-derives `HOME` from the effective user so `gcloud` finds its config when the script runs via `sudo -u ligate` from another user's session. (#371)
+- `docs/development/public-devnet-deploy.md`: VM image flipped from Debian 12 to Ubuntu 24.04 (the released `ligate-node` binary links GLIBC 2.39; Debian 12 has 2.36 and fails to load the binary). Celestia bumped to v0.30.2 (new `celestia-node_Linux_x86_64.tar.gz` artifact layout). VM sizing table updated to the actual prod shape. Adds an explicit "OS choice" note explaining why Ubuntu. (#371)
+- `docs/development/public-devnet-deploy.md`: cloud-init pre-creates `/var/lib/ligate/rocksdb` so the operator can symlink the chain's storage path into it before first boot. Step 3 of the operator-still-has-to list gains the symlink command. Without this, the chain writes state to `/dev/root` on the 20 GB boot disk and a VM image rebuild loses chain history. (#369)
+- `docs/development/runbooks/backup-restore.md`: full rewrite of the one-time setup section to reflect what actually works (VM scope bump for storage write, since `iam.disableServiceAccountKeyCreation` blocks the documented SA-JSON-key path). Adds in-place migration procedure (done on `ligate-devnet-1-sequencer` 2026-05-17, post-mortem informs the runbook for future hosts). Adds online persistent-disk resize procedure. Known-limitations table at the end documents remaining followups. (#365, #367, #368)
+- `Cargo.toml`: workspace version bumped from `0.0.1` to `0.1.2-devnet`. Previously the workspace-default `0.0.1` propagated to every binary's self-reported version (including what `/v1/info` surfaces) regardless of the git tag. The "tagged release ceremony" pattern that justified the gap was internal-only convention — for the external `/v1/info` consumer the gap was confusing ("why does it report 0.0.1 when the tag is v0.1.1?"). Going forward, workspace version IS the release version and follows the tag.
+
+### Fixed
+
+- `ligate-node` systemd unit: `TimeoutStopSec=300` (was the systemd default of 90s). RocksDB compaction + WAL flush on shutdown can take 2-3 min on a hot state DB; the default triggered a SIGKILL during the `v0.1.1-devnet` swap on 2026-05-16. (#364)
+- `/etc/alloy/config.alloy` on the chain VM: adds `prometheus.exporter.unix "node"` (in-process node_exporter) + matching `prometheus.scrape "node"`. 265 `node_*` series now flow to `grafanacloud-ligate-prom` under `job="integrations/unix"`, powering the new Host VM dashboard row. (#364)
+
 ## [0.1.1-devnet] - 2026-05-16
 
 Pre-launch alignment release. Two operator-visible changes (genesis re-substitution onto the round-2 operator key, sig-verify error UX) and a handful of infrastructure-side tightening (SDK fork pin alignment with the api repo, release-workflow tagging behaviour, pre-commit gate, brand mark refresh).
