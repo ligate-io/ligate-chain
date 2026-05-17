@@ -90,7 +90,41 @@ esac
 
 if [ "$COLD" = "true" ]; then
     echo "==> Cold snapshot: pausing ligate-node for a consistent rsync"
-    sudo systemctl stop ligate-node.service
+    # Two-part shutdown to dodge two bugs:
+    #
+    # 1. Upstream Sovereign SDK hang: ligate-node logs "shutdown
+    #    complete" within ~1s of SIGTERM but the process doesn't
+    #    actually exit (surfaced 2026-05-17 03:30 UTC when the first
+    #    scheduled daily backup hit `TimeoutStopSec=300` and took
+    #    ~5.5 min of chain downtime). SIGKILL is safe in practice:
+    #    RocksDB + NOMT WALs recover cleanly on next start,
+    #    chain_hash unchanged across the forced-kill events we've
+    #    observed.
+    #
+    # 2. systemd auto-restart from `Restart=on-failure`: a bare
+    #    `systemctl kill` makes systemd see the process exit as a
+    #    failure and restart ligate-node automatically — the rsync
+    #    then runs against a LIVE chain again, defeating the cold
+    #    snapshot. Using `systemctl stop --no-block` tells systemd
+    #    "we are intentionally stopping, don't restart", then we
+    #    escalate to SIGKILL once the SIGTERM grace window expires.
+    sudo systemctl stop --no-block ligate-node.service
+    # Give graceful-shutdown logs ~3s to flush. The chain finishes
+    # its shutdown sequence well within 1s; 3s is a defensive margin.
+    sleep 3
+    # Escalate: SIGKILL the process if it hasn't exited yet (it
+    # almost certainly hasn't, per bug #1). systemd is in "stopping"
+    # state from the --no-block stop above, so this doesn't trigger
+    # the Restart=on-failure path.
+    sudo systemctl kill --signal=SIGKILL ligate-node.service 2>/dev/null || true
+    # Wait for the unit to actually transition to inactive/failed so
+    # the rsync runs against a quiescent storage directory.
+    for _ in $(seq 1 30); do
+        STATE=$(systemctl show ligate-node.service -p ActiveState --value)
+        [ "$STATE" = "inactive" ] || [ "$STATE" = "failed" ] && break
+        sleep 0.5
+    done
+    echo "    ligate-node stopped (state=${STATE:-unknown})"
 fi
 
 # `--sparse` preserves sparseness on copy. RocksDB NOMT files contain
