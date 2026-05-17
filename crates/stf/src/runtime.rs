@@ -244,7 +244,7 @@ where
         use sov_modules_api::prelude::utoipa::openapi::{Contact, Info, License};
         let mut info = Info::new("Ligate Chain JSON API", env!("CARGO_PKG_VERSION"));
         info.description = Some(
-            "REST API for Ligate Chain — the attestation-native rollup. \
+            "REST API for Ligate Chain, the attestation-native rollup. \
              Mounts the chain's ledger, runtime, and sequencer surfaces under /v1."
                 .to_string(),
         );
