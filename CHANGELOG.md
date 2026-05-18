@@ -10,7 +10,15 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [0.2.1] - 2026-05-18
 
-Cosmetic + operator-UX patch release. `chain_hash` unchanged; safe binary swap in place.
+Cosmetic + operator-UX + ops-tooling patch release. `chain_hash` unchanged; safe binary swap in place. Bundles the openapi `info`-block fix, the swagger-ui v5 swap (both #393/#394), plus three operator-side additions that make devnet-1 reproducible: live Caddyfile committed, swagger-ui installer scripted, TIA exporter extended with chain-readiness and a dead-man's switch.
+
+### Added
+
+- `ops/caddy/Caddyfile`: live `/etc/caddy/Caddyfile` from the devnet-1 sequencer VM committed to repo as the canonical source. Documents the Cloudflare-only edge allowlist (defense-in-depth against direct-to-origin IP scans), the openapi-v3.json path rewrite (browser hits `/openapi-v3.json` without `/v1/` prefix; Caddy rewrites internally), the swagger-ui v5 disk-served override, and the `/metrics` lockdown. Operators rebuilding the VM now reach for the repo's Caddyfile instead of reading state off a running VM. Drop the swagger-ui v5 override block once Sovereign SDK upgrades its bundled UI. Closes ligate-io/ligate-chain#394 (companion to the docs update below).
+- `ops/install/swagger-ui-dist.sh`: idempotent installer for swagger-ui-dist@5.17.14 into `/var/www/swagger-ui/`. Downloads the upstream tarball, strips two path components so `dist/*` lands at the install root, writes a custom `swagger-initializer.js` that points the bundle at `/openapi-v3.json` with `tryItOutEnabled: true`, chowns to `caddy:caddy` (falls back to `chmod a+r` if the user isn't present on the host). Env-configurable for `SWAGGER_UI_VERSION`, `INSTALL_DIR`, `OWNER_USER`, `OWNER_GROUP`, `SPEC_URL`. Replaces the manual `curl | tar` recipe in the runbook. Same #394 cleanup track.
+- `ops/exporters/celestia-tia/celestia-tia-exporter.py`: new `ligate_ready{instance}` gauge by polling the chain's `/v1/health/ready` (default `http://127.0.0.1:12346/v1/health/ready`, 3s timeout) on the same cadence as the balance poll. Gives the `ReadyFalse` alert in `ops/prometheus/alerts.yaml` a metric to fire on without standing up a blackbox-exporter. Companion gauge `ligate_ready_last_check_seconds` exposes the last-probe timestamp for staleness debugging.
+- `ops/exporters/celestia-tia/celestia-tia-exporter.py`: dead-man's-switch gauge `celestia_tia_exporter_alive{instance,account}` flips to 0 if no balance poll has succeeded in `DEAD_MANS_SWITCH_SEC` (default 300s). Lets alert rules separate "balance is low" from "we have no idea what the balance is" (the latter usually means the celestia-light node is dead, not the wallet).
+- `ops/exporters/celestia-tia/celestia-tia-exporter.py`: per-account `account` label (default `da-signer`, configurable via `DA_SIGNER_ACCOUNT` env) on `celestia_node_da_signer_balance_utia` + the three exporter-internal gauges. Future-proofing for the multi-signer split (hot/cold or rotation); today it's a single value, but dashboards group by friendly name instead of by a 45-char bech32. Follow-up #397 tracks the chain-side `ligate_da_submission_failures_total` counter the SDK has to emit (out of scope for this exporter).
 
 ### Fixed
 
