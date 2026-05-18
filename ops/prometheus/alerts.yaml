@@ -177,51 +177,55 @@ groups:
       # devnet burn rate of ~0.15-0.5 TIA/day (much lower than the
       # mainnet-volume 5/day estimate the runbook was written against).
       #
-      # Both warn AND page thresholds tightened on 2026-05-17 because
-      # the wallet was sitting at ~12.95 TIA pre-top-up and the prior
-      # thresholds (50 warn / 12 page) would have fired immediately
-      # and continuously until top-up. Restore both to their original
-      # values (50 / 12) after the next treasury top-up so we recover
-      # the early-warning margin. Tracking: chain followup issue
-      # (ligate-io/ligate-chain#391).
+      # Restored 2026-05-18 after the treasury top-up landed the DA
+      # signer wallet at ~100,000 TIA. Pre-top-up emergency window
+      # (2 / 2 TIA both severities) is now obsolete; thresholds set to
+      # catch wallet-drain attacks instead of runway-out. At observed
+      # devnet burn (~0.15-0.5 TIA/day) the wallet would last decades
+      # before hitting either threshold organically, so an early fire
+      # means something abnormal: compromised key, fee-explosion bug,
+      # Celestia gas spike, or partner abuse. Closes
+      # ligate-io/ligate-chain#391.
       #
-      # - 2 TIA warn: at observed devnet burn (~0.15-0.5 TIA/day) this
-      #   gives 4-13 days of runway from the warn point.
-      # - 2 TIA page: same threshold; the chain has effectively halted
-      #   blob submission within hours of reaching this point at any
-      #   plausible burn rate. (Equal-threshold ordering is awkward but
-      #   temporary; the original 50/12 split is restored post-top-up.)
+      # - 10,000 TIA warn:  90% of the wallet drained. Investigate.
+      # - 1,000 TIA  page: 99% drained. Page someone — assume drain
+      #   attack until proven otherwise; rotate key first, question
+      #   second.
+      # `TIADrawdownSpike` below is the early-warning rate alert
+      # (>5 TIA/day burn), separate from these absolute thresholds.
       - alert: TIABalanceLow
         expr: |
-          (celestia_node_da_signer_balance_utia / 1e6) < 2
+          (celestia_node_da_signer_balance_utia / 1e6) < 10000
         for: 30m
         labels:
           severity: warn
           component: chain
         annotations:
-          summary: "TIA balance below 2 on {{ $labels.instance }} (top-up pending)"
+          summary: "TIA balance below 10000 on {{ $labels.instance }} — investigate"
           description: |
-            DA signer wallet has dropped below 2 TIA. Threshold was
-            temporarily lowered from 50 pre-top-up; if you see this
-            alert the temporary window has closed and the top-up is
-            overdue. Top up from treasury and restore the warn
-            threshold to 50.
+            DA signer wallet has dropped below 10,000 TIA. At normal
+            devnet burn (~0.15-0.5 TIA/day) this should take years from
+            a healthy ~100k starting point. A fire here means abnormal
+            drain: check burn rate, blob submission errors, and
+            recent operator activity before assuming top-up is needed.
             Procedure: docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
           runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
 
       - alert: TIABalanceCritical
         expr: |
-          (celestia_node_da_signer_balance_utia / 1e6) < 2
+          (celestia_node_da_signer_balance_utia / 1e6) < 1000
         for: 5m
         labels:
           severity: page
           component: chain
         annotations:
-          summary: "TIA balance below 2 on {{ $labels.instance }} (top-up overdue)"
+          summary: "TIA balance below 1000 on {{ $labels.instance }} — likely drain attack"
           description: |
-            DA signer wallet has dropped below 2 TIA. Threshold was
-            temporarily lowered from 12 pre-top-up; this is now a
-            page-severity incident: blob submission halts in hours.
+            DA signer wallet has dropped below 1,000 TIA. Given the
+            ~100k post-top-up balance and ~0.5 TIA/day max burn, this
+            represents 99%+ loss. Assume compromised key until proven
+            otherwise: rotate the DA signer key, audit recent activity,
+            then top up from treasury.
             Procedure: docs/development/runbooks/da-signer-rotation.md
           runbook_url: https://github.com/ligate-io/ligate-chain/blob/main/docs/development/runbooks/da-signer-rotation.md#tia-balance-monitoring
 
