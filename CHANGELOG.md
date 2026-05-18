@@ -8,6 +8,19 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-18
+
+Same-day patch on top of v0.2.1. Two leftover bugs from the v0.2.1 verification pass on prod, both now fixed for real. `chain_hash` unchanged; safe binary swap in place.
+
+### Fixed
+
+- **OpenAPI `info.title` + `info.description` now override correctly.** v0.2.1's #395 fix at `crates/stf/src/runtime.rs` was diagnostically correct (direct field assignment instead of `Info::new(...)`), but couldn't possibly land because the Sovereign SDK's `register_endpoints()` in `sov-modules-rollup-blueprint/src/native_only/endpoints.rs:88-92` unconditionally re-overwrote both fields with the SDK defaults right after calling our `Runtime::openapi_spec()`. The other three fields (`version`, `contact`, `license`) survived because they weren't touched. Verified live: post-v0.2.1 swap, `curl https://rpc.ligate.io/v1/openapi-v3.json | jq .info` returned `title: "Sovereign SDK Rollup JSON API"` with our version/contact/license correctly applied, confirming the runtime override was being called but immediately stomped. Patched in our SDK fork (`ligate-io/sovereign-sdk@09068b6f`): the SDK now only falls back to its defaults when `runtime_spec.info.title.is_empty()` / `info.description.is_none()`, respecting whatever the runtime set. Cargo `[patch]` block bumped from `eab3f9d0` → `09068b6f3`. Closes ligate-io/ligate-chain#393 (this time for real; v0.2.1 closed it prematurely).
+- `ops/exporters/celestia-tia/celestia-tia-exporter.py`: `LIGATE_READY_URL` default changed from `http://127.0.0.1:12346/v1/health/ready` (which 404s) to `http://127.0.0.1:12346/ready`. The chain exposes health endpoints at the root, not under `/v1/` (path inventory: `/health` returns `{"status":"ok"}`, `/ready` returns `{"status":"synced","synced_da_height":N}`, `/v1/healthcheck` returns a literal `ok` string). Picked `/ready` because it actually reports sync status. With the wrong URL, the `ligate_ready` gauge always emitted 0 — the `ReadyFalse` alert in `ops/prometheus/alerts.yaml` would have fired the moment alert evaluation started against this metric.
+
+### Deps
+
+- `Sovereign-Labs/sovereign-sdk` rev pin in `[patch]` block bumped from `eab3f9d0ae...` to `09068b6f3d...` (the openapi `info` fix, on top of `ligate-mainline`). Upstream-declared pins in `[workspace.dependencies]` stay at `f6cd64749e...` (those are identity declarations that the `[patch]` redirects; cargo doesn't fetch them).
+
 ## [0.2.1] - 2026-05-18
 
 Cosmetic + operator-UX + ops-tooling patch release. `chain_hash` unchanged; safe binary swap in place. Bundles the openapi `info`-block fix, the swagger-ui v5 swap (both #393/#394), plus three operator-side additions that make devnet-1 reproducible: live Caddyfile committed, swagger-ui installer scripted, TIA exporter extended with chain-readiness and a dead-man's switch.
