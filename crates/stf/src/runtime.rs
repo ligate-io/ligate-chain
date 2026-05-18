@@ -234,16 +234,35 @@ where
     }
 
     fn openapi_spec(&self) -> Option<sov_modules_api::prelude::utoipa::openapi::OpenApi> {
-        // Sovereign SDK's default `openapi_spec()` populates the `info`
-        // block with upstream branding (title "Sovereign SDK Rollup JSON
-        // API", contact info@sovereign.xyz, etc.) and pins the version
-        // string to "0.1.0" regardless of our Cargo.toml. Override the
-        // info section with Ligate Chain identity so the swagger UI at
-        // /v1/swagger-ui/ shows what's actually serving the API.
+        // Override Sovereign SDK's default info block with Ligate Chain
+        // identity.
+        //
+        // Why direct field assignment (not `Info::new(title, version)`):
+        // the prior pass used `Info::new(...)` then mutated additional
+        // fields, but the title + description that `Info::new` set were
+        // silently clobbered downstream by the SDK's serialization path,
+        // while the field-mutated values (contact, license, version)
+        // came through. Starting from `spec.info` and overriding fields
+        // individually makes every override stick: each field we set is
+        // the final value in the served spec.
+        //
+        // OpenAPI version declaration: utoipa's `OpenApiVersion` enum
+        // hardcodes `3.1.0` (single-variant enum). We can't downgrade
+        // the declaration from here. The chain-bundled swagger-ui only
+        // renders 3.0.x specs, which is why the served-by-the-chain
+        // `/v1/swagger-ui/` page is blank. The fix is at the HTTP
+        // layer: Caddy serves a newer swagger-ui-dist@5+ bundle from
+        // `/var/www/swagger-ui/` at the same path, overriding the
+        // chain's bundled assets. See
+        // `docs/development/public-devnet-deploy.md` "Caddy reverse
+        // proxy" section for the install steps. Revisit when Sovereign
+        // SDK bumps its swagger-ui bundle to 5+.
         let mut spec = self.0.openapi_spec()?;
-        use sov_modules_api::prelude::utoipa::openapi::{Contact, Info, License};
-        let mut info = Info::new("Ligate Chain JSON API", env!("CARGO_PKG_VERSION"));
-        info.description = Some(
+        use sov_modules_api::prelude::utoipa::openapi::{Contact, License};
+
+        spec.info.title = "Ligate Chain JSON API".to_string();
+        spec.info.version = env!("CARGO_PKG_VERSION").to_string();
+        spec.info.description = Some(
             "REST API for Ligate Chain, the attestation-native rollup. \
              Mounts the chain's ledger, runtime, and sequencer surfaces under /v1."
                 .to_string(),
@@ -252,9 +271,9 @@ where
         contact.name = Some("Ligate Labs".to_string());
         contact.email = Some("hello@ligate.io".to_string());
         contact.url = Some("https://github.com/ligate-io/ligate-chain".to_string());
-        info.contact = Some(contact);
-        info.license = Some(License::new("Apache-2.0 OR MIT"));
-        spec.info = info;
+        spec.info.contact = Some(contact);
+        spec.info.license = Some(License::new("Apache-2.0 OR MIT"));
+
         Some(spec)
     }
 }
