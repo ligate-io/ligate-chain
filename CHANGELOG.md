@@ -8,6 +8,15 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Added
+
+- `docs/development/runbooks/alerts/discord-setup.md`: paste-and-go wiring for chain alerts to the `#chain-alerts` channel in the Ligate Labs Discord via Grafana Cloud Alerting's native Discord contact point. Covers the webhook creation flow, the Grafana Cloud contact-point + notification-policy setup, the rule-import path from `ops/prometheus/alerts.yaml` (worked example for `BlockHeightStall`), a `curl` smoke test against the webhook, and a `systemctl stop ligate-node` end-to-end test that exercises the full Prometheus rule → Grafana contact point → Discord path. Page-severity alerts fire `@here` mentions; warn-severity is channel-only. Documents the `alertmanager-discord` bridge sidecar as the fallback path for operators running their own Alertmanager (followers, third-party partners). Tracks [#268](https://github.com/ligate-io/ligate-chain/issues/268).
+
+### Changed
+
+- `ops/prometheus/alertmanager.yaml`: adds a Discord receiver via `webhook_configs` pointing at the `alertmanager-discord` bridge sidecar (`http://127.0.0.1:9094/`), wired into both the `default` and `info-only` receivers so Discord posts ride alongside the existing Slack posts. Slack + email receivers retained as alternates; no behaviour change for operators not running the bridge. Header comment now flags the file as the SELF-HOSTED FALLBACK path and points readers at `discord-setup.md` for the canonical Grafana Cloud route.
+- `docs/development/runbooks/alerts/README.md`: notification-wiring section now points at `discord-setup.md`; per-alert table extended with the three TIA alerts (`TIABalanceLow`, `TIABalanceCritical`, `TIADrawdownSpike`) that were already in `alerts.yaml` but missing from the table; deploy section split into Grafana Cloud (canonical) and self-hosted Alertmanager (fallback) tracks. Each per-alert runbook header now links to `discord-setup.md` and notes whether the alert mentions `@here`.
+
 ## [0.2.0] - 2026-05-17
 
 **Breaking wire-format change.** `AttestationId` is now a single 32-byte hash with the `lat` bech32m prefix (`lat1…`), replacing the pre-v0.2.0 compound `<schema_id>:<payload_hash>` (`lsc1…:lph1…`) form. The on-chain `StateMap<AttestationId, Attestation<S>>` key encoding therefore changes, which means **this release requires a re-genesis** on any chain that has already submitted attestations. devnet-1 is being re-genesised as part of this cut; no historic devnet state survives.

@@ -1,8 +1,15 @@
 # Alertmanager config for ligate-devnet-1.
 #
+# NOTE: this file is the SELF-HOSTED FALLBACK path. The canonical wiring
+# for the public devnet operator is Grafana Cloud Alerting + the native
+# Discord contact point; see
+# `docs/development/runbooks/alerts/discord-setup.md`. Followers /
+# third-party partners running their own Prometheus + Alertmanager
+# should render and deploy THIS file instead.
+#
 # Receives firing alerts from Prometheus, deduplicates them, and routes
 # to notification targets. Pre-public-devnet, the routing tree is
-# deliberately simple: single operator, single Slack channel + email.
+# deliberately simple: single operator, Slack + email + Discord.
 # Mainnet routing (PagerDuty rotas, severity-specific escalation) is
 # future work.
 #
@@ -13,6 +20,14 @@
 #   alertmanager startup. NEVER check in.
 # - `SMTP_PASSWORD`: SMTP send password for the operator's mailbox.
 #   Same secret-injection pattern.
+# - `DISCORD_ALERTS_WEBHOOK_URL`: Discord webhook URL for #chain-alerts
+#   in the Ligate Labs server. Stored at `~/.config/ligate/secrets.env`
+#   on the operator workstation; exported into the alertmanager-discord
+#   sidecar's environment as `DISCORD_WEBHOOK`. Bridge listens on
+#   127.0.0.1:9094 and translates Alertmanager's webhook payload into
+#   Discord-compatible messages (Alertmanager has no native Discord
+#   integration). See discord-setup.md for the sidecar systemd unit
+#   pattern.
 #
 # Tracking issue: ligate-io/ligate-chain#268.
 
@@ -26,10 +41,10 @@ global:
   smtp_require_tls: true
   slack_api_url_file: '/run/secrets/slack_webhook_url'
 
-# Routing tree. All alerts hit `default`. `severity=page` also fans
-# out to email so the operator gets a phone-side notification even if
-# Slack is muted. `severity=info` is Slack-only (no point waking
-# anyone for an informational alert).
+# Routing tree. All alerts hit `default` (Slack + Discord). `severity=page`
+# also fans out to email so the operator gets a phone-side notification
+# even if Slack / Discord are muted. `severity=info` is channel-only
+# (no point waking anyone for an informational alert).
 route:
   receiver: default
   group_by: ['alertname', 'instance']
@@ -50,7 +65,12 @@ route:
       receiver: info-only
 
 receivers:
-  # Default receiver: Slack with full alert detail.
+  # Default receiver: Slack + Discord with full alert detail.
+  # The `webhook_configs` entry points at the alertmanager-discord
+  # bridge sidecar (see discord-setup.md "Self-hosted Alertmanager
+  # fallback" section); the bridge translates Alertmanager's JSON
+  # payload into a Discord webhook POST and reads its target URL
+  # from `DISCORD_WEBHOOK` in its own environment.
   - name: default
     slack_configs:
       - channel: '#devnet-ops'
@@ -64,10 +84,16 @@ receivers:
           - type: button
             text: 'View in Prometheus'
             url: '{{ (index .Alerts 0).GeneratorURL }}'
+    webhook_configs:
+      - url: 'http://127.0.0.1:9094/'
+        send_resolved: true
+        # Bridge does its own retry; no need for max_alerts here.
 
-  # Pager receiver: Slack + email. Phone notification surface for
-  # page-severity alerts. Pre-PagerDuty, the operator's email pipes
-  # into their phone's high-priority filter.
+  # Pager receiver: email only. Phone notification surface for
+  # page-severity alerts; the Slack + Discord posts are already
+  # delivered via the `default` route fan-out (`continue: true`).
+  # Pre-PagerDuty, the operator's email pipes into their phone's
+  # high-priority filter.
   - name: pager
     email_configs:
       - to: 'hello@ligate.io'
@@ -76,13 +102,16 @@ receivers:
           Subject: '[PAGE] {{ .GroupLabels.alertname }} on {{ .GroupLabels.instance }}'
         html: '{{ template "email.html" . }}'
 
-  # Info-only receiver: Slack with light formatting; no email.
+  # Info-only receiver: Slack + Discord with light formatting; no email.
   - name: info-only
     slack_configs:
       - channel: '#devnet-ops'
         send_resolved: false
         title: '[INFO] {{ .GroupLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+    webhook_configs:
+      - url: 'http://127.0.0.1:9094/'
+        send_resolved: false
 
 # Inhibition rules: if a higher-severity alert is firing, suppress
 # lower-severity alerts for the same instance. Avoids alerting fatigue

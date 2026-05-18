@@ -1,6 +1,6 @@
 # `ReadyFalse`
 
-**Severity: warn**
+**Severity: warn** (warn-severity alerts post to `#chain-alerts` without a mention; wiring details in [`discord-setup.md`](./discord-setup.md))
 
 ## What fired
 
