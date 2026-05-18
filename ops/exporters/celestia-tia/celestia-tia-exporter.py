@@ -32,7 +32,7 @@ Config via env:
     DA_SIGNER_ADDRESS       celestia1mphanjz38a5fvftsdr20ct388gtnxhlq52wr33
     DA_SIGNER_ACCOUNT       da-signer   (friendly label; defaults to "da-signer")
     LIGATE_INSTANCE         ligate-devnet-1-sequencer
-    LIGATE_READY_URL        http://127.0.0.1:12346/v1/health/ready
+    LIGATE_READY_URL        http://127.0.0.1:12346/ready
     LIGATE_READY_TIMEOUT    3   (seconds)
     POLL_INTERVAL_SEC       60
     DEAD_MANS_SWITCH_SEC    300
@@ -71,7 +71,7 @@ DA_SIGNER_ADDRESS = os.environ["DA_SIGNER_ADDRESS"]  # required; no default
 # a 45-char bech32. Currently always "da-signer".
 DA_SIGNER_ACCOUNT = os.environ.get("DA_SIGNER_ACCOUNT", "da-signer")
 INSTANCE = os.environ.get("LIGATE_INSTANCE", "ligate-devnet-1-sequencer")
-LIGATE_READY_URL = os.environ.get("LIGATE_READY_URL", "http://127.0.0.1:12346/v1/health/ready")
+LIGATE_READY_URL = os.environ.get("LIGATE_READY_URL", "http://127.0.0.1:12346/ready")
 LIGATE_READY_TIMEOUT = float(os.environ.get("LIGATE_READY_TIMEOUT", "3"))
 POLL_INTERVAL_SEC = int(os.environ.get("POLL_INTERVAL_SEC", "60"))
 # Dead-man's switch threshold: how long the last successful balance poll
@@ -189,11 +189,17 @@ def fetch_balance() -> int:
 # ----- Ligate-node readiness probe ------------------------------------------
 
 def probe_ligate_ready() -> int:
-    """Hit `/v1/health/ready` and return 1 if 2xx, 0 otherwise.
+    """Hit `LIGATE_READY_URL` (defaults to chain's `/ready`) and return 1 if 2xx, 0 otherwise.
 
     Treats both HTTP errors and connection errors as "not ready". The
     HTTP error path covers cases where the chain is up but stuck (5xx
     from a health handler that knows it's degraded).
+
+    Path note: the chain exposes `/ready` and `/health` at the root (no
+    `/v1/` prefix); both are wired through Caddy. `/v1/healthcheck` also
+    works but returns a literal `ok` rather than a JSON body. The
+    earlier v0.2.1 cut shipped this with a wrong default URL
+    (`/v1/health/ready`, which 404s).
     """
     req = urllib.request.Request(LIGATE_READY_URL, method="GET")
     try:
