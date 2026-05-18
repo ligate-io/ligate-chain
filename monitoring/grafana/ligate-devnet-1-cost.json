@@ -1,12 +1,12 @@
 {
-  "description": "\n\nGCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) removed 2026-05-18 pending GCP billing wiring decision. See chain follow-up issue.",
+  "description": "DA signer wallet (TIA) balance, burn rate, and runway. Powered by celestia-tia-exporter sidecar (ops/exporters/celestia-tia/). GCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) are tracked separately in chain follow-up issue #392.",
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Current TIA balance on the DA signer wallet in whole TIA (utia / 1e6). Source: Celestia light node's /metrics endpoint. Red at <10 TIA (~7 day runway), yellow at <50 TIA, green above.",
+      "description": "Current TIA balance on the DA signer wallet in whole TIA (utia / 1e6). Source: celestia-tia-exporter sidecar polling state.BalanceForAddress on the local light node. Thresholds match the alert rules in ops/prometheus/alerts.yaml: page at <1000 TIA (likely drain attack), warn at <10000 TIA, green above. Calibrated to the ~100k TIA post-top-up baseline; at observed devnet burn (~0.15-0.5 TIA/day) the wallet should sit in the green for years.",
       "fieldConfig": {
         "defaults": {
           "decimals": 2,
@@ -19,11 +19,11 @@
               },
               {
                 "color": "yellow",
-                "value": 10
+                "value": 1000
               },
               {
                 "color": "green",
-                "value": 50
+                "value": 10000
               }
             ]
           },
@@ -31,10 +31,10 @@
         }
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
         "x": 0,
-        "y": 0
+        "y": 0,
+        "w": 6,
+        "h": 6
       },
       "id": 1,
       "options": {
@@ -57,6 +57,240 @@
     },
     {
       "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "LGT balance of the faucet hot wallet (lig1kfaqfu\u2026). Drained by every successful drip (web @ 100 LGT / bot @ 100-1000 LGT). Source: api.ligate.io/v1/addresses/<addr> via Infinity datasource. Top up from treasury when balance drops below ~10,000 LGT. Display shows raw nano-LGT divided by 1e9 via the panel's Calculate-field transform.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10000
+              },
+              {
+                "color": "green",
+                "value": 100000
+              }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 6
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "amount_nano",
+              "text": "amount_nano",
+              "type": "number"
+            }
+          ],
+          "filters": [],
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "balances",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/addresses/lig1kfaqfuxejztfgl803v375djashtnsd9dqj0mfy37x4zlzd3nyqm",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Faucet wallet LGT balance",
+      "type": "stat",
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "lgt",
+            "binary": {
+              "left": "amount_nano",
+              "operator": "/",
+              "right": "1000000000"
+            },
+            "mode": "binary",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "replaceFields": true
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Days of runway at observed burn rate, computed as balance / burn_per_day. Uses a 7d burn window for smoothing; clamps burn to a tiny floor (0.001 TIA/day) so periods of zero burn don't divide by zero. Display is capped at 3650 (10 years) \u2014 anything that reaches the cap means runway is effectively unbounded at observed burn. Note: for ~7d after any large top-up the burn window still contains the step jump, so the rate clamps to 0 and runway shows the cap; this is correct behaviour, not a bug. Green > 90 days, yellow 30-90, red < 30. The absolute-balance thresholds on the panel above are the real alert trigger.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "d"
+        }
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 6
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "expr": "clamp_max((celestia_node_da_signer_balance_utia{instance=~\"$instance\"} / 1e6) / clamp_min(-rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[7d]) * 86400 / 1e6, 0.001), 3650)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "title": "Runway (days at 7d burn, capped 10y)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "Total faucet drips landed today (web + Discord bot combined). Source: api.ligate.io/v1/stats/drips-daily?days=1 (UTC day-bucketed). Web = bank.transfer txs from the faucet wallet, read from the indexer's transactions table. Bot = rows in the api's bot_drips table (one per successful /v1/drip-bot call). Stat shows the most-recent day's total.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 6
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "total",
+              "text": "total",
+              "type": "number"
+            }
+          ],
+          "filters": [],
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "points",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/drips-daily?days=1",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Drips today (web + bot)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "TIA burned per day, averaged over $window. clamp_min to 0 so balance INCREASES (top-ups) show as 0 burn instead of a giant negative \u2014 without that clamp, a 100k-TIA top-up over a 1h window appears as a -144M TIA/day rate, which is mathematically correct but operationally useless. Drawdown spike (>5 TIA/day) also drives the TIADrawdownSpike alert in ops/prometheus/alerts.yaml. Default window is 7d so the visualization smooths over any single top-up event; switch to 1h via the dropdown for live debugging.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 24,
+        "h": 4
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "expr": "clamp_min(-rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[$window]) * 86400 / 1e6, 0)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "title": "TIA draw-down rate (per $window)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
@@ -71,10 +305,10 @@
         }
       },
       "gridPos": {
-        "h": 8,
+        "x": 0,
+        "y": 10,
         "w": 12,
-        "x": 6,
-        "y": 0
+        "h": 11
       },
       "id": 2,
       "targets": [
@@ -88,39 +322,99 @@
     },
     {
       "datasource": {
-        "type": "prometheus",
-        "uid": "grafanacloud-prom"
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
       },
-      "description": "TIA burned per day, averaged over $window. Negative draw-down (positive sign here after the *-1) means balance is decreasing. Compare against the alert threshold (50 TIA/30 days = ~1.67 TIA/day baseline; spikes above 5 TIA/day suggest abuse or backfill anomaly).",
+      "description": "Daily faucet drips over the last 30 days, stacked by source. `web` = chain-side count of bank.transfer txs from the faucet wallet (read from the indexer's transactions table). `bot` = api-side count from bot_drips (one row per /v1/drip-bot success). Source: api.ligate.io/v1/stats/drips-daily?days=30. Days with zero drips are present in the series with 0 values.",
       "fieldConfig": {
         "defaults": {
-          "decimals": 3,
-          "unit": "none"
-        }
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "web"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A7D28C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bot"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C49963"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 4
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 11
       },
-      "id": 3,
-      "options": {
-        "colorMode": "value",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        }
-      },
+      "id": 7,
       "targets": [
         {
-          "expr": "rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[$window]) * -1 * 60 * 60 * 24 / 1e6",
-          "legendFormat": "{{instance}}"
+          "columns": [
+            {
+              "selector": "date",
+              "text": "date",
+              "type": "timestamp",
+              "timestampFormat": "YYYY-MM-DD"
+            },
+            {
+              "selector": "web",
+              "text": "web",
+              "type": "number"
+            },
+            {
+              "selector": "bot",
+              "text": "bot",
+              "type": "number"
+            }
+          ],
+          "filters": [],
+          "format": "timeseries",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "points",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/drips-daily?days=30",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
         }
       ],
-      "title": "TIA draw-down rate (per $window)",
-      "type": "stat"
+      "title": "Drips per day (web vs bot)",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",
@@ -156,11 +450,11 @@
       },
       {
         "current": {
-          "text": "24h",
-          "value": "24h"
+          "text": "7d",
+          "value": "7d"
         },
         "name": "window",
-        "query": "1h,24h,7d",
+        "query": "1h,24h,7d,30d",
         "type": "custom"
       }
     ]
