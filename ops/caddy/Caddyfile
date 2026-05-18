@@ -22,7 +22,6 @@
 rpc.ligate.io {
     import cloudflare_only
     encode gzip
-    reverse_proxy 127.0.0.1:12346
 
     # Health probes are unversioned; ligate-node serves them at the root.
     handle /health {
@@ -32,7 +31,6 @@ rpc.ligate.io {
         reverse_proxy 127.0.0.1:12346
     }
 
-
     # Swagger UI v5 from disk overrides the chain-bundled older build
     # that can't render openapi: 3.1.0 (utoipa hardcodes that version
     # string; can't be downgraded from chain code). The 5+ bundle
@@ -41,13 +39,28 @@ rpc.ligate.io {
     # /var/www/swagger-ui/ (chmod a+r, owned ligate:ligate).
     # Drop this block once Sovereign SDK upgrades its bundled
     # swagger-ui. Tracking: ligate-io/ligate-chain#394.
+    #
+    # IMPORTANT: the `redir /v1/swagger-ui/ 308` only fires when this
+    # block routes ahead of the catch-all `reverse_proxy` at the end.
+    # That's the whole reason the catch-all is wrapped in handle{} —
+    # a bare `reverse_proxy` at the site-block level would compete with
+    # these handle{} blocks and could win the routing race, sending
+    # /v1/swagger-ui to the chain's broken bundled UI instead.
     handle_path /v1/swagger-ui/* {
         root * /var/www/swagger-ui
         try_files {path} /index.html
         file_server
     }
     handle /v1/swagger-ui {
-        redir /v1/swagger-ui/ 308
+        # Explicit `*` matcher is required: Caddy's `redir` directive
+        # treats its first argument as a path matcher if it starts with
+        # `/`. So `redir /v1/swagger-ui/ 308` was being parsed as
+        # `redir <matcher=/v1/swagger-ui/> <to=308>`, producing a route
+        # that 302'd to literal "308" only when the path was already
+        # `/v1/swagger-ui/`. With `*` (matches anything in this
+        # subroute's scope) Caddy parses correctly:
+        # `redir <matcher=*> <to=/v1/swagger-ui/> <code=308>`.
+        redir * /v1/swagger-ui/ 308
     }
 
     # Swagger UI bundle hot-fix: the swagger-initializer.js (whether
@@ -66,5 +79,18 @@ rpc.ligate.io {
     # Operators scrape from inside the VPC over the unexposed port.
     handle /metrics {
         respond "Not exposed publicly. See ops docs." 404
+    }
+
+    # Catch-all: every other path proxies to ligate-node.
+    # MUST be wrapped in handle{} — a bare directive at the site-block
+    # level competes with the explicit handle{} blocks above and can
+    # win the routing race. The original Caddyfile had `reverse_proxy
+    # 127.0.0.1:12346` as a bare directive, which is exactly why the
+    # `/v1/swagger-ui` (no trailing slash) redirect wasn't firing:
+    # the bare proxy was winning over `handle /v1/swagger-ui { redir }`.
+    # Empty matcher (handle without a path) = fallback for any request
+    # not matched by a more specific handle block above.
+    handle {
+        reverse_proxy 127.0.0.1:12346
     }
 }
