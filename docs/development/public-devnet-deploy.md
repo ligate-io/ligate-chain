@@ -61,7 +61,7 @@ gcloud compute instances create ligate-devnet-1-sequencer \
     --boot-disk-size=20GB \
     --create-disk=name=ligate-data,size=150GB,type=pd-ssd \
     --tags=http-server,https-server \
-    --metadata-from-file=user-data=cloud-init.yaml
+    --metadata-from-file=user-data=ops/cloud-init/sequencer.yaml
 ```
 
 For a follower, swap `--machine-type=e2-medium`, `--create-disk=...,size=100GB`, and rename the instance.
@@ -80,112 +80,16 @@ Point `rpc.ligate.io` (or your follower-side equivalent) at that IP via your DNS
 
 ## Step 2: cloud-init
 
-The `cloud-init.yaml` referenced above:
+The `cloud-init.yaml` referenced above is checked in at [`ops/cloud-init/sequencer.yaml`](../../ops/cloud-init/sequencer.yaml). Pass it to `gcloud compute instances create` via `--metadata-from-file=user-data=ops/cloud-init/sequencer.yaml` (as in the Step 1 invocation above).
 
-```yaml
-#cloud-config
-package_update: true
-package_upgrade: true
+What it provisions:
 
-packages:
-  - build-essential
-  - pkg-config
-  - libssl-dev
-  - cmake
-  - clang
-  - curl
-  - git
-  - jq
-  - rsync
-  - chrony
-
-write_files:
-  - path: /etc/systemd/system/celestia-light.service
-    content: |
-      [Unit]
-      Description=Celestia light node (Mocha)
-      After=network-online.target
-      Wants=network-online.target
-
-      [Service]
-      User=ligate
-      ExecStart=/usr/local/bin/celestia light start \
-          --core.ip rpc-mocha.pops.one \
-          --p2p.network mocha \
-          --rpc.addr 127.0.0.1 \
-          --rpc.port 26658
-      Restart=on-failure
-      RestartSec=5
-      LimitNOFILE=65536
-
-      [Install]
-      WantedBy=multi-user.target
-
-  - path: /etc/systemd/system/ligate-node.service
-    content: |
-      [Unit]
-      Description=Ligate Chain node (devnet-1)
-      After=celestia-light.service network-online.target
-      Wants=celestia-light.service
-
-      [Service]
-      User=ligate
-      Group=ligate
-      WorkingDirectory=/opt/ligate
-      EnvironmentFile=/etc/ligate/env
-      ExecStart=/opt/ligate/bin/ligate-node \
-          --da-layer celestia \
-          --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
-          --genesis-config-dir /opt/ligate/devnet-1/genesis \
-          --metrics-bind 127.0.0.1:9100
-      Restart=on-failure
-      RestartSec=10
-      # RocksDB compaction + WAL flush on shutdown can take 2-3 min on a
-      # hot state DB. The systemd default of 90s triggered a SIGKILL
-      # during the v0.1.1-devnet swap on 2026-05-16 (chain#362). 300s
-      # gives headroom without leaving zombie processes around forever.
-      TimeoutStopSec=300
-      LimitNOFILE=65536
-
-      [Install]
-      WantedBy=multi-user.target
-
-runcmd:
-  - useradd -m -s /bin/bash ligate
-  - mkdir -p /opt/ligate /etc/ligate /var/lib/ligate
-  - chown ligate:ligate /opt/ligate /etc/ligate /var/lib/ligate
-  # Mount the persistent data disk to /var/lib/ligate
-  - |
-    DEVICE=$(readlink -f /dev/disk/by-id/google-ligate-data)
-    mkfs.ext4 -F $DEVICE
-    echo "$DEVICE /var/lib/ligate ext4 defaults,nofail 0 2" >> /etc/fstab
-    mount /var/lib/ligate
-  # Pre-create the RocksDB directory on the persistent disk so the
-  # operator's Step 3 symlink lands somewhere valid. Without this the
-  # chain writes state to /opt/ligate/devnet-1/data-celestia on the
-  # boot disk, and a VM image rebuild wipes the chain's local history.
-  # See "Migrating an existing host to the persistent disk" in
-  # docs/development/runbooks/backup-restore.md for the same path,
-  # but applied after-the-fact on hosts that booted without this step.
-  - mkdir -p /var/lib/ligate/rocksdb
-  - chown ligate:ligate /var/lib/ligate/rocksdb
-  # Install Rust + risc0 toolchain (sequencer only; follower can skip risc0)
-  - sudo -u ligate bash -lc 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y'
-  # Install Celestia light node binary. Newer Celestia releases ship
-  # as a tar.gz (was a bare binary in earlier releases); extract and
-  # install the `celestia` binary.
-  - |
-    CELESTIA_VERSION=v0.30.2
-    curl -fsSL "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-node_Linux_x86_64.tar.gz" \
-      -o /tmp/celestia.tar.gz
-    tar -xzf /tmp/celestia.tar.gz -C /tmp/
-    install -o root -g root -m 0755 /tmp/celestia /usr/local/bin/celestia
-  - sudo -u ligate /usr/local/bin/celestia light init --p2p.network=mocha
-  - systemctl daemon-reload
-  - systemctl enable --now celestia-light.service
-  # ligate-node service starts manually after the operator has placed the
-  # binary, devnet-1 configs, and /etc/ligate/env (with secrets).
-```
+- Build tooling (rustc + cargo via rustup, plus `build-essential` / `clang` / `pkg-config` / `libssl-dev` so a from-source `cargo build --release --bin ligate-node` works if a release tarball isn't usable).
+- The `ligate` system user, with `/opt/ligate`, `/etc/ligate`, and `/var/lib/ligate` ownership.
+- The persistent data disk formatted as ext4 and mounted at `/var/lib/ligate` (idempotent — re-running cloud-init on a VM with an existing FS doesn't reformat). `/var/lib/ligate/rocksdb` is pre-created so the Step 3 storage symlink lands somewhere valid.
+- `celestia-light` v0.30.2 installed to `/usr/local/bin/celestia`, initialised against Mocha, and a `celestia-light.service` systemd unit that auto-starts on boot.
+- A `ligate-node.service` systemd unit (with `TimeoutStopSec=300` so RocksDB compaction has time to finish — chain#362 retro). **Not enabled** — would crashloop on missing binary; operator starts it manually after Step 3.
+- `chrony` enabled as belt-and-braces NTP.
 
 The cloud-init does the chassis. The operator still has to:
 
