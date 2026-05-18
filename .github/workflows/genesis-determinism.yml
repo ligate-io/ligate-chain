@@ -119,13 +119,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download linux hashes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: hashes-linux-amd64
           path: linux/
 
       - name: Download macOS hashes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: hashes-darwin-arm64
           path: darwin/
