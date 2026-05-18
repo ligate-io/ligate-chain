@@ -263,6 +263,156 @@
           }
         }
       ]
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "Total faucet drips landed today (web + Discord bot combined). Source: api.ligate.io/v1/stats/drips-daily?days=1 (UTC day-bucketed). Web = bank.transfer txs from the faucet wallet, read from the indexer's transactions table. Bot = rows in the api's bot_drips table (one per successful /v1/drip-bot call). Stat shows the most-recent day's total.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 12
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "total",
+              "text": "total",
+              "type": "number"
+            }
+          ],
+          "filters": [],
+          "format": "table",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "points",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/drips-daily?days=1",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Drips today (web + bot)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "afm64tqkoba4ga"
+      },
+      "description": "Daily faucet drips over the last 30 days, stacked by source. `web` = chain-side count of bank.transfer txs from the faucet wallet (read from the indexer's transactions table). `bot` = api-side count from bot_drips (one row per /v1/drip-bot success). Source: api.ligate.io/v1/stats/drips-daily?days=30. Days with zero drips are present in the series with 0 values.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "web"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#A7D28C"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "bot"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#C49963"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 6,
+        "y": 12
+      },
+      "id": 7,
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "date",
+              "text": "date",
+              "type": "timestamp",
+              "timestampFormat": "YYYY-MM-DD"
+            },
+            {
+              "selector": "web",
+              "text": "web",
+              "type": "number"
+            },
+            {
+              "selector": "bot",
+              "text": "bot",
+              "type": "number"
+            }
+          ],
+          "filters": [],
+          "format": "timeseries",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "points",
+          "source": "url",
+          "type": "json",
+          "url": "/v1/stats/drips-daily?days=30",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Drips per day (web vs bot)",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",
