@@ -1,12 +1,12 @@
 {
-  "description": "\n\nGCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) removed 2026-05-18 pending GCP billing wiring decision. See chain follow-up issue.",
+  "description": "DA signer wallet (TIA) balance, burn rate, and runway. Powered by celestia-tia-exporter sidecar (ops/exporters/celestia-tia/). GCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) are tracked separately in chain follow-up issue #392.",
   "panels": [
     {
       "datasource": {
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Current TIA balance on the DA signer wallet in whole TIA (utia / 1e6). Source: Celestia light node's /metrics endpoint. Red at <10 TIA (~7 day runway), yellow at <50 TIA, green above.",
+      "description": "Current TIA balance on the DA signer wallet in whole TIA (utia / 1e6). Source: celestia-tia-exporter sidecar polling state.BalanceForAddress on the local light node. Thresholds match the alert rules in ops/prometheus/alerts.yaml: page at <1000 TIA (likely drain attack), warn at <10000 TIA, green above. Calibrated to the ~100k TIA post-top-up baseline; at observed devnet burn (~0.15-0.5 TIA/day) the wallet should sit in the green for years.",
       "fieldConfig": {
         "defaults": {
           "decimals": 2,
@@ -19,11 +19,11 @@
               },
               {
                 "color": "yellow",
-                "value": 10
+                "value": 1000
               },
               {
                 "color": "green",
-                "value": 50
+                "value": 10000
               }
             ]
           },
@@ -91,7 +91,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "TIA burned per day, averaged over $window. Negative draw-down (positive sign here after the *-1) means balance is decreasing. Compare against the alert threshold (50 TIA/30 days = ~1.67 TIA/day baseline; spikes above 5 TIA/day suggest abuse or backfill anomaly).",
+      "description": "TIA burned per day, averaged over $window. clamp_min to 0 so balance INCREASES (top-ups) show as 0 burn instead of a giant negative — without that clamp, a 100k-TIA top-up over a 1h window appears as a -144M TIA/day rate, which is mathematically correct but operationally useless. Drawdown spike (>5 TIA/day) also drives the TIADrawdownSpike alert in ops/prometheus/alerts.yaml. Default window is 7d so the visualization smooths over any single top-up event; switch to 1h via the dropdown for live debugging.",
       "fieldConfig": {
         "defaults": {
           "decimals": 3,
@@ -115,11 +115,64 @@
       },
       "targets": [
         {
-          "expr": "rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[$window]) * -1 * 60 * 60 * 24 / 1e6",
+          "expr": "clamp_min(-rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[$window]) * 86400 / 1e6, 0)",
           "legendFormat": "{{instance}}"
         }
       ],
       "title": "TIA draw-down rate (per $window)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Days of runway at observed burn rate, computed as balance / burn_per_day. Uses a 7d burn window for smoothing; clamps burn to a tiny floor (0.001 TIA/day) so periods of zero burn don't divide by zero. Display is capped at 3650 (10 years) — anything that reaches the cap means runway is effectively unbounded at observed burn. Note: for ~7d after any large top-up the burn window still contains the step jump, so the rate clamps to 0 and runway shows the cap; this is correct behaviour, not a bug. Green > 90 days, yellow 30-90, red < 30. The absolute-balance thresholds on the panel above are the real alert trigger.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          },
+          "unit": "d"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "clamp_max((celestia_node_da_signer_balance_utia{instance=~\"$instance\"} / 1e6) / clamp_min(-rate(celestia_node_da_signer_balance_utia{instance=~\"$instance\"}[7d]) * 86400 / 1e6, 0.001), 3650)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "title": "Runway (days at 7d burn, capped 10y)",
       "type": "stat"
     }
   ],
@@ -156,11 +209,11 @@
       },
       {
         "current": {
-          "text": "24h",
-          "value": "24h"
+          "text": "7d",
+          "value": "7d"
         },
         "name": "window",
-        "query": "1h,24h,7d",
+        "query": "1h,24h,7d,30d",
         "type": "custom"
       }
     ]
