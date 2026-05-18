@@ -8,6 +8,23 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-18
+
+Patch release. Adds `da_block_height` to the batch receipt JSON for explorer-side Celenium deep-links. Backward-compatible additive change; `chain_hash` unchanged; safe binary swap in place.
+
+### Added
+
+- `receipt.da_block_height: Option<u64>` on the batch receipt JSON returned by `GET /v1/ledger/batches/{id}` and the slot-nested variants. `Some(height)` for receipts produced by the node-side `apply_slot` replay path (where the slot header is in scope and `header.height()` is the Celestia inclusion height for the batch's blob); `None` for receipts produced by the sequencer's optimistic pre-inclusion path (height not yet known at execution time). The canonical receipts indexed off the ledger DB are always the node-side ones, so consumers (api / explorer) reliably get `Some(height)`. Powers the upcoming explorer "View on Celenium" deep-link per ligate-io/ligate-chain#355.
+- Locally verified against Mock DA: `receipt.da_block_height` reliably appears in batch JSON, matching the slot number under Mock DA's 1:1 slot↔DA-height mapping.
+
+### Deps
+
+- `[patch]` SDK pin bumped to `ligate-io/sovereign-sdk@4b4a313b7` (branch `ligate/da-block-height-on-batch-receipt`, on top of the v0.2.2 openapi commit). Single-commit SDK change adds `Option<u64> da_block_height` to `BatchSequencerReceipt<S>` (with `#[serde(default)]` for backward-compat) and threads it through the `apply_slot` → `apply_batches_in_user_space` → `apply_batch` (registered + unregistered) call chain; sequencer-side optimistic block executor passes `None`.
+
+### Compatibility note
+
+The `Option<u64>` + `#[serde(default)]` shape means batch receipts written before this binary swap deserialise cleanly as `da_block_height: null`. No re-genesis. No state wipe. In-place binary replacement is the entire upgrade procedure.
+
 ## [0.2.2] - 2026-05-18
 
 Same-day patch on top of v0.2.1. Two leftover bugs from the v0.2.1 verification pass on prod, both now fixed for real. `chain_hash` unchanged; safe binary swap in place.
