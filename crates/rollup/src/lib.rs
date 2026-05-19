@@ -67,12 +67,12 @@ pub use mock_rollup::{MockLigateRollup, MockRollupSpec};
 ///
 /// - The actual leader / replica branch lives in the SDK fork at
 ///   `sov-sequencer/src/preferred/db/mod.rs:543-564`, matching on
-///   [`sov_full_node_configs::sequencer::ConfiguredNodeRole`]
+///   `sov_full_node_configs::sequencer::ConfiguredNodeRole`
 ///   (`Leader` / `Replica` / `ReplicaNoLeaderSync` / `DbElected`).
 /// - `DbElected` mode runs a Postgres-backed election with heartbeat
 ///   timeout, grace period, and replica state-sync. See `db/heartbeat_task.rs`
 ///   and `replica/replica_sync_task.rs` in the SDK fork.
-/// - To activate it for our chain, [`PreferredSequencerConfig::postgres_config`]
+/// - To activate it for our chain, `PreferredSequencerConfig::postgres_config`
 ///   needs to be set in `devnet/rollup.toml`'s `[sequencer.preferred]`
 ///   section (currently absent, which is why we run single-instance).
 ///
