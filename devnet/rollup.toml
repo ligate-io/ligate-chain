@@ -105,6 +105,48 @@ batch_execution_time_limit_millis = 2000
 num_cache_warmup_workers = 0
 ideal_lag_behind_finalized_slot = 3
 
+# SEAM: multi-sequencer activation block (#82, #412).
+#
+# The Sovereign SDK ships Postgres-backed leader election via
+# `ConfiguredNodeRole::DbElected`: each instance heartbeats into a
+# shared Postgres, one wins leadership and proposes blocks, the others
+# run as `PgSyncReplica`s catching up via the same Postgres. On
+# leader failure, the heartbeat timeout (500ms default) elapses and
+# a replica acquires leadership. See SDK fork
+# `sov-sequencer/src/preferred/db/heartbeat_task.rs` for the
+# mechanism and `full-node-configs/src/sequencer.rs` for
+# `PostgresConfig` field semantics.
+#
+# We provisioned Cloud SQL Postgres 16 (regional HA) at private IP
+# `10.123.0.2`, database `ligate_sequencer`, role `ligate_sequencer`,
+# with the role password stored in GCP Secret Manager as
+# `cloudsql-ligate-sequencer-db-app`. See
+# `ops/cloud-init/render-rollup-toml.sh` for the per-instance render
+# step that fetches the password and `node_id` at boot time and
+# writes the active block below.
+#
+# This block stays commented in the canonical `rollup.toml`. Sub-issue
+# 5 activates it by running the render script in the cloud-init
+# preinstall, which produces a per-instance rendered rollup.toml that
+# the chain process actually consumes. Activating it here on the
+# current single-instance prod would be a regression (no second node
+# to fail over to).
+#
+# [sequencer.preferred.postgres_config]
+# postgres_connection_string = "postgresql://ligate_sequencer:${POSTGRES_PASSWORD}@10.123.0.2:5432/ligate_sequencer?sslmode=require"
+# node_id = "${LIGATE_NODE_ID}"
+# node_role = "DbElected"
+#
+# # SDK leader-election defaults are reasonable for our cadence:
+# #   heartbeat_interval_millis = 100   (10 heartbeats/sec)
+# #   leader_timeout_millis     = 500   (failover in ~500ms)
+# #   grace_period_millis       = 10000 (10s anti-flap)
+# # Uncomment and override only after measuring under load.
+# # [sequencer.preferred.postgres_config.leader_election]
+# # heartbeat_interval_millis = 100
+# # leader_timeout_millis     = 500
+# # grace_period_millis       = 10000
+
 [sequencer.extension]
 # `RollupConfig::extension_or_panic()` is called from
 # `FullNodeBlueprint::sequencer_additional_apis`. We don't override
