@@ -317,6 +317,7 @@ ignore = [
   "RUSTSEC-2026-0066", # astral-tokio-tar dir-traversal via sov-test-utils dev-dep
   "RUSTSEC-2026-0112", # astral-tokio-tar PAX header desync, same dep path
   "RUSTSEC-2026-0113", # astral-tokio-tar chmod via symlinks, same dep path
+  "RUSTSEC-2026-0145", # astral-tokio-tar 0.6.1 PAX desync, same dep path (fix >= 0.6.2)
 
   # --- Unmaintained-crate advisories ---
   # These are quality signals, not vulnerabilities. Every one is

@@ -54,6 +54,17 @@ ignore = [
     # bumps. Filed 2026-04-28.
     "RUSTSEC-2026-0113",
 
+    # astral-tokio-tar 0.6.1, PAX header desynchronization. The
+    # testcontainers chain already bumped past the 0.5.6 line that
+    # had -0066 / -0112 / -0113, but 0.6.1 itself has its own PAX
+    # desync bug. Same dep path (testcontainers -> astral-tokio-tar
+    # in sov-test-utils dev-deps), same threat-model justification:
+    # we never extract attacker-controlled tar archives in any
+    # production code path; the only consumer is the SDK's docker-
+    # based integration tests. Solution: upgrade to >= 0.6.2; clears
+    # when SDK testcontainers bumps again. Filed 2026-05-18.
+    "RUSTSEC-2026-0145",
+
     # rsa 0.9.x Marvin attack (CVSS 5.9). Pulled by sqlx-mysql, which is
     # a transitive build-time dep of sov-db's optional sqlx integration.
     # No production code path uses MySQL or RSA decryption; the Marvin
