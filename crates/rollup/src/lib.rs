@@ -55,6 +55,37 @@ pub use mock_rollup::{MockLigateRollup, MockRollupSpec};
 /// disappear into a local mempool that never propagates.
 ///
 /// Tracking: [#243](https://github.com/ligate-io/ligate-chain/issues/243).
+///
+/// # SEAM: multi-sequencer leader assignment
+///
+/// This binary-level [`NodeRole`] (`Sequencer` vs `Follower`) is
+/// coarse; multi-sequencer (#82) needs a *slot-level* "who is the
+/// active leader right now?" decision among N peer sequencers.
+///
+/// **The Sovereign SDK already implements this upstream.** It is a
+/// configuration concern, not a code-change concern, for our chain:
+///
+/// - The actual leader / replica branch lives in the SDK fork at
+///   `sov-sequencer/src/preferred/db/mod.rs:543-564`, matching on
+///   `sov_full_node_configs::sequencer::ConfiguredNodeRole`
+///   (`Leader` / `Replica` / `ReplicaNoLeaderSync` / `DbElected`).
+/// - `DbElected` mode runs a Postgres-backed election with heartbeat
+///   timeout, grace period, and replica state-sync. See `db/heartbeat_task.rs`
+///   and `replica/replica_sync_task.rs` in the SDK fork.
+/// - To activate it for our chain, `PreferredSequencerConfig::postgres_config`
+///   needs to be set in `devnet/rollup.toml`'s `[sequencer.preferred]`
+///   section (currently absent, which is why we run single-instance).
+///
+/// The design-doc sub-issues for Option 1 collapse:
+/// - Sub-issue 2 (LeaderSchedule) and 3 (view-change): **already
+///   shipped upstream**; we use `DbElected` instead of writing our own.
+/// - Sub-issue 4 (multi-instance prod deploy), 5 (force-include
+///   observability stub), and 6 (docs + runbook) are still required.
+/// - New requirement: provision a managed Postgres instance accessible
+///   from every sequencer VM (Cloud SQL or self-hosted on the same VPC).
+///
+/// See `docs/protocol/sequencer-decentralisation.md` §5 for the
+/// updated implementation plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeRole {
     /// Normal full node: produces batches, posts to DA, accepts

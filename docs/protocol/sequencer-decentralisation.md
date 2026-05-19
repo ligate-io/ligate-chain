@@ -141,21 +141,54 @@ Whatever option we pick must satisfy:
 
 ## 5. Implementation plan for Option 3.1
 
-Six sub-issues to open under the #82 umbrella, in dependency order:
+### Audit findings (chain#410)
 
-1. **Plumbing audit.** Map the current single-sequencer code path in `crates/rollup` + upstream `sov-sequencer`. Identify the leader-assignment seam (the function that decides "who proposes this slot"). Output: a short PR adding a `// SEAM:` comment at the right place + a paragraph in this doc updating §5 with what we found. Acceptance: a senior engineer can read the comment and immediately know where the deterministic-rotation logic plugs in.
+The plumbing audit located the seam in two places:
 
-2. **Deterministic per-slot leader.** Implement `LeaderSchedule` (or equivalent): given a slot height and a fixed validator set of size N, deterministically pick the leader. Initial rotation function: `leader(slot) = validators[slot % N]`. Acceptance: unit test passes; fuzz test passes; integration test confirms three local sequencers take turns proposing without collision.
+- **Config seam (ours):** `devnet/rollup.toml`'s `[sequencer.preferred]` section is missing an optional `postgres_config` block. When that block is present, the SDK switches from single-instance RocksDb to Postgres-backed multi-instance with leader election. Today the block is absent — that is why we run single-sequencer.
+- **Code seam (upstream SDK):** `sov-sequencer/src/preferred/db/mod.rs:543-564` is the actual `match ConfiguredNodeRole {...}` branch where leader-vs-replica behaviour diverges. `// SEAM:` comment in `crates/rollup/src/lib.rs` (next to `NodeRole`) marks the discovery point for readers.
 
-3. **Failure detection + view-change.** If the assigned leader doesn't propose within slot-timeout (start with 2× slot duration), the next-in-rotation takes over. Heartbeat or timeout-based; pick the simpler option after reading the Sovereign SDK upstream pattern. Acceptance: kill one of three local sequencers mid-slot; chain continues proposing within slot-timeout. Documented runbook for "what to do if two sequencers think they're leader."
+The Sovereign SDK **already implements** the bulk of Option 3.1:
 
-4. **Multi-sequencer prod deploy.** Spin up two additional GCP instances (`ligate-node-2`, `ligate-node-3`); extend the cloud-init template to support per-instance index and validator set. Update Caddyfile to fan out to the multi-sequencer set with health-aware routing. Update Grafana dashboards to add a per-instance label. Acceptance: prod runs 3 sequencers for 24h with at least one forced-failover incident successfully handled.
+- `ConfiguredNodeRole::{Leader, Replica, ReplicaNoLeaderSync, DbElected}` enum at `crates/full-node/full-node-configs/src/sequencer.rs:139`
+- Postgres heartbeat task at `preferred/db/heartbeat_task.rs`
+- Replica sync task at `preferred/replica/replica_sync_task.rs`
+- `LeaderElectionConfig` (heartbeat interval, leader timeout, grace period) with sensible defaults
+- SQL `is_leader()` function in the Postgres migrations
+- Tests at `preferred/db/postgres/tests/leader_election.rs`
 
-5. **Force-include observability.** Wire a metric `ligate_forced_inclusion_total{reason}` for when (eventually, post-#81) a transaction lands via the force-include path. Stub it as a 0-emitting counter for now so the alerts and dashboards have a place for it. Acceptance: counter visible in `/metrics`.
+`DbElected` mode is exactly what we want for Option 3.1: each instance heartbeats into Postgres, one wins the election, others run as replicas synced from the leader via Postgres state sync. On leader failure (heartbeat timeout + grace period elapsed) one of the replicas takes over.
 
-6. **Documentation.** Update `docs/development/public-devnet-deploy.md` for the multi-sequencer topology; add `docs/development/runbooks/multi-sequencer-failover.md` for incident response; cross-link from this doc's §5 to the runbook. Acceptance: a new operator can stand up the 3-sequencer topology following only the docs.
+### Revised sub-issue list
 
-Each sub-issue is independently mergeable; (1) and (2) are the blockers for everything else.
+Original §5 from v1 of this doc assumed we'd implement `LeaderSchedule` + view-change from scratch. The audit makes most of that disappear; what's left is operational:
+
+1. ✅ **Plumbing audit.** Done. `// SEAM:` comment in `crates/rollup/src/lib.rs`, this section updated. Filed as chain#410.
+
+2. ~~Deterministic per-slot leader (`LeaderSchedule`)~~ — **dropped.** SDK's `DbElected` Postgres election replaces this. Heartbeat-based instead of slot-based, which is arguably better (no two-sequencers-both-think-they're-leader race at slot boundaries).
+
+3. ~~Failure detection + view-change~~ — **dropped.** SDK's heartbeat timeout + grace period IS the failure detection; the next election cycle IS the view-change. Both fully configurable via `LeaderElectionConfig`.
+
+4. **Postgres provisioning + config.** Provision a managed Postgres instance (Cloud SQL with regional HA, or a small managed Postgres on the same VPC) accessible from every sequencer VM. Wire `[sequencer.preferred.postgres]` into `devnet/rollup.toml` with `node_role = "DbElected"` for all three sequencer instances, distinct `node_id` per instance. Acceptance: three local sequencers running against a single Postgres see one elected leader and two replicas; killing the leader triggers a new election within the configured timeout.
+
+5. **Multi-sequencer prod deploy.** Spin up two additional GCP instances (`ligate-node-2`, `ligate-node-3`); extend the cloud-init template for per-instance index. Update Caddyfile to fan reads out across all healthy instances and route writes (`POST /v1/sequencer/txs`) to the current leader (Postgres-derived via a small health endpoint, or the SDK's existing leader-info API if it exposes one). Add per-instance Grafana labels. Acceptance: prod runs 3 sequencers for 24h with at least one forced-failover incident successfully handled.
+
+6. **Force-include observability stub.** Wire `ligate_forced_inclusion_total{reason}` as a 0-emitting counter for the eventual #81 work. Acceptance: counter visible in `/metrics`.
+
+7. **Documentation.** Update `docs/development/public-devnet-deploy.md` for the multi-sequencer topology; add `docs/development/runbooks/multi-sequencer-failover.md`. Cover the Postgres dependency (backup, snapshot, restore). Acceptance: a new operator can stand up the 3-sequencer topology from the docs alone.
+
+### What this means for timing
+
+Original estimate in §4: **~6-8 weeks**. Revised estimate after audit: **~2-3 weeks**, dominated by Postgres provisioning + Caddyfile work + 24h prod soak. Coding is minimal; this is config + ops.
+
+### What's still gated
+
+Sub-issue 4 has a non-trivial decision embedded: managed Cloud SQL vs self-hosted Postgres on the same VPC. Tradeoffs:
+
+- **Cloud SQL with regional HA.** Easy to operate. Costs ~$50-100/mo for a small instance with HA. Failover is GCP-managed. The Postgres becomes a separately-paid GCP-managed dependency.
+- **Self-hosted on a small VM.** Cheaper (~$15/mo for the VM). We own the failure mode. Adds ops surface.
+
+Default recommendation: **Cloud SQL** with regional HA, at least until pre-mainnet. Operating a single VM is fine until that VM becomes the SPOF that the multi-sequencer work was meant to remove. Revisit if cost becomes a constraint.
 
 ---
 
