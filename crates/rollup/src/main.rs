@@ -15,6 +15,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::exit;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use clap::Parser;
@@ -28,7 +29,24 @@ use sov_modules_rollup_blueprint::logging::initialize_logging;
 use sov_modules_rollup_blueprint::FullNodeBlueprint;
 use sov_stf_runner::processes::RollupProverConfig;
 use sov_stf_runner::RollupConfig;
+use tokio::signal::unix::{signal, SignalKind};
 use tracing::debug;
+
+/// Hard upper bound on shutdown duration after the first SIGTERM/SIGINT/SIGQUIT.
+/// If the process is still alive after this many seconds, the watchdog forces
+/// `std::process::exit(0)` regardless of whether tasks have finished cleaning up.
+///
+/// Sized so that:
+/// - the SDK's HTTP server timeouts (20s for axum keepalive drain + 5s for jsonrpsee
+///   `stopped()`) get the chance to complete naturally;
+/// - the chain still always dies well below systemd's default `TimeoutStopSec=5min`,
+///   keeping operator restart cycles fast (single-digit seconds in the common case,
+///   tens of seconds in the worst case);
+/// - a Replica winning the Postgres lock via the SDK's "exit to restart as leader"
+///   path can never wedge the whole cluster (chain#435 incident, 2026-05-20).
+///
+/// Background filed at https://github.com/ligate-io/ligate-chain/issues/435.
+const SHUTDOWN_WATCHDOG_DEADLINE: Duration = Duration::from_secs(35);
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Ligate Chain rollup node", long_about = None)]
@@ -144,6 +162,19 @@ async fn main() {
     // whole process; dropping it stalls log flush on shutdown.
     let _guard = initialize_logging();
 
+    // Belt-and-suspenders shutdown watchdog. The SDK installs its own SIGTERM /
+    // SIGINT / SIGQUIT handlers that drive a graceful shutdown via `watch::Sender`
+    // and a per-task cancellation cascade. This task does NOT replace that;
+    // it complements it by enforcing a hard upper bound on the total shutdown
+    // duration. If any task on the cancellation graph stalls (an HTTP server
+    // waiting on a keepalive connection that never closes, a Postgres pool with
+    // a hung connection, a future regression to the SDK's task tree, etc.), this
+    // watchdog calls `std::process::exit(0)` rather than letting systemd's
+    // `TimeoutStopSec` (5 minutes by default) elapse and SIGKILL the process.
+    //
+    // See ligate-io/ligate-chain#435 for the incident this was added for.
+    spawn_shutdown_watchdog();
+
     match run().await {
         Ok(()) => {
             tracing::debug!("Rollup execution complete. Shutting down.");
@@ -157,6 +188,62 @@ async fn main() {
             exit(1);
         }
     }
+}
+
+/// Arms the shutdown watchdog. See the call site in `main()` for context.
+fn spawn_shutdown_watchdog() {
+    tokio::spawn(async move {
+        // Listen for any of the standard "please stop" signals. We watch all three
+        // so the deadline applies regardless of how shutdown was triggered (systemd
+        // sends SIGTERM, a manual `kill` defaults to SIGTERM, Ctrl-C sends SIGINT,
+        // `kill -3` sends SIGQUIT). The first one to arrive starts the deadline
+        // clock.
+        let mut sigterm = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e, "watchdog: failed to install SIGTERM listener; the SDK's own handler is still in effect");
+                return;
+            }
+        };
+        let mut sigint = match signal(SignalKind::interrupt()) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e, "watchdog: failed to install SIGINT listener; the SDK's own handler is still in effect");
+                return;
+            }
+        };
+        let mut sigquit = match signal(SignalKind::quit()) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::warn!(error = %e, "watchdog: failed to install SIGQUIT listener; the SDK's own handler is still in effect");
+                return;
+            }
+        };
+
+        tokio::select! {
+            _ = sigterm.recv() => tracing::info!(
+                deadline_secs = SHUTDOWN_WATCHDOG_DEADLINE.as_secs(),
+                "watchdog: SIGTERM received; arming hard-exit deadline"
+            ),
+            _ = sigint.recv() => tracing::info!(
+                deadline_secs = SHUTDOWN_WATCHDOG_DEADLINE.as_secs(),
+                "watchdog: SIGINT received; arming hard-exit deadline"
+            ),
+            _ = sigquit.recv() => tracing::info!(
+                deadline_secs = SHUTDOWN_WATCHDOG_DEADLINE.as_secs(),
+                "watchdog: SIGQUIT received; arming hard-exit deadline"
+            ),
+        }
+
+        tokio::time::sleep(SHUTDOWN_WATCHDOG_DEADLINE).await;
+        tracing::error!(
+            deadline_secs = SHUTDOWN_WATCHDOG_DEADLINE.as_secs(),
+            "watchdog: graceful shutdown did not complete within the deadline; \
+             forcing process exit. This indicates a stalled task somewhere in the \
+             cancellation graph; check logs for the most recent non-shutdown lines."
+        );
+        std::process::exit(0);
+    });
 }
 
 async fn run() -> anyhow::Result<()> {
