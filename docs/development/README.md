@@ -46,6 +46,7 @@ Operational procedures. Each is dated to its last review and pins a "Status: vN"
 | [`runbooks/faucet-ops.md`](./runbooks/faucet-ops.md) | `ligate-api`'s faucet endpoint operation: hot key, rate limits, per-address tracking |
 | [`runbooks/backup-restore.md`](./runbooks/backup-restore.md) | GCS-backed `ligate-node` RocksDB snapshot + restore; quarterly drill cadence |
 | [`runbooks/log-shipping.md`](./runbooks/log-shipping.md) | Fluent Bit deploy on the chain VM; Cloud Logging filter patterns |
+| [`runbooks/multi-sequencer-failover.md`](./runbooks/multi-sequencer-failover.md) | DbElected mode operations: cluster state read, planned Leader replacement, unplanned failover, forced takeover, Postgres outage handling |
 
 ## Alerts
 

@@ -1,4 +1,4 @@
-# rpc.ligate.io: TLS-terminated proxy to ligate-node REST.
+# rpc.ligate.io: TLS-terminated proxy to the ligate-node DbElected cluster.
 # Let's Encrypt cert provisions automatically on first request.
 #
 # Defense-in-depth: only accept traffic that arrived via Cloudflare's
@@ -11,6 +11,35 @@
 # on 2026-05-16. Cloudflare rarely changes these; review quarterly
 # or when the connection-from-CF check below starts dropping
 # legitimate traffic.
+#
+# ─── Topology ────────────────────────────────────────────────────────
+# Multi-sequencer mode (DbElected, chain#422). VM-1 is the public-
+# facing gateway; Cloudflare → VM-1's Caddy → fans out to the cluster
+# via VPC-private IPs. All 3 ligate-node processes register against the
+# shared Cloud SQL Postgres; exactly one holds the leader lock and
+# returns `"BatchProducer"` on `/v1/sequencer/role`. The others return
+# `"PgSyncReplica"` and 503 on `POST /v1/sequencer/txs`.
+#
+# Read traffic (everything except POST /v1/sequencer/txs):
+#   round-robin across all 3 healthy upstreams (`/health` active check).
+# Write traffic (POST /v1/sequencer/txs):
+#   `lb_policy first` against a leader-aware health probe that requires
+#   `/v1/sequencer/role` to respond with body matching `BatchProducer`.
+#   When the current Leader dies its probe stops matching, Caddy
+#   demotes it from the pool, and the next healthy upstream (which by
+#   then is the new Leader elected by the SDK) absorbs writes.
+#
+# Prerequisite: ligate-node `bind_host` must be `0.0.0.0` (or the VPC
+# range) on every VM, and the GCP firewall must allow port 12346 within
+# the VPC. The legacy single-VM config used `bind_host = 127.0.0.1` and
+# is incompatible with fan-out routing. See
+# `docs/development/runbooks/multi-sequencer-failover.md` for the bind
+# change procedure.
+#
+# Gateway HA is **not** solved here: if VM-1 itself dies, all traffic
+# stops until DNS is swung to another VM's external IP. Tracked as a
+# follow-up to chain#422; for devnet-1 the single-gateway model is
+# acceptable.
 
 (cloudflare_only) {
     @not_cloudflare not remote_ip 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
@@ -19,11 +48,28 @@
     }
 }
 
+# DbElected upstream pool. Private VPC IPs of the 3 sequencer VMs.
+# Replace these when re-IPing or expanding the pool.
+#
+# IPs are intentionally hardcoded: the pool is small (3), changes
+# infrequently, and the alternative (DNS lookup in Caddy) would
+# introduce a DNS-failure cliff.
+#
+# Snippet uses `to` subdirectives so it can be imported inside any
+# `reverse_proxy { ... }` block (bare IPs would have to appear on the
+# `reverse_proxy` line itself and can't be carried by an `import`).
+(sequencer_pool) {
+    to 10.128.0.3:12346
+    to 10.128.0.6:12346
+    to 10.128.0.11:12346
+}
+
 rpc.ligate.io {
     import cloudflare_only
     encode gzip
 
     # Health probes are unversioned; ligate-node serves them at the root.
+    # Reads against the gateway VM only (cheap, no fan-out needed).
     handle /health {
         reverse_proxy 127.0.0.1:12346
     }
@@ -42,8 +88,8 @@ rpc.ligate.io {
     #
     # IMPORTANT: the `redir /v1/swagger-ui/ 308` only fires when this
     # block routes ahead of the catch-all `reverse_proxy` at the end.
-    # That's the whole reason the catch-all is wrapped in handle{} —
-    # a bare `reverse_proxy` at the site-block level would compete with
+    # That's the whole reason the catch-all is wrapped in handle{}: a
+    # bare `reverse_proxy` at the site-block level would compete with
     # these handle{} blocks and could win the routing race, sending
     # /v1/swagger-ui to the chain's broken bundled UI instead.
     handle_path /v1/swagger-ui/* {
@@ -81,16 +127,67 @@ rpc.ligate.io {
         respond "Not exposed publicly. See ops docs." 404
     }
 
-    # Catch-all: every other path proxies to ligate-node.
-    # MUST be wrapped in handle{} — a bare directive at the site-block
-    # level competes with the explicit handle{} blocks above and can
-    # win the routing race. The original Caddyfile had `reverse_proxy
-    # 127.0.0.1:12346` as a bare directive, which is exactly why the
-    # `/v1/swagger-ui` (no trailing slash) redirect wasn't firing:
-    # the bare proxy was winning over `handle /v1/swagger-ui { redir }`.
-    # Empty matcher (handle without a path) = fallback for any request
-    # not matched by a more specific handle block above.
+    # Block /v1/sequencer/role from being public: it's an internal
+    # leader-detection endpoint used by the Caddy active health check
+    # below. Exposing it externally would leak cluster topology.
+    handle /v1/sequencer/role {
+        respond "Internal endpoint." 404
+    }
+
+    # WRITE path: POST /v1/sequencer/txs goes to the current Leader
+    # only. `lb_policy first` picks the first healthy upstream, and the
+    # health probe accepts only nodes returning body matching
+    # `BatchProducer`. So "first healthy" == "the Leader".
+    #
+    # When the Leader fails, its probe stops matching within
+    # `health_interval`. Caddy demotes it; the next probe cycle finds
+    # the new SDK-elected Leader (which by then has acquired the lock
+    # and started returning BatchProducer). Failover window =
+    # SDK election (~10s) + Caddy health_interval (~2s) = ~12s.
+    @write {
+        method POST
+        path /v1/sequencer/txs
+    }
+    handle @write {
+        reverse_proxy {
+            import sequencer_pool
+            lb_policy first
+            lb_try_duration 5s
+            lb_try_interval 250ms
+
+            # Active leader-detection probe.
+            health_uri /v1/sequencer/role
+            health_status 200
+            health_body "BatchProducer"
+            health_interval 2s
+            health_timeout 1s
+
+            # If the selected upstream fails to dial (TCP refused, node
+            # restarting), Caddy automatically tries the next healthy
+            # upstream within `lb_try_duration`. There is no built-in
+            # Caddyfile knob to retry on a 503 response body (would
+            # require a custom matcher plugin or JSON config); a race
+            # where a node passes the probe but loses the lock between
+            # probe and write is rare enough that we surface the 503 to
+            # the client and let them retry. Tracked as a future
+            # hardening if it bites in practice.
+        }
+    }
+
+    # READ path: every other request fans out to the full sequencer
+    # pool with round-robin. Uses `/ready` (NOT `/health`) for the
+    # active probe so that nodes still catching up from DA return 503
+    # and Caddy excludes them. Serving reads from an unsynced node
+    # would silently surface stale state to clients.
     handle {
-        reverse_proxy 127.0.0.1:12346
+        reverse_proxy {
+            import sequencer_pool
+            lb_policy round_robin
+
+            health_uri /ready
+            health_status 200
+            health_interval 5s
+            health_timeout 2s
+        }
     }
 }

@@ -131,6 +131,12 @@ da_polling_interval_ms = 2_000
 # fronts the node and serves the public TLS endpoint. Binding the
 # node directly to a public interface is only safe behind a firewall
 # rule restricting to your reverse proxy's source.
+#
+# Multi-sequencer (DbElected) operators must flip this to "0.0.0.0"
+# so the gateway VM's Caddy can reach the replicas' REST surface over
+# the VPC. The GCP firewall already restricts 12346 to VPC peers. See
+# `docs/development/runbooks/multi-sequencer-failover.md` for the
+# bind-flip procedure and `ops/caddy/Caddyfile` for the fan-out config.
 bind_host = "127.0.0.1"
 bind_port = 12346
 
