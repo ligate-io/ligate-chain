@@ -264,11 +264,119 @@ runcmd:
     cp -rn /tmp/ligate-chain/devnet-1/. /opt/ligate/devnet-1/
     chown -R ligate:ligate /opt/ligate/devnet-1
 
-  # Start ligate-node. Cloud-init has placed the binary, the devnet-1
-  # config, and /etc/ligate/env above. Follower-mode VMs sync state
-  # from DA without producing batches; sequencer-mode VMs start
-  # producing immediately. Cutover to multi-sequencer DbElected
-  # happens at the operator's discretion (chain#422); for now,
-  # follower VMs sit as hot replicas.
+  # Fetch the Celestia DA signer key from Secret Manager and place it
+  # in a drop-in env file that systemd's `EnvironmentFile=-` (note the
+  # leading dash: "optional file") picks up alongside the cloud-init
+  # managed /etc/ligate/env.
+  #
+  # Why a drop-in: /etc/ligate/env gets rewritten on every cloud-init
+  # run (it's templated from instance metadata). Secret material lives
+  # separately so it's not clobbered.
+  #
+  # Why follower mode also needs the signer: today our `--mode
+  # follower` still constructs the PreferredSequencer (which requires
+  # `da.get_signer()` to return a value) even though follower never
+  # actually posts blobs. Tracked at chain#426 to refactor away the
+  # requirement; until then all node modes need the key.
+  - |
+    mkdir -p /etc/ligate/env.d
+    SIGNER_HEX=$(gcloud secrets versions access latest \
+      --secret=ligate-devnet-1-celestia-signer-key \
+      --project=utopian-spring-494915-q1 2>/dev/null | tr -d '\r\n')
+    if [ -n "$SIGNER_HEX" ]; then
+      echo "SOV_CELESTIA_SIGNER_KEY=$SIGNER_HEX" > /etc/ligate/env.d/celestia-signer
+      chown root:ligate /etc/ligate/env.d/celestia-signer
+      chmod 640 /etc/ligate/env.d/celestia-signer
+      echo "cloud-init: placed Celestia signer key drop-in (${#SIGNER_HEX} hex chars)" >&2
+    else
+      echo "cloud-init: WARNING — could not fetch Celestia signer from Secret Manager; ligate-node will fail until the operator places one." >&2
+    fi
+
+  # Add the drop-in EnvironmentFile to the ligate-node systemd unit
+  # (idempotent: skips if the line already exists).
+  - |
+    UNIT=/etc/systemd/system/ligate-node.service
+    if ! grep -q "EnvironmentFile=-/etc/ligate/env.d/celestia-signer" "$UNIT"; then
+      sed -i '/^EnvironmentFile=\/etc\/ligate\/env$/a EnvironmentFile=-/etc/ligate/env.d/celestia-signer' "$UNIT"
+    fi
+
+  # Install Grafana Alloy and configure it to scrape ligate-node +
+  # node-exporter, remote-writing to Grafana Cloud Mimir. The GC API
+  # token comes from Secret Manager so this template doesn't embed
+  # credentials. Same Mimir endpoint + same GC username across all
+  # instances; the `instance` label on each scrape distinguishes which
+  # VM the series came from (the Grafana dashboards filter on this
+  # via chain#427).
+  - |
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor --batch --yes -o /etc/apt/keyrings/grafana.gpg
+    echo 'deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main' > /etc/apt/sources.list.d/grafana.list
+    apt-get update -qq
+    apt-get install -y alloy
+    mkdir -p /etc/alloy
+
+    gcloud secrets versions access latest \
+      --secret=ligate-devnet-1-grafana-cloud-token \
+      --project=utopian-spring-494915-q1 > /etc/alloy/grafana_cloud_token
+    chown alloy:alloy /etc/alloy/grafana_cloud_token
+    chmod 600 /etc/alloy/grafana_cloud_token
+
+    # LIGATE_NODE_ID was templated into /etc/ligate/env earlier in the
+    # cloud-init by the metadata-reading step above.
+    LIGATE_NODE_ID=$(grep '^LIGATE_NODE_ID=' /etc/ligate/env | cut -d= -f2)
+    cat > /etc/alloy/config.alloy <<ALLOYEOF
+    // Grafana Alloy config for $LIGATE_NODE_ID. Scrapes ligate-node
+    // (:9100) + in-process node_exporter, remote-writes to Grafana
+    // Cloud Mimir. Same pattern as VM-1.
+
+    local.file "gc_token" {
+        filename = "/etc/alloy/grafana_cloud_token"
+        is_secret = true
+    }
+
+    prometheus.scrape "ligate_node" {
+        targets = [{
+            __address__ = "127.0.0.1:9100",
+            job         = "ligate-node",
+            instance    = "$LIGATE_NODE_ID",
+        }]
+        scrape_interval = "15s"
+        forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+    }
+
+    prometheus.remote_write "grafana_cloud" {
+        endpoint {
+            url = "https://prometheus-prod-66-prod-us-east-3.grafana.net/api/prom/push"
+            basic_auth {
+                username = "3215654"
+                password = local.file.gc_token.content
+            }
+        }
+        wal {
+            truncate_frequency = "2h"
+        }
+    }
+
+    prometheus.exporter.unix "node" {
+        disable_collectors = ["ipvs", "btrfs", "infiniband", "tapestats", "zfs"]
+    }
+
+    prometheus.scrape "node" {
+        targets = prometheus.exporter.unix.node.targets
+        job_name = "node"
+        scrape_interval = "15s"
+        forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+    }
+    ALLOYEOF
+    chown alloy:alloy /etc/alloy/config.alloy
+    chmod 644 /etc/alloy/config.alloy
+    systemctl enable --now alloy
+
+  # Start ligate-node. Cloud-init has placed the binary, devnet-1
+  # config, /etc/ligate/env (managed), and /etc/ligate/env.d/celestia-signer
+  # (secret drop-in) above. Alloy is also up and scraping. Follower-mode
+  # VMs sync state from DA without producing batches; sequencer-mode VMs
+  # start producing immediately. Cutover to multi-sequencer DbElected
+  # happens at the operator's discretion (chain#422).
   - systemctl daemon-reload
   - systemctl enable --now ligate-node.service
