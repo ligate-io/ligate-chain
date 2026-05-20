@@ -8,6 +8,41 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-21
+
+Ops + docs patch. No chain code changes; `chain_hash` unchanged from `v0.2.4`; safe binary swap in place. Cuts a tagged release so the multi-instance cloud-init work (PRs #424 + #425), the canonical `devnet-1/` substituted bundle (#429), and the multi-instance Grafana dashboard (#431) ship as a pinned point-in-time bundle. The cloud-init's `LIGATE_TAG` pin advances to `v0.2.5` in a follow-up so VM-4 (and any future re-image) boots fully clean from `git clone` + Secret Manager fetch, no manual operator intervention.
+
+### Added
+
+- `ops/cloud-init/sequencer.yaml` — multi-instance support (#424, #425). Reads `LIGATE_NODE_ID` + `LIGATE_MODE` per VM from GCP instance metadata; auto-installs the `ligate-node` binary from the GitHub release; auto-places `/opt/ligate/devnet-1/` from the chain repo at the pinned tag; fetches the Celestia DA signer key from GCP Secret Manager into `/etc/ligate/env.d/celestia-signer` (drop-in dir so cloud-init's managed `/etc/ligate/env` and operator-supplied secret material don't clobber each other); installs Grafana Alloy with config templated for the per-instance `instance` label so per-VM metrics flow into Grafana Cloud Mimir distinguishably. Five iteration-round bugs hit during the live VM-2 first boot (binary mkdir, sha256 filename, Celestia RPC JWT, signer requirement under follower mode, Alloy missing) all fixed inline with comments explaining why.
+- `ops/cloud-init/render-rollup-toml.sh` (shipped in v0.2.4, unchanged here) — per-instance rollup.toml renderer for the DbElected multi-sequencer activation. Still ready to plug in at cutover; current VMs run as `--mode follower` without activating the postgres_config block.
+- `ops/grafana/ligate-node.json` — `$instance` template variable + filter rewriting on all 17 ligate_*/process_* metric queries (#431). Multi-select, defaults to "All". Lets the dashboard separate per-VM time series cleanly now that VM-2 + VM-3 are emitting alongside VM-1.
+
+### Changed
+
+- `devnet-1/genesis/chain_state.json` — replaces the template `"genesis_da_height": 0` with the live `"genesis_da_height": 11357228` (#429). 11357228 is the Mocha-4 block height at devnet-1 launch; previously this value lived only on the operator-substituted production VM-1. Committing it makes the repo's `devnet-1/` directory the canonical live-deployment bundle (anyone with the public repo + a Celestia signer key can run a working follower) rather than a tool-substitutable template.
+- `devnet-1/celestia.toml` — `prover_address` + `rollup_address` switched from the template-substituted placeholder (`lig1zd9j2z6...`) to the v0 Anvil dev actor address (`lig1h72nh5c7...`) that's documented in `devnet/rollup.toml` (the localnet config) and used in production by VM-1. Same canonical-bundle rationale as the chain_state.json change.
+- `README.md` — full "macOS first-build trifecta" callout under "System dependencies" plus a Quick start pointer at the published GHCR image and GitHub release binaries (#423, #417, #418). New macOS contributors now hit one self-contained recipe instead of bouncing between README and CONTRIBUTING.
+
+### Deps
+
+- No `Sovereign-Labs/sovereign-sdk` rev change. `[patch]` block still pins `ligate-io/sovereign-sdk@4b4a313b7` (same as v0.2.4).
+- Internal workspace crates (`attestation`, `ligate-bootstrap-cli`, `ligate-client`, `ligate-genesis-tool`, `ligate-prover-risc0`, `ligate-rollup`, `ligate-stf`, `ligate-stf-declaration`) bumped 0.2.4 → 0.2.5 in `Cargo.lock` to match the workspace version.
+
+### Compatibility
+
+`chain_hash` unchanged from `v0.2.4`. No state changes. No re-genesis required. Operators deploying this binary to existing `devnet-1` VMs keep their RocksDB state intact across the swap. The `devnet-1/genesis/chain_state.json` change is config-only (the indexer + chain read this at boot but it's not part of the chain_hash computation).
+
+### What this unlocks downstream
+
+- VM-4 (or any future re-image of VM-1/-2/-3) booting fully clean from cloud-init alone — no SCP of substituted bundle from VM-1, no manual chain_state.json patch
+- The next cutover step under chain#422 ("multi-sequencer prod deploy"): VM-2 + VM-3 are already running on this release as followers; the cutover script activates the DbElected postgres_config block via `render-rollup-toml.sh` + restarts ligate-node on all three with `--mode sequencer`
+
+### Followup (out of scope for v0.2.5)
+
+- chain#426 — refactor follower mode to skip `PreferredSequencer` init so the Celestia signer dependency goes away. Multi-day SDK fork patch; tracked for v1+ ergonomics. The current workaround (signer placed on every VM via Secret Manager) is operationally fine for our internal multi-sequencer setup.
+- chain#392 — GCP cost panels (VM-hours, SSD storage, network egress) in Grafana. Still open; needs BigQuery billing export + Grafana data source work. Multi-hour, separate session.
+
 ## [0.2.4] - 2026-05-20
 
 Ops + docs patch. No chain code changes; `chain_hash` unchanged from `v0.2.3`; safe binary swap in place. Cuts a tagged release so the multi-sequencer activation artifacts (design doc + plumbing audit findings + rollup.toml config seam + per-instance render script + Docker smoke harness) ship as a pinned point-in-time bundle alongside the Dependabot bumps that landed since `v0.2.3`. Sub-issue 5 (multi-sequencer prod deploy) consumes the `v0.2.4` artifacts (release tarball + GHCR image) rather than tracking a moving `main`.
