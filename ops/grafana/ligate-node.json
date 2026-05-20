@@ -72,7 +72,7 @@
       },
       "pluginVersion": "10.0.0",
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_schemas_registered_total", "legendFormat": "schemas", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_schemas_registered_total{instance=~\"$instance\"}", "legendFormat": "schemas", "refId": "A"}
       ],
       "title": "Schemas registered",
       "type": "stat"
@@ -97,7 +97,7 @@
       },
       "pluginVersion": "10.0.0",
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_attestor_sets_registered_total", "legendFormat": "attestor sets", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_attestor_sets_registered_total{instance=~\"$instance\"}", "legendFormat": "attestor sets", "refId": "A"}
       ],
       "title": "Attestor sets registered",
       "type": "stat"
@@ -120,7 +120,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "rate(ligate_attestations_submitted_total[5m])", "legendFormat": "attestations / sec", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "rate(ligate_attestations_submitted_total{instance=~\"$instance\"}[5m])", "legendFormat": "attestations / sec", "refId": "A"}
       ],
       "title": "Attestations submitted (rate)",
       "type": "timeseries"
@@ -151,7 +151,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_block_height", "legendFormat": "block height", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_block_height{instance=~\"$instance\"}", "legendFormat": "block height", "refId": "A"}
       ],
       "title": "Block height",
       "type": "timeseries"
@@ -181,7 +181,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_mempool_depth", "legendFormat": "pending txs", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_mempool_depth{instance=~\"$instance\"}", "legendFormat": "pending txs", "refId": "A"}
       ],
       "title": "Mempool depth",
       "type": "timeseries"
@@ -211,7 +211,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_state_db_size_bytes", "legendFormat": "state db", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "ligate_state_db_size_bytes{instance=~\"$instance\"}", "legendFormat": "state db", "refId": "A"}
       ],
       "title": "State DB size",
       "type": "timeseries"
@@ -234,7 +234,7 @@
         "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "sum by (endpoint) (rate(ligate_rpc_requests_total[5m]))", "legendFormat": "{{endpoint}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "sum by (endpoint) (rate(ligate_rpc_requests_total{instance=~\"$instance\"}[5m]))", "legendFormat": "{{endpoint}}", "refId": "A"}
       ],
       "title": "RPC requests / sec (by endpoint)",
       "type": "timeseries"
@@ -265,7 +265,7 @@
         "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "sum by (reason) (rate(ligate_da_submission_failures_total[5m]))", "legendFormat": "{{reason}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "sum by (reason) (rate(ligate_da_submission_failures_total{instance=~\"$instance\"}[5m]))", "legendFormat": "{{reason}}", "refId": "A"}
       ],
       "title": "DA submission failures (rate, by reason)",
       "type": "timeseries"
@@ -295,9 +295,9 @@
         "tooltip": {"mode": "multi"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.50, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A"},
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.95, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B"},
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.99, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.50, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket{instance=~\"$instance\"}[5m])))", "legendFormat": "p50", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.95, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket{instance=~\"$instance\"}[5m])))", "legendFormat": "p95", "refId": "B"},
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.99, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket{instance=~\"$instance\"}[5m])))", "legendFormat": "p99", "refId": "C"}
       ],
       "title": "DA finalization latency (Published -> Finalized)",
       "type": "timeseries"
@@ -328,7 +328,7 @@
         "tooltip": {"mode": "multi", "sort": "desc"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "topk(10, sum by (reason) (rate(ligate_attestations_rejected_total[1h])))", "legendFormat": "{{reason}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "topk(10, sum by (reason) (rate(ligate_attestations_rejected_total{instance=~\"$instance\"}[1h])))", "legendFormat": "{{reason}}", "refId": "A"}
       ],
       "title": "Attestation rejections by reason (top 10, 1h)",
       "type": "timeseries"
@@ -358,7 +358,7 @@
         "tooltip": {"mode": "multi"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(ligate_rpc_request_duration_seconds_bucket[5m])))", "legendFormat": "{{endpoint}}", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(ligate_rpc_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])))", "legendFormat": "{{endpoint}}", "refId": "A"}
       ],
       "title": "RPC latency p95 (by endpoint)",
       "type": "timeseries"
@@ -396,7 +396,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "rate(process_cpu_seconds_total[5m])", "legendFormat": "cores", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "rate(process_cpu_seconds_total{instance=~\"$instance\"}[5m])", "legendFormat": "cores", "refId": "A"}
       ],
       "title": "Process CPU (cores)",
       "type": "timeseries"
@@ -419,7 +419,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "process_resident_memory_bytes", "legendFormat": "RSS", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "process_resident_memory_bytes{instance=~\"$instance\"}", "legendFormat": "RSS", "refId": "A"}
       ],
       "title": "Process RSS",
       "type": "timeseries"
@@ -449,7 +449,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "process_open_fds", "legendFormat": "open FDs", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "process_open_fds{instance=~\"$instance\"}", "legendFormat": "open FDs", "refId": "A"}
       ],
       "title": "Process open FDs",
       "type": "timeseries"
@@ -472,7 +472,7 @@
         "tooltip": {"mode": "single"}
       },
       "targets": [
-        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "rate(ligate_metrics_dropped_total[5m])", "legendFormat": "dropped/sec", "refId": "A"}
+        {"datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "expr": "rate(ligate_metrics_dropped_total{instance=~\"$instance\"}[5m])", "legendFormat": "dropped/sec", "refId": "A"}
       ],
       "title": "Metrics dropped (broadcast lagged)",
       "type": "timeseries"
@@ -496,6 +496,24 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "name": "instance",
+        "label": "Sequencer instance",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "query": "label_values(ligate_block_height, instance)",
+        "regex": "ligate-devnet-1-sequencer.*",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".+",
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        }
       }
     ]
   },
