@@ -175,14 +175,16 @@ rpc.ligate.io {
     }
 
     # READ path: every other request fans out to the full sequencer
-    # pool with round-robin. `/health` is a generic liveness probe;
-    # any non-2xx response evicts the upstream.
+    # pool with round-robin. Uses `/ready` (NOT `/health`) for the
+    # active probe so that nodes still catching up from DA return 503
+    # and Caddy excludes them. Serving reads from an unsynced node
+    # would silently surface stale state to clients.
     handle {
         reverse_proxy {
             import sequencer_pool
             lb_policy round_robin
 
-            health_uri /health
+            health_uri /ready
             health_status 200
             health_interval 5s
             health_timeout 2s
