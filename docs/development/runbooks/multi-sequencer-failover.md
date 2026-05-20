@@ -118,6 +118,29 @@ sudo ss -tlnp | grep 12346
 # Expect: LISTEN ... 0.0.0.0:12346 ... ligate-node
 ```
 
+**Measured restart penalty: ~5 minutes per VM.** `ligate-node` currently
+ignores SIGTERM and only exits when systemd's `TimeoutStopSec` (default
+300s) expires and the process gets SIGKILL'd. This is a chain bug
+tracked at [chain#435](https://github.com/ligate-io/ligate-chain/issues/435):
+graceful shutdown is broken, so every restart is a 5-min HTTP outage
+window on that VM (Caddy returns 502 from `127.0.0.1:12346`).
+
+Workarounds while #435 is open:
+- Restart only one VM at a time so the others keep serving reads through
+  Caddy's fan-out pool (after the Caddyfile in
+  [`ops/caddy/Caddyfile`](../../../ops/caddy/Caddyfile) is deployed).
+- Apply a unit override to shorten the kill cycle:
+  ```
+  [Service]
+  TimeoutStopSec=30
+  KillMode=mixed
+  SendSIGKILL=yes
+  ```
+- For the Leader VM only, schedule restarts during low-traffic windows.
+
+This penalty also applies to **every** binary upgrade until #435 lands,
+not just the bind flip.
+
 The GCP firewall already restricts port 12346 to VPC peers (default
 deny + per-VPC allow rule). No public exposure occurs.
 
@@ -159,11 +182,11 @@ done
    Leader still holds the lock. The promoted node is now in the election
    pool.
 
-2. **Stop the current Leader gracefully.**
+2. **Stop the current Leader.** Until [chain#435](https://github.com/ligate-io/ligate-chain/issues/435) lands, `ligate-node` doesn't shut down on SIGTERM and `systemctl stop` blocks for `TimeoutStopSec` (5 min default) before SIGKILL. Until the bug is fixed, send SIGKILL directly so the lock releases fast:
    ```sh
-   sudo systemctl stop ligate-node
+   sudo systemctl kill --signal=SIGKILL ligate-node
    ```
-   Within one election cycle (lock TTL, typically 30s) the promoted
+   Within one election cycle (lock TTL, typically 30s after the dying Leader stops renewing) the promoted
    Replica should win:
    ```sh
    PGPASSWORD="$PG_PASS" psql -h 10.123.0.2 -U ligate_sequencer -d ligate_sequencer \
