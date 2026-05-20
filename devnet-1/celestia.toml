@@ -140,7 +140,7 @@ tokio_runtime_metrics_interval_millis = 500
 
 [proof_manager]
 aggregated_proof_block_jump = 10
-prover_address = "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac"
+prover_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 max_number_of_transitions_in_db = 100
 max_number_of_transitions_in_memory = 30
 # Added by SDK rev `f6cd64749` (Sovereign-Labs/sovereign-sdk#2832): bound
@@ -161,7 +161,7 @@ max_concurrent_batch_blobs = 128
 # proof blobs in flight on the DA layer; rollup shuts down on saturation.
 max_concurrent_proof_blobs = 1024
 max_allowed_node_distance_behind = 10
-rollup_address = "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac"
+rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 
 [sequencer.preferred]
 # Conscious choice (per #293, option A). We run preferred sequencer
