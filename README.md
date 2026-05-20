@@ -19,6 +19,9 @@
 
 ## Quick start
 
+> **Just want to run a node, not build from source?**
+> Pre-built Linux x86_64 / Linux arm64 / macOS arm64 binaries ship on every release: <https://github.com/ligate-io/ligate-chain/releases>. A multi-arch container image is also published on every release tag at `ghcr.io/ligate-io/ligate-chain:<version>` (e.g. `:0.2.4`, plus `:latest`). See [docs.ligate.io/nodes](https://docs.ligate.io/nodes) for the operator-facing install + boot recipes.
+
 ### Build and test
 
 ```bash
@@ -28,7 +31,7 @@ cd ligate-chain
 
 # Build the workspace (Rust 1.93 auto-installs via rust-toolchain.toml).
 # Ubuntu / Debian first install: sudo apt install -y libclang-dev clang
-# macOS first install:           xcode-select --install
+# macOS first install:           xcode-select --install  (see "macOS first-build trifecta" below)
 cargo build --workspace
 
 # Run the workspace tests (lib + integration + doctests)
@@ -236,6 +239,25 @@ The SDK pulls in `librocksdb-sys`, which needs `libclang` at build time:
   export LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib
   ```
   Or set them per-invocation: `DYLD_FALLBACK_LIBRARY_PATH=/Library/Developer/CommandLineTools/usr/lib LIBCLANG_PATH=/Library/Developer/CommandLineTools/usr/lib cargo test ...`.
+
+#### macOS first-build trifecta
+
+A clean macOS dev machine hits three failure modes in sequence on the first `cargo check`. All three are documented in [`CONTRIBUTING.md`](CONTRIBUTING.md), but here's the one-shot recipe to get going:
+
+1. **`librocksdb-sys` link** — the two `export`s above.
+2. **Risc0 rustup toolchain override** — `cargo` errors with `override toolchain 'risc0' is not installed` before the workspace even compiles. Install the toolchain manager:
+   ```bash
+   curl -L https://risc0.com/install | bash
+   rzup install
+   ```
+   This is a ~1-2 GB one-time install. If you don't plan to touch the prover (Phase A.4 / `crates/rollup/provers/risc0`), the lighter alternative is `export RUSTUP_TOOLCHAIN=1.93.0` per shell to bypass the override.
+3. **Metal kernel build** — Risc0 tries to compile macOS Metal kernels at build time. If you don't have full Xcode (only Command Line Tools), set:
+   ```bash
+   export RISC0_SKIP_BUILD_KERNELS=1
+   ```
+   **Do NOT set this in CI** — Linux runners build CPU kernels cleanly, and skipping there produces unresolved-symbol errors at link time. Per-machine workaround only.
+
+Tracking: [#417](https://github.com/ligate-io/ligate-chain/issues/417) covers proposed ergonomic improvements (`.cargo/config.toml`, etc.) — cargo doesn't support target-conditional env vars natively, so this stays a documented per-machine setup for now.
 
 ### CI gates
 
