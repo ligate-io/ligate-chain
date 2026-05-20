@@ -8,6 +8,29 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-20
+
+Ops + docs patch. No chain code changes; `chain_hash` unchanged from `v0.2.3`; safe binary swap in place. Cuts a tagged release so the multi-sequencer activation artifacts (design doc + plumbing audit findings + rollup.toml config seam + per-instance render script + Docker smoke harness) ship as a pinned point-in-time bundle alongside the Dependabot bumps that landed since `v0.2.3`. Sub-issue 5 (multi-sequencer prod deploy) consumes the `v0.2.4` artifacts (release tarball + GHCR image) rather than tracking a moving `main`.
+
+### Added
+
+- `docs/protocol/sequencer-decentralisation.md` — design doc deciding the multi-sequencer path: Option 1 (internal Postgres-elected leader rotation) → Option 2 (federated validator set, pre-mainnet). Out of scope: shared sequencer (Astria/Espresso/Skip, fails the PoUA-compatibility requirement) and based rollup (Celestia validators sequence, latency-bound). 5 open questions explicitly deferred; revisit triggers named. (#409)
+- Plumbing-audit findings folded into the same doc's §5: the Sovereign SDK pin (`ligate-io/sovereign-sdk@4b4a313b7`) already implements `ConfiguredNodeRole::DbElected` end-to-end (heartbeat task, replica sync, Postgres-backed election, SQL `is_leader()` function). What was originally a 6-sub-issue plan over 6-8 weeks collapses to a 4-sub-issue plan over ~2-3 weeks; the bulk of remaining work is provisioning + Caddyfile + Grafana labels, not Rust. `crates/rollup/src/lib.rs` gains a `// SEAM:` doc-comment block pointing readers at the SDK's existing implementation. (#410, #411)
+- `devnet/rollup.toml`: commented `# SEAM:` block under `[sequencer.preferred]` documenting how to activate `DbElected` multi-instance mode by uncommenting and supplying `postgres_connection_string` + `node_id` + `node_role = "DbElected"`. Block stays commented in the canonical prod config (single-instance) until sub-issue 5 spins up the second and third VMs. (#416)
+- `ops/cloud-init/render-rollup-toml.sh`: per-instance render script. Reads the canonical `devnet/rollup.toml`, fetches the Cloud SQL app-role password from GCP Secret Manager (`cloudsql-ligate-sequencer-db-app`) via the VM service account, substitutes `${LIGATE_NODE_ID}` + `${POSTGRES_PASSWORD}` into the SEAM block, writes the activated config to `/var/lib/ligate/rollup.toml` at mode 600. Marker-anchored sed transforms refuse to run on a source toml that's missing the `# SEAM:` header (schema-drift guard). Idempotent: same env in → same output. Designed to run as a systemd `ExecStartPre=` step. (#416)
+- `tests/smoke/multi-sequencer/`: Docker Compose smoke harness validating the SDK's DbElected mechanism. Postgres + 3× chain instances (`ghcr.io/ligate-io/ligate-chain:0.2.3`) booting against shared MockDa SQLite and shared Postgres. Live-verified: exactly one `BatchProducer` + two `PgSyncReplica` per run, `GET /v1/sequencer/role` returns the correct value on each endpoint, leader-kill is observed by survivors via the SDK's heartbeat task. Failover capture (survivor flipping to `BatchProducer`) is best-effort on MockDa due to multi-writer SQLite contention — the audit-claim core (election + heartbeat-observation) is fully verified; survivor-takeover is tracked separately for upgrade to local-celestia-devnet (#420). Five macOS-Docker gotchas hit and documented inline: GHCR tag drops the `v` prefix, minimal image lacks `envsubst`/`wget`/`curl` (sed + host-side polling instead), named volumes are root-owned (`user: "0:0"`), io_uring blocked by default seccomp (`seccomp=unconfined`), SDK 10s grace period races MockDa crash (smoke-only override to 500ms). (#419)
+
+### Deps
+
+- `Sovereign-Labs/sovereign-sdk` rev pin in `[patch]` block unchanged from `v0.2.3` (`4b4a313b7`). All DbElected machinery already in that pin; no SDK bump needed. Workspace pins in `[workspace.dependencies]` stay at `f6cd64749e…`.
+- `getrandom` bumped from `0.3.4` to `0.4.2` (Dependabot #402). Transitive dep; no code path changes needed. `cargo audit` / `cargo deny` / `cargo test` all green.
+- `actions/upload-artifact` bumped `4` → `7`, `actions/download-artifact` bumped `4` → `8`, `docker/login-action` bumped `3` → `4` in CI workflows (Dependabot #399, #400, #401). CI surface only; no chain binary effect.
+- `cargo audit` ignore list extended with `RUSTSEC-2026-0145` (`astral-tokio-tar` 0.6.1 PAX header desync; transitive via `testcontainers` in `sov-test-utils` dev-deps; test-only path, not reachable from production code; solution upgrade to >= 0.6.2 — clears when SDK testcontainers bumps).
+
+### Compatibility
+
+`chain_hash` unchanged from `v0.2.3`. No state changes. No re-genesis required. Operators deploying this binary to an existing `devnet-1` VM keep their RocksDB state intact across the swap.
+
 ## [0.2.3] - 2026-05-18
 
 Patch release. Adds `da_block_height` to the batch receipt JSON for explorer-side Celenium deep-links. Backward-compatible additive change; `chain_hash` unchanged; safe binary swap in place.
