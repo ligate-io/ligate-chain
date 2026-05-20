@@ -1,7 +1,10 @@
 #!/bin/sh
 # Container entrypoint for the multi-sequencer smoke. Renders the
-# rollup.toml template with the per-container env vars, then execs
-# `ligate-node` against the rendered file.
+# rollup.toml template with the per-container env vars (via sed),
+# then execs `ligate-node` against the rendered file.
+#
+# Uses sed because the chain image is debian-slim minimal — no
+# `envsubst` (gettext-base), no curl, no wget.
 #
 # This is intentionally simpler than the production
 # `ops/cloud-init/render-rollup-toml.sh` (no GCP Secret Manager;
@@ -15,8 +18,6 @@ set -eu
 : "${LIGATE_BIND_HOST:?}"
 : "${LIGATE_BIND_PORT:?}"
 : "${LIGATE_STORAGE_PATH:?}"
-: "${LIGATE_METRICS_BIND_HOST:?}"
-: "${LIGATE_METRICS_BIND_PORT:?}"
 : "${POSTGRES_HOST:?}"
 : "${POSTGRES_PORT:?}"
 : "${POSTGRES_DB:?}"
@@ -28,18 +29,21 @@ RENDERED="/var/lib/ligate/rollup.toml"
 
 mkdir -p "$(dirname "$RENDERED")" "$LIGATE_STORAGE_PATH" /var/lib/ligate/da
 
-# `envsubst` substitutes only the named env vars. If we used the
-# default behaviour, any `$0`-style positional refs would explode. We
-# enumerate the vars we expect to substitute so a typo in the template
-# can't leak unintended env into the rendered config.
-SUBST_VARS='${LIGATE_NODE_ID} ${LIGATE_BIND_HOST} ${LIGATE_BIND_PORT}'
-SUBST_VARS="$SUBST_VARS \${LIGATE_STORAGE_PATH} \${LIGATE_METRICS_BIND_HOST} \${LIGATE_METRICS_BIND_PORT}"
-SUBST_VARS="$SUBST_VARS \${POSTGRES_HOST} \${POSTGRES_PORT} \${POSTGRES_DB}"
-SUBST_VARS="$SUBST_VARS \${POSTGRES_USER} \${POSTGRES_PASSWORD}"
-
-# busybox envsubst (alpine) doesn't accept the -i flag but takes the
-# var list as a single positional arg.
-envsubst "$SUBST_VARS" < "$TEMPLATE" > "$RENDERED"
+# sed-based substitution (envsubst isn't available in the chain
+# image). Each substitution uses `|` as the delimiter so values
+# containing `/` (filesystem paths, connection strings) don't need
+# escaping.
+sed \
+  -e "s|\${LIGATE_NODE_ID}|${LIGATE_NODE_ID}|g" \
+  -e "s|\${LIGATE_BIND_HOST}|${LIGATE_BIND_HOST}|g" \
+  -e "s|\${LIGATE_BIND_PORT}|${LIGATE_BIND_PORT}|g" \
+  -e "s|\${LIGATE_STORAGE_PATH}|${LIGATE_STORAGE_PATH}|g" \
+  -e "s|\${POSTGRES_HOST}|${POSTGRES_HOST}|g" \
+  -e "s|\${POSTGRES_PORT}|${POSTGRES_PORT}|g" \
+  -e "s|\${POSTGRES_DB}|${POSTGRES_DB}|g" \
+  -e "s|\${POSTGRES_USER}|${POSTGRES_USER}|g" \
+  -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD}|g" \
+  "$TEMPLATE" > "$RENDERED"
 
 # Sanity-check: the rendered toml must have the postgres_config block
 # with the right node_id.

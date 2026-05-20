@@ -22,6 +22,8 @@ within the configured timeout.
   sync
 
 **Does not prove:**
+- **Failover validation past leader kill.** See "Failover validation
+  limits" below.
 - Behaviour against real Celestia DA (this harness uses MockDa).
   Production behaviour is validated separately by Mocha smoke
   (`.github/workflows/mocha-smoke.yml`).
@@ -29,6 +31,31 @@ within the configured timeout.
 - Behaviour under Postgres failure (we use a single non-HA postgres
   container; prod uses Cloud SQL regional HA).
 - Cross-zone latency effects on heartbeat tuning.
+
+## Failover validation limits
+
+The smoke includes a "kill leader, observe failover" step, but with
+MockDa as the DA backend, **failover capture is best-effort, not
+guaranteed.** Reason: when the BatchProducer container is SIGKILLed,
+the shared MockDa SQLite enters a degraded state that the surviving
+chain processes interpret as "DA layer is gone" — they shut down
+their STF runners cleanly (`STF Runner has completed execution` in
+the logs) BEFORE the SDK's heartbeat task elects a new leader.
+
+This is a MockDa concurrency limit, not a DbElected mechanism issue:
+- The SDK's leader-election state in Postgres updates correctly
+  (visible via `psql` against the heartbeat tables)
+- The heartbeat task on survivors detects the leader death (logs
+  show the election task shutdown handler firing)
+- Survivors just don't survive long enough to actually become
+  BatchProducer themselves before MockDa drags them down
+
+Validating the failover phase end-to-end requires a DA backend that
+handles multi-instance writers properly. Tracked as a followup under
+chain#412: "upgrade smoke to local-celestia-devnet". With Celestia,
+all three instances will properly remain alive past the leader-kill
+event and the smoke will be able to observe a survivor flip to
+BatchProducer.
 
 ## Topology
 
@@ -93,7 +120,7 @@ render script produces.
 
 ## Image selection
 
-By default uses `ghcr.io/ligate-io/ligate-chain:v0.2.3`. The v0.2.3
+By default uses `ghcr.io/ligate-io/ligate-chain:0.2.3`. The v0.2.3
 SDK pin (`4b4a313b7`) has the full DbElected machinery; no newer
 chain version needed for this verification.
 

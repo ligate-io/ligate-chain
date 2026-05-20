@@ -24,7 +24,10 @@ services:
       retries: 30
 
   ligate-1:
-    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:v0.2.3}
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.3}
+    user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
+    security_opt:
+      - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,8 +36,6 @@ services:
       LIGATE_BIND_HOST: 0.0.0.0
       LIGATE_BIND_PORT: "12346"
       LIGATE_STORAGE_PATH: /var/lib/ligate/state
-      LIGATE_METRICS_BIND_HOST: 0.0.0.0
-      LIGATE_METRICS_BIND_PORT: "9100"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ligate_sequencer
@@ -49,16 +50,12 @@ services:
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       - "12346:12346"
-      - "9101:9100"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:12346/health > /dev/null 2>&1"]
-      interval: 3s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
 
   ligate-2:
-    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:v0.2.3}
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.3}
+    user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
+    security_opt:
+      - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,8 +64,6 @@ services:
       LIGATE_BIND_HOST: 0.0.0.0
       LIGATE_BIND_PORT: "12346"
       LIGATE_STORAGE_PATH: /var/lib/ligate/state
-      LIGATE_METRICS_BIND_HOST: 0.0.0.0
-      LIGATE_METRICS_BIND_PORT: "9100"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ligate_sequencer
@@ -83,16 +78,12 @@ services:
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       - "12347:12346"
-      - "9102:9100"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:12346/health > /dev/null 2>&1"]
-      interval: 3s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
 
   ligate-3:
-    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:v0.2.3}
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.3}
+    user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
+    security_opt:
+      - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,8 +92,6 @@ services:
       LIGATE_BIND_HOST: 0.0.0.0
       LIGATE_BIND_PORT: "12346"
       LIGATE_STORAGE_PATH: /var/lib/ligate/state
-      LIGATE_METRICS_BIND_HOST: 0.0.0.0
-      LIGATE_METRICS_BIND_PORT: "9100"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ligate_sequencer
@@ -117,13 +106,6 @@ services:
     entrypoint: ["/bin/sh", "/entrypoint.sh"]
     ports:
       - "12348:12346"
-      - "9103:9100"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:12346/health > /dev/null 2>&1"]
-      interval: 3s
-      timeout: 5s
-      retries: 20
-      start_period: 30s
 
 volumes:
   postgres-data:
