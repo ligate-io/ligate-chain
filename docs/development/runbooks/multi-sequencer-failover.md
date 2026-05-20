@@ -99,6 +99,36 @@ Unhealthy signals:
 
 ---
 
+## Prerequisite: `bind_host` flip for fan-out routing
+
+The canonical bundle ships with `bind_host = "127.0.0.1"` in
+`[runner.http_config]` of `celestia.toml`. That's safe for solo
+operators but **incompatible** with the gateway-VM Caddyfile in
+`ops/caddy/Caddyfile`, which fans writes out to all 3 sequencer VMs
+over the VPC. Flip the bind on every multi-sequencer VM before
+deploying the leader-aware Caddyfile:
+
+```sh
+# On each VM (VM-1, VM-2, VM-3)
+sudo sed -i 's/^bind_host = "127.0.0.1"/bind_host = "0.0.0.0"/' /opt/ligate/devnet-1/celestia.toml
+sudo systemctl restart ligate-node
+
+# Verify
+sudo ss -tlnp | grep 12346
+# Expect: LISTEN ... 0.0.0.0:12346 ... ligate-node
+```
+
+The GCP firewall already restricts port 12346 to VPC peers (default
+deny + per-VPC allow rule). No public exposure occurs.
+
+For a fresh VM coming up via cloud-init, the bind flip is currently a
+manual post-boot step: cloud-init runs the render script and writes
+the canonical `127.0.0.1` value, then an operator follows up with the
+`sed` above. Wiring `LIGATE_BIND_HOST` into `render-rollup-toml.sh` is
+a small follow-up (open as a sub-issue of chain#422 if it bites again).
+
+---
+
 ## Procedure A: Planned Leader replacement (zero-downtime upgrade)
 
 Use this when rolling a binary upgrade on the active node. The Replica
@@ -290,6 +320,10 @@ What is **SDK-documented but not yet exercised live**:
 - Lock TTL behaviour under Postgres maintenance failover (Procedure D).
 - DA contention if two nodes briefly both believe they are Leader (we
   have not deliberately split-brained the cluster).
+- Caddy leader-aware fan-out in [`ops/caddy/Caddyfile`](../../../ops/caddy/Caddyfile)
+  (write traffic routes to whichever upstream returns `BatchProducer`
+  on `/v1/sequencer/role`). Probed manually but not exercised under
+  load or during a real failover.
 
 **Next planned drill.** Once VM-3 is fully synced and promoted to
 `DbElected`, kill VM-1's ligate-node process and time the failover. Open
