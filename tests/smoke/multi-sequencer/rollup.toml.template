@@ -1,0 +1,112 @@
+# Template rollup.toml for the multi-sequencer smoke harness.
+#
+# `entrypoint.sh` runs sed substitution over this file with per-instance
+# env vars (LIGATE_NODE_ID, LIGATE_BIND_PORT, LIGATE_STORAGE_PATH plus
+# the postgres connection vars), then execs `ligate-node` against the
+# rendered file.
+#
+# Modelled directly on `devnet/rollup.toml` so we don't have config
+# drift between the smoke and the production-canonical config — only
+# the fields that need to differ per instance + the activated
+# postgres_config block.
+
+[chain]
+# Same chain_id used by `devnet/rollup.toml`. All three containers boot
+# against the same genesis + chain identity; they're hot replicas of
+# the same sequencer identity.
+chain_id = "ligate-localnet"
+
+[da]
+# Shared MockDa SQLite at a fixed path inside each container. The
+# `shared-mock-da` named volume in docker-compose.yml maps the same
+# host directory into all three containers, so they're "talking to
+# the same DA". SQLite WAL handles multiple-reader / single-writer
+# semantics; only the elected BatchProducer writes.
+connection_string = "sqlite:///var/lib/ligate/da/da.sqlite?mode=rwc"
+sender_address = "0000000000000000000000000000000000000000000000000000000000000000"
+finalization_blocks = 0
+
+[da.block_producing.periodic]
+block_time_ms = 1000
+
+[storage]
+# Per-instance RocksDB. Each container gets its own state volume so
+# replicas catch up via Postgres state sync (and we can wipe one
+# instance to simulate cold replay).
+path = "${LIGATE_STORAGE_PATH}"
+state_cache_size = 1073741824
+user_commit_concurrency = 4
+user_hashtable_buckets = 15_000_000
+user_preallocate_ht = false
+kernel_commit_concurrency = 2
+pruner_block_interval = 100
+pruner_versions_to_keep = 20
+
+[runner]
+da_polling_interval_ms = 50
+
+[runner.http_config]
+bind_host = "${LIGATE_BIND_HOST}"
+bind_port = ${LIGATE_BIND_PORT}
+
+[monitoring]
+telegraf_address = "udp://127.0.0.1:8094"
+tokio_runtime_metrics_interval_millis = 500
+
+[proof_manager]
+aggregated_proof_block_jump = 1
+prover_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
+max_number_of_transitions_in_db = 100
+max_number_of_transitions_in_memory = 30
+max_number_of_aggregated_proofs_in_memory = 5
+
+[sequencer]
+blob_processing_timeout_secs = 3000
+max_batch_size_bytes = 1048576
+max_concurrent_batch_blobs = 128
+max_concurrent_proof_blobs = 1024
+max_allowed_node_distance_behind = 10
+rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
+
+[sequencer.preferred]
+disable_state_root_consistency_checks = true
+recovery_strategy = "TryToSave"
+batch_execution_time_limit_millis = 2000
+num_cache_warmup_workers = 0
+ideal_lag_behind_finalized_slot = 3
+
+# THE WHOLE POINT OF THIS SMOKE.
+# All three containers run this same block with the same connection
+# string and the same `node_role = DbElected`. Only `node_id` differs,
+# injected from the per-container env. The SDK's heartbeat task in
+# each container races to acquire leadership; one wins, others run
+# as replicas synced via Postgres.
+[sequencer.preferred.postgres_config]
+postgres_connection_string = "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable"
+node_id = "${LIGATE_NODE_ID}"
+node_role = "DbElected"
+
+# SMOKE-ONLY OVERRIDES.
+#
+# SDK defaults are heartbeat 100ms, leader_timeout 500ms, grace 10s.
+# The grace period is anti-flap protection: after a node acquires
+# leadership, no other node can take over for `grace_period_millis`.
+# That means real failover takes up to 10s.
+#
+# 10s would be fine on real Celestia DA — but in this smoke harness
+# all three containers share a single MockDa SQLite, and the
+# multi-writer contention crashes the chain at ~11s. Failover at the
+# 10s mark races the crash and loses.
+#
+# We compress grace_period_millis to 500ms here so the failover
+# completes well inside the MockDa window. Production keeps the SDK
+# defaults; this override exists only because MockDa isn't designed
+# for multi-instance use. A future iteration of this smoke against
+# local-celestia-devnet will restore the production defaults.
+[sequencer.preferred.postgres_config.leader_election]
+heartbeat_interval_millis = 100
+leader_timeout_millis = 500
+grace_period_millis = 500
+
+[sequencer.extension]
+max_log_limit = 20000

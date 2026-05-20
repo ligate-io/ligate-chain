@@ -1,0 +1,115 @@
+# Multi-sequencer DbElected smoke (chain#412).
+# See README.md for what this validates and how to run.
+#
+# Three `ligate-node` containers + one Postgres. Same chain identity
+# (genesis), same MockDa volume, distinct `node_id` and storage path.
+# All three start in `DbElected` mode; one wins election and proposes,
+# the other two run as replicas synced via Postgres.
+
+name: ligate-multi-sequencer-smoke
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ligate_sequencer
+      POSTGRES_USER: ligate_sequencer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localsmoke}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ligate_sequencer -d ligate_sequencer"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  ligate-1:
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.3}
+    user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
+    security_opt:
+      - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LIGATE_NODE_ID: ligate-1
+      LIGATE_BIND_HOST: 0.0.0.0
+      LIGATE_BIND_PORT: "12346"
+      LIGATE_STORAGE_PATH: /var/lib/ligate/state
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ligate_sequencer
+      POSTGRES_USER: ligate_sequencer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localsmoke}
+    volumes:
+      - ./rollup.toml.template:/templates/rollup.toml.template:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./genesis:/var/lib/ligate/genesis:ro
+      - shared-mock-da:/var/lib/ligate/da
+      - ligate-1-state:/var/lib/ligate/state
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    ports:
+      - "12346:12346"
+
+  ligate-2:
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.3}
+    user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
+    security_opt:
+      - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LIGATE_NODE_ID: ligate-2
+      LIGATE_BIND_HOST: 0.0.0.0
+      LIGATE_BIND_PORT: "12346"
+      LIGATE_STORAGE_PATH: /var/lib/ligate/state
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ligate_sequencer
+      POSTGRES_USER: ligate_sequencer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localsmoke}
+    volumes:
+      - ./rollup.toml.template:/templates/rollup.toml.template:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./genesis:/var/lib/ligate/genesis:ro
+      - shared-mock-da:/var/lib/ligate/da
+      - ligate-2-state:/var/lib/ligate/state
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    ports:
+      - "12347:12346"
+
+  ligate-3:
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.3}
+    user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
+    security_opt:
+      - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LIGATE_NODE_ID: ligate-3
+      LIGATE_BIND_HOST: 0.0.0.0
+      LIGATE_BIND_PORT: "12346"
+      LIGATE_STORAGE_PATH: /var/lib/ligate/state
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ligate_sequencer
+      POSTGRES_USER: ligate_sequencer
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-localsmoke}
+    volumes:
+      - ./rollup.toml.template:/templates/rollup.toml.template:ro
+      - ./entrypoint.sh:/entrypoint.sh:ro
+      - ./genesis:/var/lib/ligate/genesis:ro
+      - shared-mock-da:/var/lib/ligate/da
+      - ligate-3-state:/var/lib/ligate/state
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    ports:
+      - "12348:12346"
+
+volumes:
+  postgres-data:
+  shared-mock-da:
+  ligate-1-state:
+  ligate-2-state:
+  ligate-3-state:
