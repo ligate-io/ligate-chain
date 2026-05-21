@@ -8,6 +8,44 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-05-21
+
+Failover-recovery hardening (chain#435). Cuts a tagged release for the SDK pin bump and shutdown-watchdog plumbing that resolve the three bugs surfaced by the 2026-05-20 multi-sequencer failover drill: a forced kill on the leader left every node in a cascading 5-minute shutdown hang with stale Postgres state, requiring manual RocksDB surgery to recover. The combined fix in this release replaces the SDK's "Replica acquired leadership → exit-to-restart" pattern with an in-process role transition, makes graceful shutdown bounded, and lets any future kill auto-recover.
+
+### Added
+
+- `crates/rollup/src/main.rs`. 35-second shutdown watchdog. On first SIGTERM/SIGINT/SIGQUIT, arms a hard-exit deadline; if `main()` hasn't returned by then, calls `std::process::exit(0)`. Complements (not replaces) the SDK's signal handler; insurance against any future task that fails to honour the cancellation cascade. Verified locally against MockDa: SDK shutdown took longer than 35s on a clean SIGTERM, watchdog brought the process down at the deadline as designed.
+- SDK fork (`ligate-io/sovereign-sdk@d3e7acf28`): `AtomicSequencerRole` wrapper (`Arc<AtomicU8>`), `Message::{PromoteToLeader, DemoteToReplica}` actor variants, `RoleTransitionRequester` trait + impl on `SequencerStateUpdator<S, Rt>`, `RoleTransitionRequest` mpsc between actor and `SideEffectsTask`, `LeaderConstructionDeps` stash on `SideEffectsTask`, `PreferredBlobSender::activate_leader_state` / `deactivate_leader_state`, `PreferredSequencerDb::set_backend`. Net effect: a DbElected replica that wins the Postgres lock seamlessly transitions to `BatchProducer` in-process. no process exit, no systemd restart.
+
+### Changed
+
+- SDK pin bumped from `4b4a313b7d89cf7ca4b37edd6cefec4123d51add` to `d3e7acf28e1ebe98f523c235084c61a1c93d0b38` across all 32 `[patch."https://github.com/Sovereign-Labs/sovereign-sdk.git"]` entries in `Cargo.toml`. Includes Bug 1 (sequence-number panic-to-reset), Bug 2a (HTTP server 20s/5s timeouts), and Bug 3 Phases 1–4 (in-process role transition).
+- Internal workspace crates (`attestation`, `ligate-bootstrap-cli`, `ligate-client`, `ligate-genesis-tool`, `ligate-prover-risc0`, `ligate-rollup`, `ligate-stf`, `ligate-stf-declaration`) bumped 0.2.5 → 0.2.6 in `Cargo.lock` to match the workspace version.
+
+### Fixed
+
+- **chain#435 Bug 1**: SDK fork `sov-sequencer/src/preferred/db/mod.rs:291` no longer panics when local sequencer state (Postgres `in_progress_batch` row OR RocksDB equivalent) is ahead of DA's confirmed view. The assertion is replaced with `tracing::error!` + early-return empty `Vec` from `proofs_for_replay`; `initial_data` detects the stale row condition on boot and discards it in-memory (next `begin_rollup_block` UPSERTs over it via `ON CONFLICT (singleton) DO UPDATE`). Without this fix, any forced kill of the leader mid-batch left the node in an unrecoverable crash loop until an operator wiped `preferred_sequencer/` by hand.
+- **chain#435 Bug 2a**: SDK fork `sov-stf-runner/src/http/mod.rs` wraps `axum::serve(...).with_graceful_shutdown(...)` in `tokio::time::timeout(20s, ...)` and `server_handle.stopped()` in `tokio::time::timeout(5s, ...)`. Without these a single keepalive connection (e.g. Caddy reverse proxy) blocked process exit until systemd's `TimeoutStopSec` (5 min default) elapsed.
+
+### Compatibility
+
+`chain_hash` unchanged from `v0.2.5`. No state changes. No re-genesis. Safe binary swap on existing `devnet-1` VMs.
+
+In single-sequencer legacy mode (`celestia.toml` without a `[sequencer.preferred.postgres_config]` block. current VM-1 state), all of this code is dormant. The Bug 1 + Bug 2 watchdog are the operational wins: any future kill auto-recovers without manual RocksDB surgery, and worst-case shutdown is bounded at 35s.
+
+In DbElected multi-sequencer mode (current VM-2 + VM-3. stopped), the SDK now supports in-process role transitions. **Re-enabling DbElected on the existing cluster is now safe**; the failover drill that previously caused a 26-minute outage should complete cleanly with PID-stable role flips.
+
+### Known limitations
+
+- A leader that gets demoted to replica in-process does NOT yet have its `ReplicaSyncTask` started if it booted as a leader. The `replica_task` is constructed unconditionally in SDK `initialization.rs` but only `start()`ed in the boot-time `if let PgSyncReplica` branch. So a demoted leader catches up via DA only (slower) until it next gets promoted back. Tracked as a follow-up; not blocking for devnet-1's 1-leader-2-cold-standby topology where demotions are rare.
+- The `BlobSender` `JoinHandle` returned from `activate_leader_state` is not tracked in the SDK's `background_handles` vec. It lives until the global shutdown signal fires. Adequate for our purposes.
+
+### Followup (out of scope for v0.2.6)
+
+- `ops/cloud-init/sequencer.yaml`. bump `LIGATE_TAG` from `v0.2.5` to `v0.2.6` so future VM (re-)images pick up the fix. Follow-up PR, same pattern as v0.2.5 ops bump.
+- chain#82. multi-sequencer umbrella. Schedule re-enabling DbElected on VM-2 + VM-3 + re-running the forced-failover drill once v0.2.6 is deployed and soaked on VM-1.
+- ReplicaSyncTask hot-start on demotion (see Known limitations above).
+
 ## [0.2.5] - 2026-05-21
 
 Ops + docs patch. No chain code changes; `chain_hash` unchanged from `v0.2.4`; safe binary swap in place. Cuts a tagged release so the multi-instance cloud-init work (PRs #424 + #425), the canonical `devnet-1/` substituted bundle (#429), and the multi-instance Grafana dashboard (#431) ship as a pinned point-in-time bundle. The cloud-init's `LIGATE_TAG` pin advances to `v0.2.5` in a follow-up so VM-4 (and any future re-image) boots fully clean from `git clone` + Secret Manager fetch, no manual operator intervention.
