@@ -30,6 +30,7 @@
 
 mod celestia_rollup;
 pub mod chain_config;
+pub mod cluster;
 pub mod follower_guard;
 pub mod health;
 pub mod info;
