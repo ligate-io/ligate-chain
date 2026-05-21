@@ -49,6 +49,11 @@ use tracing::{debug, error, warn};
 /// sweet spot between absorbing polling and feeling fresh.
 const CACHE_TTL: Duration = Duration::from_secs(1);
 
+/// Single-slot snapshot cache: the last successful query result plus
+/// the wall-clock instant it was taken. Pulled out as a type alias to
+/// keep the field type on [`ClusterState`] readable (clippy was right).
+type TopologyCache = Arc<RwLock<Option<(Instant, Arc<ClusterTopology>)>>>;
+
 /// Inner state of the `/v1/cluster/nodes` handler.
 ///
 /// Holds the Postgres pool (or `None` when the node is configured
@@ -65,7 +70,7 @@ pub struct ClusterState {
     pool: Option<Arc<PgPool>>,
     /// In-memory cache. Shared across requests so the explorer + ops
     /// dashboards polling at 1Hz don't hammer Postgres.
-    cache: Arc<RwLock<Option<(Instant, Arc<ClusterTopology>)>>>,
+    cache: TopologyCache,
 }
 
 impl ClusterState {
@@ -73,10 +78,7 @@ impl ClusterState {
     /// endpoint will return `503` until reconfigured (which today
     /// means a node restart).
     pub fn disabled() -> Self {
-        Self {
-            pool: None,
-            cache: Arc::new(RwLock::new(None)),
-        }
+        Self { pool: None, cache: Arc::new(RwLock::new(None)) }
     }
 
     /// Open a tiny `(max_connections=2)` Postgres pool against the
@@ -90,10 +92,7 @@ impl ClusterState {
             .connect(connection_string)
             .await
             .map_err(|e| anyhow::anyhow!("opening cluster Postgres pool: {e}"))?;
-        Ok(Self {
-            pool: Some(Arc::new(pool)),
-            cache: Arc::new(RwLock::new(None)),
-        })
+        Ok(Self { pool: Some(Arc::new(pool)), cache: Arc::new(RwLock::new(None)) })
     }
 }
 
@@ -242,13 +241,9 @@ async fn handle_cluster_nodes(State(state): State<ClusterState>) -> Response {
 }
 
 /// Returns a cached topology if it's still inside `CACHE_TTL`.
-async fn read_cache(
-    cache: &RwLock<Option<(Instant, Arc<ClusterTopology>)>>,
-) -> Option<Arc<ClusterTopology>> {
+async fn read_cache(cache: &TopologyCache) -> Option<Arc<ClusterTopology>> {
     let guard = cache.read().await;
-    let Some((stamped_at, topology)) = guard.as_ref() else {
-        return None;
-    };
+    let (stamped_at, topology) = guard.as_ref()?;
     if stamped_at.elapsed() < CACHE_TTL {
         Some(Arc::clone(topology))
     } else {
@@ -256,10 +251,7 @@ async fn read_cache(
     }
 }
 
-async fn store_cache(
-    cache: &RwLock<Option<(Instant, Arc<ClusterTopology>)>>,
-    topology: Arc<ClusterTopology>,
-) {
+async fn store_cache(cache: &TopologyCache, topology: Arc<ClusterTopology>) {
     let mut guard = cache.write().await;
     *guard = Some((Instant::now(), topology));
 }
@@ -317,12 +309,7 @@ async fn query_topology(pool: &PgPool) -> anyhow::Result<Arc<ClusterTopology>> {
                 acquired_at.map(|t| (t.unix_timestamp_nanos() / 1_000_000) as i64);
         }
 
-        nodes.push(ClusterNode {
-            node_id,
-            address,
-            is_leader,
-            last_heartbeat_age_ms: age_ms,
-        });
+        nodes.push(ClusterNode { node_id, address, is_leader, last_heartbeat_age_ms: age_ms });
     }
 
     if leader_node_id.is_none() {
@@ -374,9 +361,6 @@ mod tests {
         assert_eq!(resp.status().as_u16(), 503);
         let body: serde_json::Value = resp.json().await.expect("json");
         assert_eq!(body["reason"], "not_clustered");
-        assert!(body["detail"]
-            .as_str()
-            .unwrap_or("")
-            .contains("postgres_config"));
+        assert!(body["detail"].as_str().unwrap_or("").contains("postgres_config"));
     }
 }
