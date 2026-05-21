@@ -31,7 +31,6 @@
 mod celestia_rollup;
 pub mod chain_config;
 pub mod cluster;
-pub mod follower_guard;
 pub mod health;
 pub mod info;
 pub mod metrics;
@@ -41,58 +40,15 @@ pub use celestia_rollup::{CelestiaLigateRollup, CelestiaRollupSpec};
 pub use chain_config::{ChainConfig, ChainIdError};
 pub use mock_rollup::{MockLigateRollup, MockRollupSpec};
 
-/// Operator role this node should run as.
-///
-/// `Sequencer` is the normal full-node-with-sequencer flow; the node
-/// builds batches and posts them to DA. `Follower` is a read-only
-/// sync mode for non-sequencer operators (design partners, auditors,
-/// anyone running their own Ligate node who isn't the registered
-/// sequencer).
-///
-/// In `Follower` mode `main.rs` disables `automatic_batch_production`
-/// (no posts to DA), and `create_endpoints` layers a middleware
-/// (see [`follower_guard`]) that returns `503 Service Unavailable`
-/// for `POST /v1/sequencer/txs` so submissions don't silently
-/// disappear into a local mempool that never propagates.
-///
-/// Tracking: [#243](https://github.com/ligate-io/ligate-chain/issues/243).
-///
-/// # SEAM: multi-sequencer leader assignment
-///
-/// This binary-level [`NodeRole`] (`Sequencer` vs `Follower`) is
-/// coarse; multi-sequencer (#82) needs a *slot-level* "who is the
-/// active leader right now?" decision among N peer sequencers.
-///
-/// **The Sovereign SDK already implements this upstream.** It is a
-/// configuration concern, not a code-change concern, for our chain:
-///
-/// - The actual leader / replica branch lives in the SDK fork at
-///   `sov-sequencer/src/preferred/db/mod.rs:543-564`, matching on
-///   `sov_full_node_configs::sequencer::ConfiguredNodeRole`
-///   (`Leader` / `Replica` / `ReplicaNoLeaderSync` / `DbElected`).
-/// - `DbElected` mode runs a Postgres-backed election with heartbeat
-///   timeout, grace period, and replica state-sync. See `db/heartbeat_task.rs`
-///   and `replica/replica_sync_task.rs` in the SDK fork.
-/// - To activate it for our chain, `PreferredSequencerConfig::postgres_config`
-///   needs to be set in `devnet/rollup.toml`'s `[sequencer.preferred]`
-///   section (currently absent, which is why we run single-instance).
-///
-/// The design-doc sub-issues for Option 1 collapse:
-/// - Sub-issue 2 (LeaderSchedule) and 3 (view-change): **already
-///   shipped upstream**; we use `DbElected` instead of writing our own.
-/// - Sub-issue 4 (multi-instance prod deploy), 5 (force-include
-///   observability stub), and 6 (docs + runbook) are still required.
-/// - New requirement: provision a managed Postgres instance accessible
-///   from every sequencer VM (Cloud SQL or self-hosted on the same VPC).
-///
-/// See `docs/protocol/sequencer-decentralisation.md` §5 for the
-/// updated implementation plan.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeRole {
-    /// Normal full node: produces batches, posts to DA, accepts
-    /// submissions on `/v1/sequencer/txs`.
-    Sequencer,
-    /// Read-only follower: syncs STF from DA, serves read endpoints,
-    /// does not auto-produce batches, returns 503 on submissions.
-    Follower,
-}
+// The binary-level `NodeRole` (`Sequencer` vs `Follower`) and its
+// follower-only `automatic_batch_production = false` + 503-on-submit
+// middleware were removed in chain#446 after a paper-leader incident
+// on 2026-05-21: a Follower-mode node promoted to leader via DbElected
+// in-process role transition kept the boot-time `false` flag, holding
+// the lock but never posting batches. The Sovereign SDK's DbElected
+// machinery already gates posting on the Postgres lock and returns
+// 503 on POST `/v1/sequencer/txs` when not the leader, so the
+// chain-level mode toggle was redundant at best and a footgun at
+// worst. If a true read-only RPC node is ever needed, add a proper
+// `--no-sequencer` mode that doesn't instantiate the sequencer at
+// all, rather than the previous hybrid.

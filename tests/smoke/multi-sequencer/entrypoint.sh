@@ -62,5 +62,4 @@ echo "entrypoint: launching ligate-node against $RENDERED" >&2
 # pass `--da-layer celestia` here.
 exec /usr/local/bin/ligate-node \
   --rollup-config-path "$RENDERED" \
-  --genesis-config-dir /var/lib/ligate/genesis \
-  --mode sequencer
+  --genesis-config-dir /var/lib/ligate/genesis

@@ -8,6 +8,39 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-05-21
+
+Removes the `--mode {sequencer,follower}` operator flag and the corresponding `NodeRole::Follower` machinery (chain#446). DbElected, the SDK's lock-elected sequencer mode, is the only sequencer path now; the boot-time mode toggle was redundant with the lock check and actively harmful in one observed case.
+
+### Why
+
+A paper-leader incident on 2026-05-21 18:53 UTC: VM-3 booted with `--mode follower` (set `automatic_batch_production = false` at startup), then acquired the Postgres leader lock via the in-process Replica→Leader role transition shipped in v0.2.6. `GET /v1/sequencer/role` returned `"BatchProducer"`, but the SDK's batch-production loop kept seeing the stale boot-time `false` and skipped every slot. The chain followed DA normally so slots advanced, but no user transactions made it into batches. Symptom externally: "attestations stuck in mempool, blobs not landing on Celestia for ~15 minutes." Resolved at 20:10 UTC by bouncing VM-3 (VM-1, which had no `--mode` flag, took the lock and resumed posting).
+
+The fix in this release deletes the root cause rather than papering over it. In DbElected mode the lock is the producer gate; a separate "this node is a follower" flag is a footgun waiting for the next role transition.
+
+### Removed
+
+- `pub enum NodeRole { Sequencer, Follower }` from `crates/rollup/src/lib.rs`.
+- `crates/rollup/src/follower_guard.rs` (Axum middleware that returned 503 on `POST /v1/sequencer/txs` for Follower-mode nodes). The SDK already returns 503 on submissions when a node doesn't hold the lock, so this middleware was redundant.
+- `--mode` CLI flag from `crates/rollup/src/main.rs`. Operator invocation simplifies from `ligate-node --da-layer celestia --mode sequencer` to `ligate-node --da-layer celestia`.
+- `node_role` field from `MockLigateRollup` and `CelestiaLigateRollup` structs.
+- `new_with_role` constructors on both rollup blueprints; `new` is now the only path.
+- The four `--mode` parsing tests in `main.rs`. Replaced with a single test that asserts `--mode` is rejected by clap (guard against re-introduction breaking operator scripts).
+
+### Operator action
+
+- VM-2 and VM-3 systemd units (`/etc/systemd/system/ligate-node.service`) had `--mode ${LIGATE_MODE}` stripped from their `ExecStart` line during the 2026-05-21 incident response. Already deployed; no further action needed for devnet-1.
+- The `LIGATE_MODE` env var in `/etc/ligate/env` is now vestigial. Cloud-init writes it from instance metadata (chain#424/#425); it will be cleaned up in a follow-up operator change.
+- Anyone using a fork or third-party deploy that passed `--mode follower` for a read-only node should drop the flag. The SDK's lock check handles the same protection at runtime.
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.8. Safe binary swap. CLI, JS SDK, explorer, and `api.ligate.io` all keep working with no client-side changes.
+
+### Followup
+
+- chain#447 (filed concurrently): proper `--no-sequencer` mode for read-only RPC nodes that don't instantiate the sequencer machinery at all. The previous Follower was a hybrid (sequencer instantiated, posting disabled by flag); the proper read-only path doesn't construct the sequencer in the first place.
+
 ## [0.2.8] - 2026-05-21
 
 Adds the chain-side `/v1/cluster/nodes` REST endpoint (chain#442 Phase 1+2). Same chain code as v0.2.7 plus the new cluster module and a Caddyfile entry that keeps the endpoint off the public RPC. `chain_hash` unchanged. Safe binary swap.
