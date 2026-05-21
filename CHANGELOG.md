@@ -8,6 +8,32 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-05-21
+
+Adds the chain-side `/v1/cluster/nodes` REST endpoint (chain#442 Phase 1+2). Same chain code as v0.2.7 plus the new cluster module and a Caddyfile entry that keeps the endpoint off the public RPC. `chain_hash` unchanged. Safe binary swap.
+
+### Added
+
+- `crates/rollup/src/cluster.rs`: `GET /v1/cluster/nodes` returns the live DbElected cluster topology (every node that has heartbeated into Postgres, plus which one currently holds the leader lock). 1-second in-memory cache. Returns 503 with `{"reason": "not_clustered"}` on legacy single-sequencer nodes. Wired into both `celestia_rollup.rs` and `mock_rollup.rs`.
+- `ops/caddy/Caddyfile`: 404 block for `/v1/cluster/nodes`, mirroring the existing `/v1/sequencer/role` and `/metrics` blocks. Response contains private VPC addresses; only internal callers (Grafana, ops dashboards, the future api proxy) should hit the chain directly.
+
+### Changed
+
+- Internal workspace crates bumped 0.2.7 -> 0.2.8 in `Cargo.lock`.
+- `Cargo.toml`: adds `sov-full-node-configs` to workspace deps (covered by the existing `[patch]` table for the SDK fork).
+- `crates/rollup/Cargo.toml`: adds `sqlx 0.8` (same version as the SDK fork's `sov-sequencer`) and `sov-full-node-configs`.
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.7. Safe binary swap. CLI, JS SDK, explorer, and `api.ligate.io` all keep working with no client-side changes.
+
+The Caddyfile update is operator-side (not auto-deployed by the release tarball). After binary swap on each VM, run `sudo cp ops/caddy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy` on the public-facing VM (VM-1 on devnet-1).
+
+### Followup (chain#442)
+
+- Phase 3: `ligate-api` proxy at `api.ligate.io/v1/cluster/nodes` that strips private addresses.
+- Phase 4: `ligate-explorer` Cluster page consuming the api proxy.
+
 ## [0.2.7] - 2026-05-21
 
 Hotfix for v0.2.6 which was broken on deploy: the HTTP server died 20 seconds after boot because of a faulty `tokio::time::timeout` wrap around `axum::serve` in the SDK fork. Reverts that wrap. The chain-side 35-second shutdown watchdog (also added in v0.2.6) still bounds any future shutdown hang. v0.2.6 was deployed to VM-1 at 10:52 UTC and rolled back to v0.2.4 at 10:55 UTC after the public RPC started returning 502; no chain state was affected.
