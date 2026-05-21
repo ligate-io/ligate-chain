@@ -65,6 +65,14 @@ attestation = { path = "../modules/attestation", features = ["native"] }
 prometheus = { workspace = true, features = ["process"] }
 axum       = { workspace = true }
 
+# Postgres pool for `/v1/cluster/nodes` (issue #442). Scoped to this
+# crate only: the SDK fork's heartbeat task has its own pool for
+# election; rather than expose it, we open a tiny 2-connection pool
+# here for the read-only topology query. Same `sqlx` version as the
+# SDK fork's sov-sequencer (0.8) to avoid duplicate compilation.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "time"] }
+sov-full-node-configs = { workspace = true }
+
 [dev-dependencies]
 reqwest         = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 ed25519-dalek   = { workspace = true }

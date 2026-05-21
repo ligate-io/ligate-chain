@@ -134,6 +134,16 @@ rpc.ligate.io {
         respond "Internal endpoint." 404
     }
 
+    # Block /v1/cluster/nodes from being public (chain#442): the
+    # response includes private VPC addresses for each cluster
+    # member. Internal callers (Grafana, ops dashboards, operators
+    # SSHed into the VPC) reach the chain directly on port 12346.
+    # The api proxy at api.ligate.io/v1/cluster/nodes is the public
+    # surface and strips addresses there.
+    handle /v1/cluster/nodes {
+        respond "Internal endpoint." 404
+    }
+
     # WRITE path: POST /v1/sequencer/txs goes to the current Leader
     # only. `lb_policy first` picks the first healthy upstream, and the
     # health probe accepts only nodes returning body matching

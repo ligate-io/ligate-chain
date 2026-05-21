@@ -211,12 +211,15 @@ impl FullNodeBlueprint<Native> for CelestiaLigateRollup<Native> {
         // at root. #110: metrics middleware on the outer router.
         // #181: merge /rollup/info into the /v1 group, fed by the
         // configured chain_id and the runtime's CHAIN_HASH.
+        // #442: /cluster/nodes for DbElected topology, also under /v1.
         let chain_api = std::mem::take::<axum::Router<()>>(&mut endpoints.axum_router);
         let info_state = crate::info::InfoState::new(
             self.chain_id.clone(),
             <Self::Runtime as sov_modules_api::Runtime<Self::Spec>>::CHAIN_HASH,
         );
         let chain_api = crate::info::add_routes(chain_api, info_state);
+        let cluster_state = crate::cluster::build_cluster_state(rollup_config).await;
+        let chain_api = crate::cluster::add_routes(chain_api, cluster_state);
         let mut router = axum::Router::new().nest("/v1", chain_api);
 
         let health_state = crate::health::HealthState::new(sync_status_for_health);

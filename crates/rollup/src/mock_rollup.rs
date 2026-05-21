@@ -230,6 +230,14 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
             <Self::Runtime as sov_modules_api::Runtime<Self::Spec>>::CHAIN_HASH,
         );
         let chain_api = crate::info::add_routes(chain_api, info_state);
+        // #442: /cluster/nodes for DbElected topology. MockDa setups
+        // typically don't run with `[sequencer.preferred.postgres_config]`
+        // populated; in that case the endpoint returns 503 with a
+        // `not_clustered` reason. The Docker Compose multi-sequencer
+        // smoke harness DOES configure Postgres, so this still wires
+        // up the live path when it's set.
+        let cluster_state = crate::cluster::build_cluster_state(rollup_config).await;
+        let chain_api = crate::cluster::add_routes(chain_api, cluster_state);
         let mut router = axum::Router::new().nest("/v1", chain_api);
 
         // #176: mount /health + /ready at root, NOT under /v1.
