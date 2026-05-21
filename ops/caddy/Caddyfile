@@ -134,14 +134,26 @@ rpc.ligate.io {
         respond "Internal endpoint." 404
     }
 
-    # Block /v1/cluster/nodes from being public (chain#442): the
-    # response includes private VPC addresses for each cluster
-    # member. Internal callers (Grafana, ops dashboards, operators
-    # SSHed into the VPC) reach the chain directly on port 12346.
-    # The api proxy at api.ligate.io/v1/cluster/nodes is the public
-    # surface and strips addresses there.
+    # `/v1/cluster/nodes` is gated behind a Bearer token (chain#442).
+    # The api proxy at `api.ligate.io/v1/cluster/nodes` sends the
+    # token in the `Authorization` header; the gate lets it through.
+    # Requests without the right token get 404 — same shape as the
+    # other internal endpoints, so we don't telegraph that the URL
+    # exists at all.
+    #
+    # `CLUSTER_AUTH_TOKEN` is sourced from the systemd unit
+    # environment (drop-in at `/etc/systemd/system/caddy.service.d/`).
+    # The `:deny-all-no-token-set` default ensures that if the env
+    # var is missing, NO request can match — `Bearer deny-all-no-token-set`
+    # is unlikely to be sent by anyone.
     handle /v1/cluster/nodes {
-        respond "Internal endpoint." 404
+        @authed header Authorization "Bearer {$CLUSTER_AUTH_TOKEN:deny-all-no-token-set}"
+        handle @authed {
+            reverse_proxy 127.0.0.1:12346
+        }
+        handle {
+            respond "Internal endpoint." 404
+        }
     }
 
     # WRITE path: POST /v1/sequencer/txs goes to the current Leader
