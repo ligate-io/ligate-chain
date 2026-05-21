@@ -116,16 +116,15 @@ The cloud-init does the chassis. The operator still has to:
   SOV_CELESTIA_SIGNER_KEY=<hex private key holding Mocha TIA>
   RUST_LOG=info,sov=info
   ```
-  A **follower** uses a similar env but with a freshly-generated 32-byte hex key for `SOV_CELESTIA_SIGNER_KEY` (no Mocha TIA needed — followers don't submit blobs). The follower's DA address derived from that key won't match the registered preferred sequencer, which would normally fail the sequencer-bond identity check — pass `--mode follower` on the binary (see next bullet) and the check is skipped via the follower guard (chain#243 / #248).
-- `systemctl enable --now ligate-node.service`. For a **follower**, add `--mode follower` to the `ExecStart` line in `/etc/systemd/system/ligate-node.service` first. The full ExecStart becomes:
+  Every node needs `SOV_CELESTIA_SIGNER_KEY` set to the preferred sequencer's private key (DbElected mode: all nodes share the same Celestia signer; only the current lock-holder posts blobs). The `--mode follower` flag and its associated read-only mode were removed in chain#446 after a paper-leader incident; if you want a true read-only RPC node that doesn't run the sequencer at all, that's tracked as chain#447.
+- `systemctl enable --now ligate-node.service`. The unit file already has the right `ExecStart` for DbElected operation:
   ```
   ExecStart=/opt/ligate/bin/ligate-node \
-      --mode follower \
       --da-layer celestia \
       --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
       --genesis-config-dir /opt/ligate/devnet-1/genesis
   ```
-  This activates the follower guard (returns 503 on `POST /v1/sequencer/txs` so users get a clear "submit to the upstream sequencer" message) and skips the preferred-sequencer DA-address check that would otherwise refuse to start.
+  At runtime the SDK's DbElected machinery elects one leader via the Postgres lock; the others heartbeat and serve reads. Non-leader nodes return 503 on `POST /v1/sequencer/txs` automatically (no chain-side middleware needed).
 - If you'll run cold backups (daily/weekly tiers stop ligate-node briefly for a consistent rsync — see `docs/development/runbooks/backup-restore.md`), install the sudoers drop-in:
   ```bash
   sudo install -o root -g root -m 0440 \

@@ -94,19 +94,17 @@ write_files:
       Group=ligate
       WorkingDirectory=/opt/ligate
       EnvironmentFile=/etc/ligate/env
-      # `--mode` is consumed from /etc/ligate/env via LIGATE_MODE
-      # (sequencer | follower), set per-instance at boot from GCP
-      # instance metadata. VM-1 historically defaults to `sequencer`
-      # (single-instance prod); VM-2 and VM-3 boot as `follower`
-      # initially, catching up via DA without competing for batch
-      # production. At cutover to multi-sequencer DbElected
-      # (chain#422), all three flip to `sequencer` + activate the
-      # postgres_config block via render-rollup-toml.sh.
+      # `--mode` was removed in chain#446. Previously every VM booted
+      # with `--mode ${LIGATE_MODE}` where VM-2 and VM-3 used `follower`
+      # for "never compete for batch production." That model was
+      # superseded by DbElected (chain#422): the Postgres lock gates
+      # who produces, not a boot-time flag. The LIGATE_MODE env var is
+      # still written by the metadata-fetch script below for backward
+      # compatibility but is no longer consumed by ligate-node.
       ExecStart=/opt/ligate/bin/ligate-node \
           --da-layer celestia \
           --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
           --genesis-config-dir /opt/ligate/devnet-1/genesis \
-          --mode ${LIGATE_MODE} \
           --metrics-bind 127.0.0.1:9100
       Restart=on-failure
       RestartSec=10

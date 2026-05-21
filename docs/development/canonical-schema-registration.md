@@ -123,7 +123,7 @@ themisra.proof-of-prompt v1
 
 ## Troubleshooting
 
-- **`HTTP 503` from sequencer on submit**: the node is in `--mode follower` (chain #248). Re-target `--rpc` at the canonical sequencer host.
+- **`HTTP 503` from sequencer on submit**: the node you hit isn't the current DbElected leader (chain#446). Re-target `--rpc` at the public gateway (`rpc.ligate.io`), which routes writes to whichever VM holds the Postgres lock.
 - **`timed out waiting for tx ... to be included`**: check the node is producing blocks (`grep "Sealed slot" /var/log/ligate-node.log`). The tx may still land later; query `/v1/ledger/txs/{hash}` manually to confirm.
 - **`CannotReserveGas("Insufficient balance")`**: the signer key's address has fewer than ~0.15 LGT (the ceremony fee total: 0.05 attestor-set + 0.1 schema-reg). Faucet-drip more, retry.
 - **`payload_shape_hash` mismatch with documented value**: the local schema file drifted from the canonical form. Restore it from `git show main:docs/protocol/schemas/...` or apply prettier; the binary's canonical-form check (BOM / CRLF / trailing newline) catches the common drift.

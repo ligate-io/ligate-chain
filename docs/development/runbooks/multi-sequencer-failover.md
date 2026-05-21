@@ -43,23 +43,16 @@ Three sequencer roles exist at the **slot level** in
 | `Replica` | Heartbeats but **never** tries to acquire the lock. Cold standby; useful for "I want this node visible in the cluster but never producing batches". |
 | `DbElected` | Heartbeats and competes for the lock. The standard production role. |
 
-Separately, the **binary-level role** (set via `--mode` / `LIGATE_MODE`
-in `/etc/ligate/env`) is `Sequencer` or `Follower`:
+> **Note (chain#446, 2026-05-21)**: the binary-level `--mode` /
+> `LIGATE_MODE` (`Sequencer` vs `Follower`) was removed after a
+> paper-leader incident. `LIGATE_MODE` is still written by cloud-init
+> for backward compatibility but is no longer read by `ligate-node`.
+> All nodes boot identically now; who produces is determined entirely
+> by `node_role` (above) and the Postgres lock.
 
-- `Sequencer` mode runs the sequencer slot, including the Postgres
-  heartbeat task and (if `node_role != Replica`) leader-election machinery.
-- `Follower` mode syncs the STF from DA but does **not** produce batches.
-  It does still run the heartbeat task if `postgres_config` is present,
-  which is how a `Follower + Replica` slot ends up registered in the
-  `nodes` table.
-
-In practice on devnet-1 today:
-
-- VM-1 (production sequencer): `LIGATE_MODE=sequencer`, `node_role=DbElected` (after cutover). The Leader candidate.
-- VM-2 + VM-3 (cold replicas): `LIGATE_MODE=follower`, `node_role=Replica`. Never compete for leadership, just heartbeat + sync.
-
-To turn a Replica into a hot Leader candidate, both flip simultaneously:
-`LIGATE_MODE` → `sequencer` and `node_role` → `DbElected`.
+In practice on devnet-1 today, all three VMs run `node_role=DbElected`
+and compete equally for the leader lock. There is no per-VM role
+toggle to flip; failover is fully transparent.
 
 ---
 
@@ -276,10 +269,10 @@ Used when:
 2. **Promote it.** On that VM:
    ```sh
    sudo sed -i 's/^node_role = "Replica"/node_role = "DbElected"/' /opt/ligate/devnet-1/celestia.toml
-   # Also flip binary mode if it was a Follower
-   sudo sed -i 's/^LIGATE_MODE=follower/LIGATE_MODE=sequencer/' /etc/ligate/env
    sudo systemctl restart ligate-node
    ```
+   (The historical `LIGATE_MODE=follower` flip was removed in
+   chain#446; binary mode no longer exists.)
 
 3. **Verify.** Within one lock-TTL cycle:
    ```sh

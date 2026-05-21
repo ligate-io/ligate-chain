@@ -48,16 +48,13 @@ use sov_stf_runner::RollupConfig;
 ///
 /// Holds the configured `chain_id` so the blueprint's `create_endpoints`
 /// hook can mount `/v1/rollup/info` with the operator-supplied
-/// identifier (#181), and the [`crate::NodeRole`] so the `create_endpoints`
-/// hook can layer the [`crate::follower_guard`] middleware when
-/// running as a follower (#243). The [`Default`] impl is kept so
-/// existing tests can construct the type without plumbing chain
-/// config; production code paths (`main.rs`) pass the loaded id and
-/// role via [`MockLigateRollup::new`].
+/// identifier (#181). The [`Default`] impl is kept so existing tests
+/// can construct the type without plumbing chain config; production
+/// code paths (`main.rs`) pass the loaded id via
+/// [`MockLigateRollup::new`].
 #[derive(Clone, Debug)]
 pub struct MockLigateRollup<M> {
     chain_id: std::sync::Arc<str>,
-    node_role: crate::NodeRole,
     phantom: std::marker::PhantomData<M>,
 }
 
@@ -68,33 +65,16 @@ impl<M> Default for MockLigateRollup<M> {
         // `create_endpoints`, and a panicky `unwrap` in `Default`
         // would surface during macro-generated test compilation
         // before any meaningful diagnostic.
-        Self {
-            chain_id: std::sync::Arc::from(""),
-            node_role: crate::NodeRole::Sequencer,
-            phantom: std::marker::PhantomData,
-        }
+        Self { chain_id: std::sync::Arc::from(""), phantom: std::marker::PhantomData }
     }
 }
 
 impl<M> MockLigateRollup<M> {
-    /// Build a blueprint with the configured chain id and node role.
-    /// Used by `main.rs` after [`crate::chain_config::load_split_config`]
-    /// reads + validates the `[chain]` section. Defaults to
-    /// [`crate::NodeRole::Sequencer`] for backward-compat callers.
+    /// Build a blueprint with the configured chain id. Used by
+    /// `main.rs` after [`crate::chain_config::load_split_config`]
+    /// reads + validates the `[chain]` section.
     pub fn new(chain_id: impl Into<std::sync::Arc<str>>) -> Self {
-        Self {
-            chain_id: chain_id.into(),
-            node_role: crate::NodeRole::Sequencer,
-            phantom: std::marker::PhantomData,
-        }
-    }
-
-    /// Build a blueprint with both chain id and node role.
-    pub fn new_with_role(
-        chain_id: impl Into<std::sync::Arc<str>>,
-        node_role: crate::NodeRole,
-    ) -> Self {
-        Self { chain_id: chain_id.into(), node_role, phantom: std::marker::PhantomData }
+        Self { chain_id: chain_id.into(), phantom: std::marker::PhantomData }
     }
 }
 
@@ -254,16 +234,6 @@ impl FullNodeBlueprint<Native> for MockLigateRollup<Native> {
         // `MatchedPath::as_str()` keeps cardinality bounded by
         // route template, not concrete `:id`.
         router = router.layer(axum::middleware::from_fn(crate::metrics::record_rpc_request));
-
-        // #243: in follower mode, return 503 on POST /v1/sequencer/txs
-        // so submissions don't silently disappear into a local mempool
-        // that never propagates. In sequencer mode the layer is not
-        // applied at all (zero overhead for the common case).
-        if self.node_role == crate::NodeRole::Follower {
-            router = router.layer(axum::middleware::from_fn(
-                crate::follower_guard::block_sequencer_submission,
-            ));
-        }
 
         endpoints.axum_router = router;
 

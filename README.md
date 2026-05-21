@@ -76,20 +76,11 @@ ligate transfer --signer dev --to lig1xyz... --amount 1.0 \
     --token-id $(...)
 ```
 
-### Sequencer vs follower
+### Multi-sequencer (DbElected) mode
 
-`ligate-node` accepts a `--mode {sequencer,follower}` flag (default `sequencer`).
+`ligate-node` runs a single binary on every cluster VM. Which node produces batches is decided at runtime by the Sovereign SDK's `DbElected` machinery: every node heartbeats into a shared Postgres, the SDK elects a single leader, and only the leader posts blobs to DA. If the leader process dies, a replica takes the lock in roughly one second and resumes batch production with the same PID. `GET /v1/sequencer/role` returns either `"BatchProducer"` or `"PgSyncReplica"`; `GET /v1/cluster/nodes` lists the whole topology.
 
-`sequencer` is the right mode for the official Ligate Labs node and any node whose DA address is in `sequencer_registry.json` and that holds the matching DA signer key with funded TIA. The node builds batches from incoming transactions and posts them to the DA layer.
-
-`follower` is the right mode for everyone else: design partners, auditors, and anyone running their own Ligate node who isn't the registered sequencer. The node still syncs the STF from DA and serves all read-side endpoints; it just doesn't auto-produce batches.
-
-```bash
-# Read-only follower against public devnet's Celestia config.
-cargo run --bin ligate-node -- --da-layer celestia --mode follower
-```
-
-Followers' `POST /v1/sequencer/txs` endpoint returns a native 503 with a JSON body directing clients to the upstream sequencer (`https://rpc.ligate.io` for public devnet). The guard is wired only in follower mode (see `crates/rollup/src/follower_guard.rs`); sequencers see zero overhead.
+The previous `--mode {sequencer,follower}` flag and its corresponding 503-on-submit middleware were removed in chain#446 after a paper-leader incident (a Follower-mode node promoted via in-process role transition kept the boot-time `automatic_batch_production = false` flag, holding the lock but never posting). DbElected gates posting on the lock and the SDK already returns 503 on `POST /v1/sequencer/txs` when not the leader, so the chain-level mode toggle was redundant.
 
 A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`devnet/README.md`](devnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 
