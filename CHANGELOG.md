@@ -8,6 +8,24 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-05-21
+
+Hotfix for v0.2.6 which was broken on deploy: the HTTP server died 20 seconds after boot because of a faulty `tokio::time::timeout` wrap around `axum::serve` in the SDK fork. Reverts that wrap. The chain-side 35-second shutdown watchdog (also added in v0.2.6) still bounds any future shutdown hang. v0.2.6 was deployed to VM-1 at 10:52 UTC and rolled back to v0.2.4 at 10:55 UTC after the public RPC started returning 502; no chain state was affected.
+
+### Fixed
+
+- SDK fork (`ligate-io/sovereign-sdk@2633af2d5`): revert `tokio::time::timeout(20s, axum::serve(...).with_graceful_shutdown(...))` from `sov-stf-runner/src/http/mod.rs`. The previous code in v0.2.6 forced the HTTP server to return Ok after 20 seconds of normal operation regardless of whether shutdown was signaled, leaving the chain producing batches but with no REST endpoint. The intent (bound graceful drain to 20s after shutdown signal) would need to spawn a separate watchdog task; for now the chain-side process-level watchdog at 35s covers the original hang scenario.
+- Kept the 5-second timeout on `server_handle.stopped()` after shutdown signal (jsonrpsee server drain); that one is correctly gated by the prior shutdown call so it can't fire during normal operation.
+
+### Changed
+
+- SDK pin bumped from `d3e7acf28e1ebe98f523c235084c61a1c93d0b38` to `2633af2d599c6a899fcdc484a0f198a26307d16b`.
+- Internal workspace crates bumped 0.2.6 -> 0.2.7 in `Cargo.lock`.
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.6 (and v0.2.5). Safe binary swap.
+
 ## [0.2.6] - 2026-05-21
 
 Failover-recovery hardening (chain#435). Cuts a tagged release for the SDK pin bump and shutdown-watchdog plumbing that resolve the three bugs surfaced by the 2026-05-20 multi-sequencer failover drill: a forced kill on the leader left every node in a cascading 5-minute shutdown hang with stale Postgres state, requiring manual RocksDB surgery to recover. The combined fix in this release replaces the SDK's "Replica acquired leadership → exit-to-restart" pattern with an in-process role transition, makes graceful shutdown bounded, and lets any future kill auto-recover.
