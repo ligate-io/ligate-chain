@@ -45,7 +45,7 @@ use tracing::debug;
 /// - a Replica winning the Postgres lock via the SDK's "exit to restart as leader"
 ///   path can never wedge the whole cluster (chain#435 incident, 2026-05-20).
 ///
-/// Background filed at https://github.com/ligate-io/ligate-chain/issues/435.
+/// Background filed at <https://github.com/ligate-io/ligate-chain/issues/435>.
 const SHUTDOWN_WATCHDOG_DEADLINE: Duration = Duration::from_secs(35);
 
 #[derive(Parser, Debug)]
