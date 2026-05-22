@@ -65,6 +65,14 @@ attestation = { path = "../modules/attestation", features = ["native"] }
 prometheus = { workspace = true, features = ["process"] }
 axum       = { workspace = true }
 
+# Loopback HTTP client for the sequencer-role poller (chain#446 followup).
+# The role poller hits the SDK's own `/v1/sequencer/role` endpoint via
+# 127.0.0.1. Version pinned inline (rather than via workspace.deps) to
+# match `bootstrap-cli`'s pattern; reqwest doesn't yet have a workspace
+# entry, and adding one would touch every consumer at once. Re-evaluate
+# if a third caller appears.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
 # Postgres pool for `/v1/cluster/nodes` (issue #442). Scoped to this
 # crate only: the SDK fork's heartbeat task has its own pool for
 # election; rather than expose it, we open a tiny 2-connection pool
