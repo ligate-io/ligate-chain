@@ -172,7 +172,7 @@ runcmd:
 
   # ---------------------------------------------------------------------
   # Multi-instance config (chain#422): read per-VM identity + role from
-  # GCP instance metadata, install the v0.2.4 ligate-node binary,
+  # GCP instance metadata, install the pinned ligate-node binary,
   # place devnet-1 config, write /etc/ligate/env, and start the
   # service. Per-instance metadata is set at create time:
   #
@@ -224,15 +224,15 @@ runcmd:
     chown root:ligate /etc/ligate/env
     echo "cloud-init: identity=$LIGATE_NODE_ID mode=$LIGATE_MODE celestia-jwt=${#CELESTIA_JWT}chars" >&2
 
-  # Install the v0.2.4 ligate-node binary from the published GitHub
-  # Release. Pinned tag for reproducibility — bumping requires
-  # editing this file and re-running cloud-init (or operator-side
-  # `systemctl stop && curl + tar && systemctl start` for in-place
-  # swaps, the same flow used during the v0.2.3 → v0.2.4 swap on
-  # 2026-05-20).
+  # Install the pinned ligate-node binary from the published GitHub
+  # Release. `LIGATE_TAG` must match `LIGATE_VERSION` (the artifact
+  # filename embeds the bare version, the URL path uses the v-prefixed
+  # tag). Bumping requires editing this file and re-running cloud-init
+  # (or operator-side `systemctl stop && curl + tar && systemctl start`
+  # for in-place swaps — the standard path for running VMs).
   - |
-    LIGATE_TAG=v0.2.7
-    LIGATE_VERSION=0.2.5
+    LIGATE_TAG=v0.2.10
+    LIGATE_VERSION=0.2.10
     ARTIFACT="ligate-node-${LIGATE_VERSION}-linux-amd64.tar.gz"
     # Keep the artifact's original filename so `sha256sum -c` can find
     # it via the relative path written into the .sha256 file by the
