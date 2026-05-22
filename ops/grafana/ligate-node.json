@@ -2274,7 +2274,7 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "query": "label_values(ligate_block_height, instance)",
+        "query": "label_values(last_over_time(ligate_block_height[5m]), instance)",
         "regex": "ligate-devnet-1-sequencer.*",
         "refresh": 2,
         "sort": 1,
