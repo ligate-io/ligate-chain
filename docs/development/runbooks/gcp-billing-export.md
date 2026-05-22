@@ -99,56 +99,114 @@ bq ls ligate_billing
 # expected eventually: gcp_billing_export_resource_v1_<billing_account_id>
 ```
 
-## Step 4: Wire Grafana
+## Step 4: Wire Grafana (via the VM-1 sidecar)
 
-Once the table has data:
+The original draft of this runbook used Grafana's Google BigQuery datasource with a service-account JSON key. **That path is blocked** by the `constraints/iam.disableServiceAccountKeyCreation` org policy on this project (a good security default — long-lived SA keys are a common exfiltration target). Workload Identity Federation would also work, but adds 30 to 60 minutes of GCP + Grafana setup for a single panel.
 
-1. Grafana → Connections → Data sources → Add data source → **Google BigQuery**
-2. Authentication: GCP service account JSON key. Create the key:
+The actual pattern we ship: **VM-1 runs a 6-hourly bq query, writes the result JSON, Caddy serves it, Grafana reads it via the Infinity HTTP datasource.** No key file, no WIF, no Grafana plugin install beyond the Infinity one Grafana Cloud already provides.
 
-   ```bash
-   gcloud iam service-accounts create grafana-bigquery \
-     --project="${PROJECT_ID}" \
-     --display-name="Grafana BigQuery read-only"
+### 4a. Grant VM-1's compute SA bigquery read perms
 
-   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-     --member="serviceAccount:grafana-bigquery@${PROJECT_ID}.iam.gserviceaccount.com" \
-     --role="roles/bigquery.dataViewer"
-
-   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-     --member="serviceAccount:grafana-bigquery@${PROJECT_ID}.iam.gserviceaccount.com" \
-     --role="roles/bigquery.jobUser"
-
-   gcloud iam service-accounts keys create grafana-bigquery-key.json \
-     --iam-account="grafana-bigquery@${PROJECT_ID}.iam.gserviceaccount.com"
-   ```
-
-   Paste the key contents into Grafana's BigQuery datasource form. Delete the local key file afterwards (it gives full read access to the billing data).
-
-3. Default project: `utopian-spring-494915-q1`
-4. Save & Test — Grafana queries the dataset to verify connectivity.
-
-## Step 5: Add the panel to the chain dashboard
-
-Add a new panel to `ops/grafana/ligate-node.json` (or directly in the Grafana UI). Suggested query:
-
-```sql
-SELECT
-  TIMESTAMP_TRUNC(usage_start_time, DAY) AS day,
-  SUM(cost) AS cost_usd
-FROM `utopian-spring-494915-q1.ligate_billing.gcp_billing_export_resource_v1_*`
-WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
-GROUP BY day
-ORDER BY day
+```bash
+PROJECT_ID=utopian-spring-494915-q1
+VM1_SA=$(gcloud compute instances describe ligate-devnet-1-sequencer \
+  --zone=us-central1-a --format="value(serviceAccounts[0].email)")
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$VM1_SA" --role="roles/bigquery.dataViewer" --condition=None
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$VM1_SA" --role="roles/bigquery.jobUser" --condition=None
 ```
 
-Panel type: **Time series**, x = day, y = cost_usd, unit = `currencyUSD`.
-Title: "GCP daily burn (USD)". Position: under the Cost & economy row in the chain dashboard, or in a new "GCP infra" row if you want clear separation.
+### 4b. Change VM-1's OAuth scopes to `cloud-platform`
 
-Useful complementary queries for break-down panels:
+Default compute VMs have a restricted scope set that does **not** include BigQuery. Even with the IAM roles above, `bq query` from the VM will return `Insufficient Permission` until you broaden the scopes. This requires a stop / scopes-change / start cycle (~6 min of public RPC downtime; same as a machine-type resize).
+
+```bash
+gcloud compute instances stop ligate-devnet-1-sequencer --zone=us-central1-a
+gcloud compute instances set-service-account ligate-devnet-1-sequencer \
+  --zone=us-central1-a \
+  --service-account="<vm1-sa-from-4a>" \
+  --scopes="https://www.googleapis.com/auth/cloud-platform"
+gcloud compute instances start ligate-devnet-1-sequencer --zone=us-central1-a
+```
+
+Verify after restart:
+
+```bash
+gcloud compute ssh ligate-devnet-1-sequencer --zone=us-central1-a \
+  --command='bq query --use_legacy_sql=false --format=json "SELECT 1 AS ok"'
+# expected: [{"ok":"1"}]
+```
+
+### 4c. Install the bq fetcher script + systemd timer on VM-1
+
+`/opt/ligate/bin/gcp-cost-fetch.sh`:
+
+```bash
+#!/bin/bash
+set -e
+PROJECT_ID=utopian-spring-494915-q1
+OUTPUT=/var/www/cost/daily.json
+TMP=$(mktemp)
+bq query --use_legacy_sql=false --format=json --max_rows=200 \
+  "SELECT TIMESTAMP_TRUNC(usage_start_time, DAY) AS day, SUM(cost) AS cost_usd \
+   FROM \`${PROJECT_ID}.ligate_billing.gcp_billing_export_resource_v1_*\` \
+   WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY) \
+   GROUP BY day ORDER BY day" > "$TMP"
+mv "$TMP" "$OUTPUT"
+chmod 644 "$OUTPUT"
+```
+
+Make it executable, ensure `/var/www/cost/` exists and is `caddy:caddy`-owned, then drop in:
+
+`/etc/systemd/system/gcp-cost.service` (oneshot wrapping the script) + `/etc/systemd/system/gcp-cost.timer` (`OnBootSec=2min`, `OnUnitActiveSec=6h`). `systemctl enable --now gcp-cost.timer`.
+
+### 4d. Expose the JSON via Caddy
+
+Add to `ops/caddy/Caddyfile` inside the `rpc.ligate.io` site block (just after the `/health` + `/ready` handles):
+
+```caddy
+# GCP daily billing JSON for Grafana (chain#453). Refreshed every 6h
+# by gcp-cost.timer; reads BigQuery via VM-1 compute SA. Public
+# because the data is aggregate cost only (no PII, no secrets).
+handle_path /cost/* {
+    root * /var/www/cost
+    file_server
+}
+```
+
+`systemctl reload caddy`. Verify:
+
+```bash
+curl https://rpc.ligate.io/cost/daily.json
+# expected: [] initially, then the bq result rows once the 24h export lag clears
+```
+
+### 4e. Add the Grafana panel via Infinity datasource
+
+In Grafana Cloud (Infinity is pre-installed):
+
+1. Add data source: **Infinity** if not already added. No auth needed (the URL is public-readable aggregate cost).
+2. Add panel:
+   - Type: Time series
+   - Datasource: Infinity
+   - Type: JSON, Source: URL, URL: `https://rpc.ligate.io/cost/daily.json`
+   - Root selector: leave blank (response IS the array)
+   - Columns: `day` (timestamp), `cost_usd` (number)
+   - Unit: `currencyUSD`
+   - Title: "GCP daily burn (USD)"
+   - Position: under the **Cost & economy** row in the `ligate-node` dashboard
+
+The panel renders empty until BigQuery populates (~24 to 48h after Step 2's Console enable). Don't worry about the empty state until then.
+
+## Step 5: Optional break-down panels
+
+The fetch script's query is just the daily aggregate. To add per-service or per-VM breakdowns, write a sibling script that targets a different output file (e.g. `/var/www/cost/by-service.json`), wire a second handle_path in Caddy, and add the matching Grafana panel.
+
+Useful complementary queries:
 
 ```sql
--- Cost by service over the last 30d
+-- Cost by service over the last 30d → /var/www/cost/by-service.json
 SELECT service.description AS service, SUM(cost) AS cost
 FROM `utopian-spring-494915-q1.ligate_billing.gcp_billing_export_resource_v1_*`
 WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
@@ -156,13 +214,15 @@ GROUP BY service ORDER BY cost DESC
 ```
 
 ```sql
--- Cost by VM (resource name) over the last 7d
+-- Cost by VM (resource name) over the last 7d → /var/www/cost/by-vm.json
 SELECT resource.name AS vm, SUM(cost) AS cost
 FROM `utopian-spring-494915-q1.ligate_billing.gcp_billing_export_resource_v1_*`
 WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
   AND service.description = 'Compute Engine'
 GROUP BY vm ORDER BY cost DESC
 ```
+
+For both, the Grafana panel pattern is identical to the daily-burn time series, just pointed at the new URL with the matching columns.
 
 ## Cost of the export itself
 

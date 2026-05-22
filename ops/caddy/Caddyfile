@@ -77,6 +77,16 @@ rpc.ligate.io {
         reverse_proxy 127.0.0.1:12346
     }
 
+    # GCP daily billing JSON for Grafana (chain#453). Refreshed every
+    # 6h by gcp-cost.timer; reads BigQuery via VM-1 compute SA. Public
+    # because the data is aggregate cost only (no PII, no secrets).
+    # See `docs/development/runbooks/gcp-billing-export.md` for the
+    # full setup (BigQuery export, fetcher script, systemd timer).
+    handle_path /cost/* {
+        root * /var/www/cost
+        file_server
+    }
+
     # Swagger UI v5 from disk overrides the chain-bundled older build
     # that can't render openapi: 3.1.0 (utoipa hardcodes that version
     # string; can't be downgraded from chain code). The 5+ bundle
