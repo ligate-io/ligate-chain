@@ -8,6 +8,31 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-05-22
+
+Surfaces the DbElected sequencer role + transitions as Prometheus metrics so the paper-leader scenario from 2026-05-21 (chain#446) becomes visible on Grafana, not just in logs. Plumbing-only change; no behaviour shift.
+
+### Added
+
+- `ligate_sequencer_role` gauge in `crates/rollup/src/metrics.rs`. 0 = unknown (chain HTTP unreachable / still booting), 1 = PgSyncReplica, 2 = BatchProducer. Sampled from the local `/v1/sequencer/role` endpoint every 2s (matches the SDK's Postgres heartbeat cadence).
+- `ligate_sequencer_role_transitions_total{from,to}` counter. Bumps each time the sampled role differs from the previous sample. `from` and `to` labels are readable role names (`unknown` / `replica` / `leader`) so a Grafana panel can show "VM-3: replica → leader at 22:51 UTC" without a join.
+- `crates/rollup/src/main.rs` spawns the role poller alongside the existing metrics tasks. Hardcoded loopback URL (`http://127.0.0.1:12346`); operators who change the SDK's HTTP bind would need to patch this, but nobody does in practice.
+- `ops/grafana/ligate-node.json`: new **Cluster topology** row at y=40 with two panels — role per VM (Stat, value-mapped + color-coded: red unknown, blue replica, green leader) and role transitions rate (Time series over 5m windows). The role panel is the primary visual for catching split-brain or flapping.
+- Unit tests in `metrics.rs` covering the `encode_role` shape (leader / replica / unknown on empty / unknown on future variant / whitespace handling).
+
+### Operator notes
+
+The Prometheus scrape config is unchanged. New metrics show up automatically on next scrape after the binary swap. Re-import `ops/grafana/ligate-node.json` to pick up the new row, or add the two PromQL queries to your own dashboard:
+
+- `ligate_sequencer_role{instance=~"$instance"}`
+- `sum by (instance, from, to) (rate(ligate_sequencer_role_transitions_total{instance=~"$instance"}[5m]))`
+
+Alert idea (not shipped here, file an issue if you want a default rule): page on `count(ligate_sequencer_role == 2) != 1` sustained for 60s. Zero leaders = leaderless; two leaders = split-brain.
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.9. Safe binary swap.
+
 ## [0.2.9] - 2026-05-21
 
 Removes the `--mode {sequencer,follower}` operator flag and the corresponding `NodeRole::Follower` machinery (chain#446). DbElected, the SDK's lock-elected sequencer mode, is the only sequencer path now; the boot-time mode toggle was redundant with the lock check and actively harmful in one observed case.

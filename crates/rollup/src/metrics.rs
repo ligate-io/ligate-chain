@@ -663,3 +663,171 @@ pub fn spawn_da_metrics_task<Da: DaSpec>(
         }
     });
 }
+
+// ============================================================================
+// Sequencer role gauge + transition counter (chain#446 follow-up)
+//
+// Surfaces who's currently the DbElected leader to Grafana so the
+// paper-leader scenario (which bit us on 2026-05-21) is visible as a
+// metric, not just a log line. Two metrics:
+//
+// - `ligate_sequencer_role`: 0=unknown, 1=PgSyncReplica, 2=BatchProducer.
+//   Single integer because Grafana panels color-code by value cleanly.
+// - `ligate_sequencer_role_transitions_total{from,to}`: bumps on each
+//   observed transition. The `from`/`to` labels carry the readable
+//   names so a Stat panel can show "last leader change" without a join.
+// ============================================================================
+
+/// Default polling interval for the sequencer role sampler. 2s
+/// matches the SDK's Postgres heartbeat cadence; tighter polling
+/// wouldn't surface anything new and would spam the loopback server.
+pub const DEFAULT_SEQUENCER_ROLE_POLL_INTERVAL: Duration = Duration::from_secs(2);
+
+/// `ligate_sequencer_role` gauge. 0 = unknown (no observation yet,
+/// or local chain HTTP server unreachable), 1 = PgSyncReplica
+/// (following leader via Postgres state-sync), 2 = BatchProducer
+/// (this node holds the leader lock and posts blobs to DA).
+fn sequencer_role() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_sequencer_role",
+            "Current sequencer role for this node. 0 = unknown (no observation yet or chain \
+             HTTP server unreachable), 1 = PgSyncReplica (following leader via Postgres \
+             state-sync), 2 = BatchProducer (this node holds the leader lock and posts blobs \
+             to DA)."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+/// `ligate_sequencer_role_transitions_total{from,to}` counter. Bumps
+/// every time the sampled role differs from the previous sample. The
+/// `from` and `to` labels are the readable role names (`unknown`,
+/// `replica`, `leader`) so a Grafana panel can show "VM-1: leader →
+/// replica at 22:51 UTC" without a join.
+fn sequencer_role_transitions() -> &'static IntCounterVec {
+    static M: OnceLock<IntCounterVec> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter_vec!(
+            "ligate_sequencer_role_transitions_total",
+            "Number of observed sequencer-role transitions on this node, labelled by `from` \
+             and `to` role. Each label is `unknown`, `replica`, or `leader`.",
+            &["from", "to"]
+        )
+        .expect("counter registers once")
+    })
+}
+
+/// Pre-touch both sequencer-role metrics so their HELP/TYPE lines
+/// show up in the very first `/metrics` scrape, before the poller's
+/// first tick lands.
+pub fn init_sequencer_role() {
+    let _ = sequencer_role();
+    let _ = sequencer_role_transitions();
+}
+
+/// Decode the SDK's `/v1/sequencer/role` response into the gauge
+/// encoding. Response body is a quoted JSON string like
+/// `"BatchProducer"` or `"PgSyncReplica"`. Anything we don't
+/// recognise (connection failure, unbound port, future role variant)
+/// degrades to `unknown` rather than crashing the poller.
+fn encode_role(raw: &str) -> (i64, &'static str) {
+    match raw.trim().trim_matches('"') {
+        "BatchProducer" => (2, "leader"),
+        "PgSyncReplica" => (1, "replica"),
+        _ => (0, "unknown"),
+    }
+}
+
+/// Sample the local `/v1/sequencer/role` endpoint once and update
+/// the gauge + transition counter. `prev` carries the last observed
+/// label so a transition only bumps the counter on actual change.
+/// Pulled out of the spawn loop for unit-testability.
+pub async fn sample_sequencer_role(role_url: &str, prev: &mut Option<&'static str>) {
+    init_sequencer_role();
+    // Loopback fetch. Failures (chain still booting, port not yet
+    // bound, body not JSON) all fold into `encode_role` returning
+    // `(0, "unknown")` — the right "we don't know" signal for
+    // dashboards until the next poll succeeds.
+    let body = match reqwest::Client::new()
+        .get(role_url)
+        .timeout(Duration::from_secs(1))
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => resp.text().await.unwrap_or_default(),
+        _ => String::new(),
+    };
+    let (value, label) = encode_role(&body);
+    sequencer_role().set(value);
+    if let Some(prev_label) = *prev {
+        if prev_label != label {
+            sequencer_role_transitions()
+                .with_label_values(&[prev_label, label])
+                .inc();
+            info!(from = prev_label, to = label, "sequencer role transition observed");
+        }
+    }
+    *prev = Some(label);
+}
+
+/// Spawn the sequencer-role poller. Polls `role_url` every `interval`
+/// (default 2s) and keeps `ligate_sequencer_role` plus the transition
+/// counter up to date. Fire-and-forget; lives until the runtime
+/// drops. Safe to call before the SDK's HTTP server is bound — early
+/// polls just record `unknown` until the loopback connection succeeds.
+pub fn spawn_sequencer_role_task(role_url: String, interval: Duration) {
+    init_sequencer_role();
+    tokio::spawn(async move {
+        let mut prev: Option<&'static str> = None;
+        let mut ticker = tokio::time::interval(interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            sample_sequencer_role(&role_url, &mut prev).await;
+        }
+    });
+}
+
+#[cfg(test)]
+mod sequencer_role_tests {
+    use super::encode_role;
+
+    #[test]
+    fn encode_leader() {
+        let (v, l) = encode_role("\"BatchProducer\"");
+        assert_eq!(v, 2);
+        assert_eq!(l, "leader");
+    }
+
+    #[test]
+    fn encode_replica() {
+        let (v, l) = encode_role("\"PgSyncReplica\"");
+        assert_eq!(v, 1);
+        assert_eq!(l, "replica");
+    }
+
+    #[test]
+    fn encode_unknown_on_empty() {
+        let (v, l) = encode_role("");
+        assert_eq!(v, 0);
+        assert_eq!(l, "unknown");
+    }
+
+    #[test]
+    fn encode_unknown_on_garbage() {
+        // Future role variant or chain on a different version: degrade
+        // to unknown rather than crashing the gauge.
+        let (v, l) = encode_role("\"SomeFutureRole\"");
+        assert_eq!(v, 0);
+        assert_eq!(l, "unknown");
+    }
+
+    #[test]
+    fn encode_handles_whitespace() {
+        let (v, l) = encode_role("  \"BatchProducer\"  \n");
+        assert_eq!(v, 2);
+        assert_eq!(l, "leader");
+    }
+}

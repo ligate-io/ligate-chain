@@ -242,6 +242,24 @@ async fn run() -> anyhow::Result<()> {
                 tracing::error!(error = ?e, "metrics server stopped");
             }
         });
+
+        // Sequencer-role poller (chain#446 follow-up). Polls the local
+        // chain's `/v1/sequencer/role` and surfaces it as the
+        // `ligate_sequencer_role` gauge + role-transitions counter, so
+        // Grafana can paint paper-leader scenarios (lock held but no
+        // batch production) as a clear divergence between the role
+        // gauge and the batch-blob-submission rate.
+        //
+        // URL is hardcoded to the SDK's default loopback bind. We
+        // don't read it out of `rollup_config` here because the config
+        // load happens inside `run_with_*` after this metrics setup.
+        // If an operator overrides the SDK's bind, early polls will
+        // hit "unknown" until they patch this URL — acceptable; nobody
+        // overrides it in practice.
+        metrics::spawn_sequencer_role_task(
+            "http://127.0.0.1:12346/v1/sequencer/role".to_string(),
+            metrics::DEFAULT_SEQUENCER_ROLE_POLL_INTERVAL,
+        );
     }
 
     let genesis_paths = GenesisPaths::from_dir(&args.genesis_config_dir);

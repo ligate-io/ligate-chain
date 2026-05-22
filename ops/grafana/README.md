@@ -1,7 +1,7 @@
 # Grafana dashboard for `ligate-node`
 
 Drop-in Grafana dashboard for the Phase 1 + Phase 2 metrics shipped
-on `ligate-node:9100/metrics`. Five rows, fifteen panels:
+on `ligate-node:9100/metrics`. Six rows, seventeen panels:
 
 - **Chain activity** — schemas registered, attestor sets registered,
   attestation submission rate.
@@ -13,6 +13,15 @@ on `ligate-node:9100/metrics`. Five rows, fifteen panels:
   the last hour, RPC p95 latency by endpoint.
 - **Process / observability** — process CPU (cores), RSS, open FDs,
   metrics-dropped rate (broadcast lag).
+- **Cluster topology** (chain#446 follow-up) — sequencer role per VM
+  (`unknown` / `replica` / `leader` value-mapped from
+  `ligate_sequencer_role`) and rate of role transitions
+  (`ligate_sequencer_role_transitions_total`). The role panel is the
+  primary visual for the paper-leader scenario from 2026-05-21:
+  exactly one `leader` should be lit at any time. Flat-zero
+  transitions = steady state; spikes during a planned failover drill
+  are expected; rapid flapping or two simultaneous leaders = page
+  on-call.
 
 Tracking issue: [#165](https://github.com/ligate-io/ligate-chain/issues/165).
 
