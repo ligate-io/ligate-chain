@@ -8,6 +8,27 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-05-22
+
+Hotfix for the v0.2.12 deploy panic on existing `blob_sender` RocksDB. Upgrading from v0.2.11 with a populated DB hit:
+
+```
+panicked at sov-blob-sender/src/db.rs:119:14:
+Invalid blob info in the database: Error("missing field `size_in_bytes`", line: 1, column: 215)
+```
+
+### Fixed
+
+- SDK pin bumped to `ligate-io/sovereign-sdk@2cd677a` (PR #4). The hotfix adds `#[serde(default)]` to the three new `SubmitBlobReceipt` cost fields (`fee_paid`, `gas_used`, `size_in_bytes`). Receipts persisted by older binaries now deserialize cleanly with sane defaults (`None`/`None`/`0`) instead of panicking. (chain#452)
+
+### Operator notes
+
+If you tried v0.2.12 and rolled back to v0.2.11, jump straight to v0.2.13. No data quarantine is needed; the `blob_sender` RocksDB rows that prompted the panic are read with `size_in_bytes = 0` on first load, then write the real value on the next `Published` event.
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.11/v0.2.12. Safe binary swap.
+
 ## [0.2.12] - 2026-05-22
 
 Lands real on-wire bytes-per-blob telemetry from the DA layer (`ligate_da_blob_bytes_total`) by extending the SDK's `SubmitBlobReceipt` with cost fields. Plumbing release; no behaviour shift, `chain_hash` unchanged.
