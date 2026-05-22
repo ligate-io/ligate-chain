@@ -933,11 +933,7 @@ pub fn init_da_cost_metrics() {
 /// doesn't surface a fee (mock DA in tests, or — temporarily — Celestia
 /// while chain#452's tx-body decode is still TODO). `size_in_bytes` is
 /// always authoritative; `gas_used` is recorded when present.
-pub fn record_da_blob_published(
-    fee_paid: Option<u64>,
-    gas_used: Option<u64>,
-    size_in_bytes: u64,
-) {
+pub fn record_da_blob_published(fee_paid: Option<u64>, gas_used: Option<u64>, size_in_bytes: u64) {
     init_da_cost_metrics();
     da_blobs_published().inc();
     let tia_to_record = fee_paid.unwrap_or(DA_BLOB_TIA_ESTIMATE_NANO);
