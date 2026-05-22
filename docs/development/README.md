@@ -20,7 +20,7 @@ Read these in roughly this order when standing up a fresh chain instance.
 | [`devnet.md`](./devnet.md) | Localnet bring-up (Mock DA) and the federated-devnet design (attestor orgs, multi-sequencer topology — forward-looking) |
 | [`public-devnet-deploy.md`](./public-devnet-deploy.md) | GCP VM bring-up procedure for `ligate-devnet-1`: project, SA, firewall, systemd unit, first boot |
 | [`celestia-ops.md`](./celestia-ops.md) | Co-located Celestia light node setup, wallet wiring, TIA funding |
-| [`follower-bootstrap.md`](./follower-bootstrap.md) | Spin up a read-only follower that syncs from Celestia DA — for design partners, auditors, third-party nodes |
+| [`snapshot-bootstrap.md`](./snapshot-bootstrap.md) | Spin up a read-only sync node that imports from a public snapshot instead of replaying DA from genesis. For design partners, auditors, third-party node operators. |
 | [`canonical-schema-registration.md`](./canonical-schema-registration.md) | Post-genesis schema registration ceremony: bootstrap-cli flow for `themisra.proof-of-prompt/v1` etc. |
 
 ## Reference + design
