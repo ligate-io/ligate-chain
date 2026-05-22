@@ -8,23 +8,27 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-05-22
+
+Lands real on-wire bytes-per-blob telemetry from the DA layer (`ligate_da_blob_bytes_total`) by extending the SDK's `SubmitBlobReceipt` with cost fields. Plumbing release; no behaviour shift, `chain_hash` unchanged.
+
 ### Added
 
-- `ligate_da_blob_bytes_total` (counter) — total bytes posted to the DA layer, summed from the SDK `SubmitBlobReceipt::size_in_bytes` on every observed `Published` event. Authoritative (not an estimate); lets Grafana show GB-per-month posted and real cost-per-byte trends as attestation payload size evolves. (chain#452)
-- `ligate_da_blob_gas_total` (counter) — total DA-layer gas burned, summed from `SubmitBlobReceipt::gas_used`. Only bumps when the adapter surfaces a value (Celestia: yes; mock DA: skipped). Authoritative. (chain#452)
+- `ligate_da_blob_bytes_total` (counter) — total bytes posted to the DA layer, summed from `SubmitBlobReceipt::size_in_bytes` on every observed `Published` event. Authoritative (not an estimate); lets Grafana show GB-per-month posted and real cost-per-byte trends as attestation payload size evolves. (chain#452)
+- `ligate_da_blob_gas_total` (counter) — total DA-layer gas burned, summed from `SubmitBlobReceipt::gas_used`. Registered but does not bump yet: both Celestia (the celestia-grpc client's `TxInfo` carries only `hash` + `height`) and mock-DA leave `gas_used` as `None`. Once the Celestia `get_tx` follow-up surfaces gas this counter starts tracking real values with no code change here. (chain#452)
 
 ### Changed
 
-- SDK pin bumped to `ligate-io/sovereign-sdk@33e1f419f`. The branch extends `SubmitBlobReceipt<T>` with `fee_paid: Option<u64>` (Celestia nanoTIA), `gas_used: Option<u64>` (Celestia PFB gas), and `size_in_bytes: u64`. Celestia adapter currently leaves both `fee_paid` and `gas_used` as `None` (the celestia-grpc client's `TxInfo` only exposes `hash` + `height`; surfacing gas/fee needs a follow-up `get_tx` lookup against the DA node). Mock-DA adapter also sets fee/gas to `None`. `size_in_bytes` is always populated, making `ligate_da_blob_bytes_total` the one new authoritative counter shipping today.
-- `ligate_da_tia_burned_nano_estimate_total` now prefers the receipt's `fee_paid` when present (authoritative), falling back to the compiled-in `DA_BLOB_TIA_ESTIMATE_NANO` constant when the adapter leaves it `None`. The `_estimate_` suffix stays for now since the Celestia path still uses the constant. Once the Celestia tx-body decode lands the suffix will drop in a follow-up. (chain#452)
+- SDK pin bumped to `ligate-io/sovereign-sdk@33e1f419f` (PR #3). Extends `SubmitBlobReceipt<T>` with `fee_paid: Option<u64>`, `gas_used: Option<u64>`, and `size_in_bytes: u64`. `size_in_bytes` is always populated by every adapter; `fee_paid` + `gas_used` are `None` everywhere today pending the per-adapter follow-ups.
+- `ligate_da_tia_burned_nano_estimate_total` now prefers the receipt's `fee_paid` when present (authoritative), falling back to the compiled-in `DA_BLOB_TIA_ESTIMATE_NANO` constant when the adapter leaves it `None`. The `_estimate_` suffix stays for now since the Celestia path still uses the constant; once the Celestia tx-body decode lands the suffix drops in a follow-up. (chain#452)
 
 ### Compatibility
 
-`chain_hash` unchanged. Safe binary swap. New counters appear automatically on next `/metrics` scrape.
+`chain_hash` unchanged from v0.2.11. Safe binary swap. New counters appear automatically on next `/metrics` scrape.
 
 ### Followup
 
-- Decode `tx_response.tx: Option<Any>` in the Celestia adapter to extract the real `fee_paid` (nanoTIA) from the PFB tx body's `auth_info.fee.amount`. Once landed, the chain-side `unwrap_or(DA_BLOB_TIA_ESTIMATE_NANO)` becomes pure pass-through and the `_estimate_` suffix can drop. Filing as the next chain#452 follow-up.
+- Add a `get_tx` lookup in the Celestia adapter (after `submit_pay_for_blob` returns the `TxInfo`) to fetch the full `TxResponse`, extract `gas_used` and decode `tx.auth_info.fee.amount` for the utia coin. Once landed, both `ligate_da_blob_gas_total` and the `_estimate_` counter start emitting real Celestia values without further chain-side changes.
 
 ## [0.2.11] - 2026-05-22
 
