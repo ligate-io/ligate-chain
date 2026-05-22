@@ -1,7 +1,7 @@
 # Grafana dashboard for `ligate-node`
 
 Drop-in Grafana dashboard for the Phase 1 + Phase 2 metrics shipped
-on `ligate-node:9100/metrics`. Seven rows, twenty-one panels:
+on `ligate-node:9100/metrics`. Nine rows, thirty-eight panels:
 
 - **Chain activity** — schemas registered, attestor sets registered,
   attestation submission rate.
@@ -25,13 +25,38 @@ on `ligate-node:9100/metrics`. Seven rows, twenty-one panels:
 - **Cost & economy** (chain#446 Track 4) — cumulative TIA burned
   (estimate, from `ligate_da_tia_burned_nano_estimate_total`), TIA
   burn rate per hour, protocol treasury balance in LGT
-  (`ligate_protocol_treasury_balance_nano`), and a 4-up stat row
+  (`ligate_protocol_treasury_balance_nano`), a 4-up stat row
   mirroring api `/v1/stats/totals` (txs / attestations / schemas /
-  attestor sets). The TIA burn is an estimate based on a fixed
-  per-blob constant; follow-up to extend the SDK receipt with the
-  real `fee_paid` is filed separately.
+  attestor sets), and **GCP daily burn (USD)** sourced from the
+  VM-1 BigQuery sidecar at `https://rpc.ligate.io/cost/daily.json`
+  (see `docs/development/runbooks/gcp-billing-export.md`). The TIA
+  burn is an estimate based on a fixed per-blob constant;
+  follow-up chain#452 covers the SDK receipt extension to make it
+  authoritative.
+- **VM capacity headroom** (chain#449 follow-up) — four threshold
+  stat panels colored green / amber / red so you know when to
+  upsize *before* a saturation incident:
+  - **CPU usage (cores)** sized for e2-standard-2 (2 vCPU). Red
+    >1.5 cores sustained = bump to e2-standard-4.
+  - **Memory (RSS)** sized for 8 GB. Red >4 GB = bump VM tier.
+  - **State DB size** sized for the default 100 GB SSD. Red >70 GB
+    = resize SSD online (non-disruptive grow).
+  - **Open FDs** as a canary for descriptor leaks (ulimit 65536).
+- **Activity leaders** (api#67) — three table panels backed by the
+  api's leaderboard endpoints via the Infinity HTTP-JSON
+  datasource: top attesters (`/v1/stats/top-attesters`), top schema
+  owners (`/v1/stats/top-schema-owners`), top attestor sets
+  (`/v1/stats/top-attestor-sets`). Same shape across all three
+  (`rank` / `address` / `count`), 10 rows each, 30s cache on the
+  api side. The "who's using the chain most" view.
 
 Tracking issue: [#165](https://github.com/ligate-io/ligate-chain/issues/165).
+
+The Infinity datasource (used by GCP daily burn + the three
+leaderboards) is preinstalled in Grafana Cloud. Self-hosted Grafana
+needs `grafana-infinity-datasource` from the plugins catalog. No
+auth — both target hosts (`api.ligate.io` + `rpc.ligate.io`) are
+public.
 
 ## Import
 
