@@ -625,14 +625,20 @@ pub fn spawn_da_metrics_task<Da: DaSpec>(
                                 }
                             }
                             in_flight.insert(receipt.blob_hash, std::time::Instant::now());
-                            // Bump the DA cost estimate counters
-                            // (chain#446 Track 4). Each Published
-                            // event counts as one blob; we add a
-                            // fixed nanoTIA estimate because the
-                            // SDK's `SubmitBlobReceipt` doesn't
-                            // currently carry the real `fee_paid`
-                            // value from the Celestia PFB receipt.
-                            record_da_blob_published();
+                            // Bump the DA cost counters (chain#446
+                            // Track 4 + chain#452). The SDK receipt
+                            // now carries the real `size_in_bytes`
+                            // (always populated) and `gas_used`
+                            // (Celestia). `fee_paid` is still `None`
+                            // pending Celestia tx-body decode; we
+                            // fall back to a per-blob constant in
+                            // that case so the existing
+                            // `_estimate_total` counter keeps moving.
+                            record_da_blob_published(
+                                receipt.fee_paid,
+                                receipt.gas_used,
+                                receipt.size_in_bytes,
+                            );
                         }
                         BlobSubmissionStatus::Finalized { receipt } => {
                             if let Some(started) = in_flight.remove(&receipt.blob_hash) {
@@ -858,10 +864,48 @@ fn da_tia_estimate_per_blob_nano() -> &'static IntGauge {
         register_int_gauge!(
             "ligate_da_tia_estimate_per_blob_nano",
             "The fixed per-blob TIA estimate (in nanoTIA) the chain uses to compute \
-             `ligate_da_tia_burned_nano_estimate_total`. Exposed as a gauge so dashboards can \
-             show the assumed rate next to the burn counter."
+             `ligate_da_tia_burned_nano_estimate_total` when the SDK receipt's `fee_paid` is \
+             `None`. Exposed as a gauge so dashboards can show the assumed-rate fallback next \
+             to the burn counter."
         )
         .expect("gauge registers once")
+    })
+}
+
+/// `ligate_da_blob_bytes_total`: real on-wire blob size posted to the
+/// DA layer, summed across every observed `Published` event. Lets
+/// dashboards show GB-per-month posted, real cost-per-byte, and
+/// trend size growth as attestation payloads evolve. Bumps by
+/// `SubmitBlobReceipt::size_in_bytes`, which every adapter (Celestia,
+/// mock-DA) always populates as of chain#452.
+fn da_blob_bytes_total() -> &'static IntCounter {
+    static M: OnceLock<IntCounter> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter!(
+            "ligate_da_blob_bytes_total",
+            "Total bytes this node has posted to the DA layer, summed from the SDK \
+             `SubmitBlobReceipt::size_in_bytes` on every observed `Published` event. \
+             Authoritative (not an estimate)."
+        )
+        .expect("counter registers once")
+    })
+}
+
+/// `ligate_da_blob_gas_total`: real PFB gas consumed on the DA layer,
+/// summed across every observed `Published` event. Only bumps when the
+/// adapter surfaces a value (Celestia: yes, mock-DA: no). Together with
+/// `ligate_da_blob_bytes_total` it gives ops a real gas-per-byte trace
+/// without needing to query Celestia's tx history.
+fn da_blob_gas_total() -> &'static IntCounter {
+    static M: OnceLock<IntCounter> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter!(
+            "ligate_da_blob_gas_total",
+            "Total DA-layer gas this node has burned posting blobs, summed from the SDK \
+             `SubmitBlobReceipt::gas_used` on every observed `Published` event. Skipped \
+             when the adapter doesn't model gas (e.g. mock DA in tests). Authoritative."
+        )
+        .expect("counter registers once")
     })
 }
 
@@ -871,16 +915,34 @@ fn da_tia_estimate_per_blob_nano() -> &'static IntGauge {
 pub fn init_da_cost_metrics() {
     let _ = da_blobs_published();
     let _ = da_tia_burned_nano_estimate();
+    let _ = da_blob_bytes_total();
+    let _ = da_blob_gas_total();
     da_tia_estimate_per_blob_nano().set(DA_BLOB_TIA_ESTIMATE_NANO as i64);
 }
 
 /// Record one observed `Published` blob event. Called from inside the
 /// existing `spawn_da_metrics_task` loop, alongside the in-flight
 /// tracking the finalization-latency metric uses.
-pub fn record_da_blob_published() {
+///
+/// The receipt's `fee_paid` is preferred when present (authoritative
+/// per-blob nanoTIA cost from the DA layer); we fall back to the
+/// compiled-in `DA_BLOB_TIA_ESTIMATE_NANO` constant when the adapter
+/// doesn't surface a fee (mock DA in tests, or — temporarily — Celestia
+/// while chain#452's tx-body decode is still TODO). `size_in_bytes` is
+/// always authoritative; `gas_used` is recorded when present.
+pub fn record_da_blob_published(
+    fee_paid: Option<u64>,
+    gas_used: Option<u64>,
+    size_in_bytes: u64,
+) {
     init_da_cost_metrics();
     da_blobs_published().inc();
-    da_tia_burned_nano_estimate().inc_by(DA_BLOB_TIA_ESTIMATE_NANO);
+    let tia_to_record = fee_paid.unwrap_or(DA_BLOB_TIA_ESTIMATE_NANO);
+    da_tia_burned_nano_estimate().inc_by(tia_to_record);
+    da_blob_bytes_total().inc_by(size_in_bytes);
+    if let Some(gas) = gas_used {
+        da_blob_gas_total().inc_by(gas);
+    }
 }
 
 // ============================================================================
