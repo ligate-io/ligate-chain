@@ -1,6 +1,8 @@
-# Bootstrap a follower from a public snapshot
+# Bootstrap a node from a public snapshot
 
-**Status:** v0 — covers the public-snapshot import flow for a fresh `ligate-devnet-1` follower. Snapshot artefacts published daily by the canonical sequencer; partner follower downloads + imports + boots, skipping DA replay from height 0.
+**Status:** v1. Covers the public-snapshot import flow for a fresh `ligate-devnet-1` node (read-only sync node or partner-run sequencer; the procedure is role-agnostic). Snapshot artefacts are published daily by the canonical sequencer; the partner node downloads + imports + boots, skipping DA replay from height 0.
+
+> Renamed from `follower-bootstrap.md` after v0.2.9 dropped the `--mode follower` flag and the "follower" role label (chain#446, chain#462). The procedure itself is unchanged.
 
 Companion to [`public-devnet-deploy.md`](public-devnet-deploy.md) (which covers the VM bring-up) and [`runbooks/backup-restore.md`](runbooks/backup-restore.md) (which covers operator-private RocksDB backups, NOT public snapshots).
 
@@ -8,7 +10,7 @@ Companion to [`public-devnet-deploy.md`](public-devnet-deploy.md) (which covers 
 
 ## Why this exists
 
-After a month of devnet, a fresh follower replaying DA from height 0 takes hours: multi-GB of blobs to refetch + reprocess + re-derive state. Past the early weeks, replay-from-zero is operationally untenable for partners who just want to mirror the chain.
+After a month of devnet, a fresh node replaying DA from height 0 takes hours: multi-GB of blobs to refetch + reprocess + re-derive state. Past the early weeks, replay-from-zero is operationally untenable for partners who just want to mirror the chain.
 
 Public snapshots cut bootstrap from hours to ~10 minutes:
 
@@ -56,7 +58,7 @@ sudo /opt/ligate/scripts/import-snapshot.sh \
 # - Start ligate-node
 # - Confirm head_height + chain_id match expectations
 
-# 4. Watch the follower catch up from snapshot height to current head
+# 4. Watch the node catch up from snapshot height to current head
 journalctl -fu ligate-node | grep block_committed
 curl -s http://127.0.0.1:12346/v1/ledger/slots/latest | jq .number
 ```
@@ -71,7 +73,7 @@ Three tiers, each with its own `latest-*.json` pointer:
 
 | Tier | Cadence | Retention | Use case |
 |---|---|---|---|
-| `daily` | Nightly 04:30 UTC | 30 days | Default. Most followers want recent state. |
+| `daily` | Nightly 04:30 UTC | 30 days | Default. Most nodes want recent state. |
 | `weekly` | Sunday 04:30 UTC | 12 weeks | Older partners catching up after extended downtime |
 | `monthly` | First of month 04:30 UTC | 12 months | Forensic / audit use cases |
 
@@ -202,12 +204,12 @@ gcloud storage ls gs://ligate-snapshots-public/snapshots/ligate-devnet-1/
 #    that has ligate-node + configs but no state:
 sudo /opt/ligate/scripts/import-snapshot.sh --chain-id ligate-devnet-1
 
-# 4. Confirm the fresh follower catches up to the canonical sequencer's
+# 4. Confirm the fresh node catches up to the canonical sequencer's
 #    head within a few minutes:
 SEQUENCER_HEIGHT=$(curl -s https://rpc.ligate.io/v1/ledger/slots/latest | jq .number)
-FOLLOWER_HEIGHT=$(curl -s http://localhost:12346/v1/ledger/slots/latest | jq .number)
-echo "sequencer: $SEQUENCER_HEIGHT  follower: $FOLLOWER_HEIGHT"
-# Within 5 minutes, FOLLOWER_HEIGHT should equal SEQUENCER_HEIGHT.
+LOCAL_HEIGHT=$(curl -s http://localhost:12346/v1/ledger/slots/latest | jq .number)
+echo "sequencer: $SEQUENCER_HEIGHT  local: $LOCAL_HEIGHT"
+# Within 5 minutes, LOCAL_HEIGHT should equal SEQUENCER_HEIGHT.
 ```
 
 Schedule the drill quarterly (the chain repo's calendar reminder system pings the operator).
