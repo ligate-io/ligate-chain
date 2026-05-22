@@ -1028,6 +1028,11 @@ fn protocol_economy_last_scrape_unix() -> &'static IntGauge {
     })
 }
 
+/// Pre-touch all economy gauges so their `HELP` / `TYPE` lines show
+/// up in the very first `/metrics` scrape, before the first poll
+/// completes. Without this, alerting rules that match against these
+/// metric names would fire a "no data" condition for the first ~60
+/// seconds after boot.
 pub fn init_economy_metrics() {
     let _ = protocol_treasury_balance_nano();
     let _ = protocol_total_supply_nano();
