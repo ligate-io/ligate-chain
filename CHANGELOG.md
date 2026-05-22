@@ -8,6 +8,27 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-05-22
+
+Adds cost + economy Prometheus metrics so Grafana dashboards can show DA spend and protocol-treasury health alongside ops metrics. Plumbing-only release; no behaviour shift, `chain_hash` unchanged.
+
+### Added
+
+- `ligate_da_blobs_published_total` (counter) and `ligate_da_tia_burned_nano_estimate_total` (counter) — bump on every observed Celestia `Published` event. The TIA value is a **fixed-per-blob estimate** (`DA_BLOB_TIA_ESTIMATE_NANO = 300_000`, calibrated against Mocha rates on 2026-05-22), not extracted from the actual Celestia tx receipt. The SDK's `SubmitBlobReceipt` doesn't currently carry `fee_paid` from the PFB tx; making it do so is filed as a separate follow-up. Treat the gauge as a floor.
+- `ligate_da_tia_estimate_per_blob_nano` (gauge) — exposes the compiled-in constant so Grafana can render "we assume X nanoTIA per blob" next to the burn counter.
+- Six new gauges mirrored from api `/v1/stats/totals`: `ligate_protocol_treasury_balance_nano`, `ligate_protocol_total_supply_nano`, `ligate_protocol_txs_total`, `ligate_protocol_attestations_total`, `ligate_protocol_schemas_registered`, `ligate_protocol_attestor_sets_registered`. Polled every 60s by a new tokio task in `metrics.rs`. Soft-fail on api unreachable: gauges hold last value; `ligate_protocol_economy_last_scrape_unix` (also new) stops advancing so Grafana can flag staleness.
+- `LIGATE_API_URL` env var (default `https://api.ligate.io`) for operators running their own api. Set to a non-existent host to effectively disable economy polling (gauges stay at zero / unset).
+- `ops/grafana/ligate-node.json`: new **Cost & economy** row at y=48 with 4 panels: cumulative TIA burned (stat), TIA burn rate per hour (time series), treasury balance in LGT (stat), and a 4-up "protocol totals" stat row (txs / attestations / schemas / attestor sets).
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.10. Safe binary swap. New env var is optional with a sensible default.
+
+### Followup
+
+- File a chain issue to extend the SDK's `SubmitBlobReceipt` with the actual `fee_paid` from the Celestia PFB tx receipt. Once available, the TIA estimate becomes the real ledger.
+- File an ops issue for GCP infra cost: enable Cloud Billing → BigQuery export and add a Grafana BigQuery datasource. Doesn't belong in `ligate-node` — the chain binary should stay portable for non-GCP operators.
+
 ## [0.2.10] - 2026-05-22
 
 Surfaces the DbElected sequencer role + transitions as Prometheus metrics so the paper-leader scenario from 2026-05-21 (chain#446) becomes visible on Grafana, not just in logs. Plumbing-only change; no behaviour shift.

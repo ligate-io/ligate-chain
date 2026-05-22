@@ -1,7 +1,7 @@
 # Grafana dashboard for `ligate-node`
 
 Drop-in Grafana dashboard for the Phase 1 + Phase 2 metrics shipped
-on `ligate-node:9100/metrics`. Six rows, seventeen panels:
+on `ligate-node:9100/metrics`. Seven rows, twenty-one panels:
 
 - **Chain activity** — schemas registered, attestor sets registered,
   attestation submission rate.
@@ -22,6 +22,14 @@ on `ligate-node:9100/metrics`. Six rows, seventeen panels:
   transitions = steady state; spikes during a planned failover drill
   are expected; rapid flapping or two simultaneous leaders = page
   on-call.
+- **Cost & economy** (chain#446 Track 4) — cumulative TIA burned
+  (estimate, from `ligate_da_tia_burned_nano_estimate_total`), TIA
+  burn rate per hour, protocol treasury balance in LGT
+  (`ligate_protocol_treasury_balance_nano`), and a 4-up stat row
+  mirroring api `/v1/stats/totals` (txs / attestations / schemas /
+  attestor sets). The TIA burn is an estimate based on a fixed
+  per-blob constant; follow-up to extend the SDK receipt with the
+  real `fee_paid` is filed separately.
 
 Tracking issue: [#165](https://github.com/ligate-io/ligate-chain/issues/165).
 

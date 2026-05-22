@@ -556,6 +556,9 @@ pub fn init_da_metrics() {
     let _ = da_submission_failures();
     let _ = da_finalization_latency();
     let _ = metrics_dropped();
+    // DA cost estimate metrics are bundled with the rest of the DA
+    // surface — same lifecycle, same scrape cadence.
+    init_da_cost_metrics();
 }
 
 /// Spawn a tokio task that subscribes to the BlobSender's
@@ -622,6 +625,14 @@ pub fn spawn_da_metrics_task<Da: DaSpec>(
                                 }
                             }
                             in_flight.insert(receipt.blob_hash, std::time::Instant::now());
+                            // Bump the DA cost estimate counters
+                            // (chain#446 Track 4). Each Published
+                            // event counts as one blob; we add a
+                            // fixed nanoTIA estimate because the
+                            // SDK's `SubmitBlobReceipt` doesn't
+                            // currently carry the real `fee_paid`
+                            // value from the Celestia PFB receipt.
+                            record_da_blob_published();
                         }
                         BlobSubmissionStatus::Finalized { receipt } => {
                             if let Some(started) = in_flight.remove(&receipt.blob_hash) {
@@ -783,6 +794,282 @@ pub fn spawn_sequencer_role_task(role_url: String, interval: Duration) {
         }
     });
 }
+
+// ============================================================================
+// DA cost estimate (Track 4 follow-up to chain#446)
+//
+// The Sovereign SDK's `SubmitBlobReceipt` doesn't currently carry the
+// actual `fee_paid` value from the Celestia PFB tx receipt — only
+// `blob_hash` and `da_transaction_id`. So we surface an *estimate*
+// based on a fixed per-blob TIA cost calibrated to Mocha testnet rates
+// observed on 2026-05-22. Filed as a follow-up to extend the SDK
+// receipt with the real fee.
+//
+// Two metrics:
+// - `ligate_da_blobs_published_total`: bumps every time a blob hits
+//   `Published` on the BlobSender's broadcast channel. Useful as a
+//   denominator and as a sanity check vs `ligate_da_finalization_*`.
+// - `ligate_da_tia_burned_nano_estimate_total`: bumps by the fixed
+//   per-blob constant on every Published event. Sum × time = estimated
+//   TIA burn over the window. Mark "estimate" in Grafana so nobody
+//   reads it as authoritative.
+// ============================================================================
+
+/// Estimated cost of a single Celestia blob submission, in nanoTIA
+/// (1 TIA = 1_000_000_000 nanoTIA). Calibrated from Mocha gas rates
+/// observed on 2026-05-22 for our typical attestation blobs (~13 to
+/// ~50 bytes of payload after framing, plus the PFB tx envelope).
+/// Conservative — will under-count once attestation payloads include
+/// larger evidence blobs. Revisit when chain#XXX (SDK fee_paid in
+/// receipt) lands.
+pub const DA_BLOB_TIA_ESTIMATE_NANO: u64 = 300_000;
+
+fn da_blobs_published() -> &'static IntCounter {
+    static M: OnceLock<IntCounter> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter!(
+            "ligate_da_blobs_published_total",
+            "Number of blobs this node has observed reaching `Published` state on Celestia DA. \
+             Bumps once per blob, regardless of whether the same blob later finalizes or \
+             retries."
+        )
+        .expect("counter registers once")
+    })
+}
+
+fn da_tia_burned_nano_estimate() -> &'static IntCounter {
+    static M: OnceLock<IntCounter> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_counter!(
+            "ligate_da_tia_burned_nano_estimate_total",
+            "ESTIMATED total TIA (in nanoTIA, 1e-9 TIA) this node has burned posting blobs to \
+             Celestia DA. Bumps by a fixed per-blob constant on every observed `Published` \
+             event (the SDK's `SubmitBlobReceipt` doesn't currently carry the real `fee_paid`). \
+             Under-counts once blob sizes grow; treat as a floor for ops dashboards, not an \
+             authoritative ledger."
+        )
+        .expect("counter registers once")
+    })
+}
+
+fn da_tia_estimate_per_blob_nano() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_da_tia_estimate_per_blob_nano",
+            "The fixed per-blob TIA estimate (in nanoTIA) the chain uses to compute \
+             `ligate_da_tia_burned_nano_estimate_total`. Exposed as a gauge so dashboards can \
+             show the assumed rate next to the burn counter."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+/// Pre-touch the DA-cost metrics so their HELP/TYPE land in the first
+/// `/metrics` scrape. Also sets the per-blob estimate gauge to the
+/// compiled-in constant so it's never `0` (a 0 there is misleading).
+pub fn init_da_cost_metrics() {
+    let _ = da_blobs_published();
+    let _ = da_tia_burned_nano_estimate();
+    da_tia_estimate_per_blob_nano().set(DA_BLOB_TIA_ESTIMATE_NANO as i64);
+}
+
+/// Record one observed `Published` blob event. Called from inside the
+/// existing `spawn_da_metrics_task` loop, alongside the in-flight
+/// tracking the finalization-latency metric uses.
+pub fn record_da_blob_published() {
+    init_da_cost_metrics();
+    da_blobs_published().inc();
+    da_tia_burned_nano_estimate().inc_by(DA_BLOB_TIA_ESTIMATE_NANO);
+}
+
+// ============================================================================
+// Protocol economy mirror (Track 4 follow-up to chain#446)
+//
+// Mirrors the api's `/v1/stats/totals` into chain Prometheus so ops
+// dashboards have a single source of truth. Each chain node polls the
+// api independently; the values are chain-wide, so all instances
+// expose the same number (Grafana aggregates with `max` or `last`).
+//
+// Soft-fails on api unreachable: gauges hold their last observed
+// value rather than zeroing out (a 0 would falsely show "treasury
+// empty"). Staleness is visible via `ligate_protocol_economy_last_scrape_unix`.
+// ============================================================================
+
+/// Default polling interval for the economy sampler. 60s is plenty —
+/// treasury and supply move on a per-transaction cadence, and devnet
+/// tx volume is low enough that finer sampling adds noise without
+/// signal.
+pub const DEFAULT_ECONOMY_POLL_INTERVAL: Duration = Duration::from_secs(60);
+
+fn protocol_treasury_balance_nano() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_treasury_balance_nano",
+            "Current LGT balance of the protocol treasury address, in nanoLGT \
+             (1 LGT = 1_000_000_000 nanoLGT). Sourced from the api's \
+             `/v1/stats/totals.treasury_balance_nano`."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+fn protocol_total_supply_nano() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_total_supply_nano",
+            "Total LGT supply, in nanoLGT. Genesis-fixed at 1B LGT for devnet-1; this gauge \
+             tracks the chain's reported value so a future emission policy is auto-picked-up."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+fn protocol_txs_total() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_txs_total",
+            "Total transactions ever included on chain (per the api's indexer). Includes both \
+             SUCCESS and REVERTED."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+fn protocol_attestations_total() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_attestations_total",
+            "Total attestations ever submitted, per api indexer."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+fn protocol_schemas_registered() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_schemas_registered",
+            "Total schemas registered, per api indexer."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+fn protocol_attestor_sets_registered() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_attestor_sets_registered",
+            "Total attestor sets registered, per api indexer."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+fn protocol_economy_last_scrape_unix() -> &'static IntGauge {
+    static M: OnceLock<IntGauge> = OnceLock::new();
+    M.get_or_init(|| {
+        register_int_gauge!(
+            "ligate_protocol_economy_last_scrape_unix",
+            "Unix timestamp (seconds) of the most recent successful poll of the api's \
+             `/v1/stats/totals`. If this stops advancing, the api is unreachable and the \
+             economy gauges above are stale — Grafana should show a 'stale data' badge once \
+             this drifts more than 5 minutes from `now()`."
+        )
+        .expect("gauge registers once")
+    })
+}
+
+/// Pre-touch all economy gauges so their `HELP` / `TYPE` lines show
+/// up in the very first `/metrics` scrape, before the first poll
+/// completes. Without this, alerting rules that match against these
+/// metric names would fire a "no data" condition for the first ~60
+/// seconds after boot.
+pub fn init_economy_metrics() {
+    let _ = protocol_treasury_balance_nano();
+    let _ = protocol_total_supply_nano();
+    let _ = protocol_txs_total();
+    let _ = protocol_attestations_total();
+    let _ = protocol_schemas_registered();
+    let _ = protocol_attestor_sets_registered();
+    let _ = protocol_economy_last_scrape_unix();
+}
+
+/// Parse a numeric string field out of the api's totals JSON and set
+/// the matching gauge. Strings are used by the api because supply +
+/// treasury values can exceed JS Number's safe-integer range (2^53);
+/// they fit in i64 for any realistic chain state we'll see.
+fn set_from_str(v: &serde_json::Value, key: &str, gauge: &IntGauge) {
+    if let Some(s) = v.get(key).and_then(|x| x.as_str()) {
+        if let Ok(n) = s.parse::<i64>() {
+            gauge.set(n);
+        }
+    }
+}
+
+fn set_from_int(v: &serde_json::Value, key: &str, gauge: &IntGauge) {
+    if let Some(n) = v.get(key).and_then(|x| x.as_i64()) {
+        gauge.set(n);
+    }
+}
+
+/// Sample the api's `/v1/stats/totals` once and update the protocol-
+/// economy gauges. Soft-fails: a network error or a parse error
+/// leaves the previous gauge values in place and the
+/// `last_scrape_unix` gauge does not advance. Public so a test
+/// harness can drive a single sample without spinning the task.
+pub async fn sample_economy(api_url: &str) {
+    init_economy_metrics();
+    let body =
+        match reqwest::Client::new().get(api_url).timeout(Duration::from_secs(5)).send().await {
+            Ok(resp) if resp.status().is_success() => resp.text().await.unwrap_or_default(),
+            _ => return,
+        };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) else {
+        return;
+    };
+    set_from_str(&v, "treasury_balance_nano", protocol_treasury_balance_nano());
+    set_from_str(&v, "total_supply_nano", protocol_total_supply_nano());
+    set_from_int(&v, "txs_total", protocol_txs_total());
+    set_from_int(&v, "attestations", protocol_attestations_total());
+    set_from_int(&v, "schemas", protocol_schemas_registered());
+    set_from_int(&v, "attestor_sets", protocol_attestor_sets_registered());
+    if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        protocol_economy_last_scrape_unix().set(now.as_secs() as i64);
+    }
+}
+
+/// Spawn the protocol-economy poller. Polls `api_url` every
+/// `interval` (default 60s) and updates the LGT-economy gauges.
+/// Fire-and-forget; lives until the runtime drops. Safe before the
+/// api is reachable — early polls just skip-update until the network
+/// path comes up.
+pub fn spawn_economy_task(api_url: String, interval: Duration) {
+    init_economy_metrics();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(interval);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            ticker.tick().await;
+            sample_economy(&api_url).await;
+        }
+    });
+}
+
+// ============================================================================
+// Unit tests
+//
+// Placed at the very end so clippy's `items_after_test_module` lint is
+// satisfied. When you add new test cases, add them HERE — don't insert
+// a new `#[cfg(test)] mod` higher up in the file or downstream items
+// stop compiling.
+// ============================================================================
 
 #[cfg(test)]
 mod sequencer_role_tests {

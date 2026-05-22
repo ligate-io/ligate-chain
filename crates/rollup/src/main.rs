@@ -260,6 +260,19 @@ async fn run() -> anyhow::Result<()> {
             "http://127.0.0.1:12346/v1/sequencer/role".to_string(),
             metrics::DEFAULT_SEQUENCER_ROLE_POLL_INTERVAL,
         );
+
+        // Protocol-economy poller (chain#446 Track 4). Mirrors the
+        // api's `/v1/stats/totals` into chain Prometheus so ops
+        // dashboards have a single source. Defaults to the public
+        // api at `api.ligate.io`; `LIGATE_API_URL` env var overrides
+        // for operators running their own api (or for disabling by
+        // pointing at a sink). Soft-fails on api unreachable; gauges
+        // hold last value and `ligate_protocol_economy_last_scrape_unix`
+        // stops advancing so dashboards can flag staleness.
+        let api_url =
+            std::env::var("LIGATE_API_URL").unwrap_or_else(|_| "https://api.ligate.io".to_string());
+        let totals_url = format!("{}/v1/stats/totals", api_url.trim_end_matches('/'));
+        metrics::spawn_economy_task(totals_url, metrics::DEFAULT_ECONOMY_POLL_INTERVAL);
     }
 
     let genesis_paths = GenesisPaths::from_dir(&args.genesis_config_dir);
