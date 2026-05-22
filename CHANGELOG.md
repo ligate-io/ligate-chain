@@ -8,6 +8,24 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Added
+
+- `ligate_da_blob_bytes_total` (counter) — total bytes posted to the DA layer, summed from the SDK `SubmitBlobReceipt::size_in_bytes` on every observed `Published` event. Authoritative (not an estimate); lets Grafana show GB-per-month posted and real cost-per-byte trends as attestation payload size evolves. (chain#452)
+- `ligate_da_blob_gas_total` (counter) — total DA-layer gas burned, summed from `SubmitBlobReceipt::gas_used`. Only bumps when the adapter surfaces a value (Celestia: yes; mock DA: skipped). Authoritative. (chain#452)
+
+### Changed
+
+- SDK pin bumped to `ligate-io/sovereign-sdk@33e1f419f`. The branch extends `SubmitBlobReceipt<T>` with `fee_paid: Option<u64>` (Celestia nanoTIA), `gas_used: Option<u64>` (Celestia PFB gas), and `size_in_bytes: u64`. Celestia adapter currently leaves both `fee_paid` and `gas_used` as `None` (the celestia-grpc client's `TxInfo` only exposes `hash` + `height`; surfacing gas/fee needs a follow-up `get_tx` lookup against the DA node). Mock-DA adapter also sets fee/gas to `None`. `size_in_bytes` is always populated, making `ligate_da_blob_bytes_total` the one new authoritative counter shipping today.
+- `ligate_da_tia_burned_nano_estimate_total` now prefers the receipt's `fee_paid` when present (authoritative), falling back to the compiled-in `DA_BLOB_TIA_ESTIMATE_NANO` constant when the adapter leaves it `None`. The `_estimate_` suffix stays for now since the Celestia path still uses the constant. Once the Celestia tx-body decode lands the suffix will drop in a follow-up. (chain#452)
+
+### Compatibility
+
+`chain_hash` unchanged. Safe binary swap. New counters appear automatically on next `/metrics` scrape.
+
+### Followup
+
+- Decode `tx_response.tx: Option<Any>` in the Celestia adapter to extract the real `fee_paid` (nanoTIA) from the PFB tx body's `auth_info.fee.amount`. Once landed, the chain-side `unwrap_or(DA_BLOB_TIA_ESTIMATE_NANO)` becomes pure pass-through and the `_estimate_` suffix can drop. Filing as the next chain#452 follow-up.
+
 ## [0.2.11] - 2026-05-22
 
 Adds cost + economy Prometheus metrics so Grafana dashboards can show DA spend and protocol-treasury health alongside ops metrics. Plumbing-only release; no behaviour shift, `chain_hash` unchanged.
