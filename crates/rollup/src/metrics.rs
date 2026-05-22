@@ -750,22 +750,16 @@ pub async fn sample_sequencer_role(role_url: &str, prev: &mut Option<&'static st
     // bound, body not JSON) all fold into `encode_role` returning
     // `(0, "unknown")` — the right "we don't know" signal for
     // dashboards until the next poll succeeds.
-    let body = match reqwest::Client::new()
-        .get(role_url)
-        .timeout(Duration::from_secs(1))
-        .send()
-        .await
-    {
-        Ok(resp) if resp.status().is_success() => resp.text().await.unwrap_or_default(),
-        _ => String::new(),
-    };
+    let body =
+        match reqwest::Client::new().get(role_url).timeout(Duration::from_secs(1)).send().await {
+            Ok(resp) if resp.status().is_success() => resp.text().await.unwrap_or_default(),
+            _ => String::new(),
+        };
     let (value, label) = encode_role(&body);
     sequencer_role().set(value);
     if let Some(prev_label) = *prev {
         if prev_label != label {
-            sequencer_role_transitions()
-                .with_label_values(&[prev_label, label])
-                .inc();
+            sequencer_role_transitions().with_label_values(&[prev_label, label]).inc();
             info!(from = prev_label, to = label, "sequencer role transition observed");
         }
     }
