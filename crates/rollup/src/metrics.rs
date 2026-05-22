@@ -795,48 +795,6 @@ pub fn spawn_sequencer_role_task(role_url: String, interval: Duration) {
     });
 }
 
-#[cfg(test)]
-mod sequencer_role_tests {
-    use super::encode_role;
-
-    #[test]
-    fn encode_leader() {
-        let (v, l) = encode_role("\"BatchProducer\"");
-        assert_eq!(v, 2);
-        assert_eq!(l, "leader");
-    }
-
-    #[test]
-    fn encode_replica() {
-        let (v, l) = encode_role("\"PgSyncReplica\"");
-        assert_eq!(v, 1);
-        assert_eq!(l, "replica");
-    }
-
-    #[test]
-    fn encode_unknown_on_empty() {
-        let (v, l) = encode_role("");
-        assert_eq!(v, 0);
-        assert_eq!(l, "unknown");
-    }
-
-    #[test]
-    fn encode_unknown_on_garbage() {
-        // Future role variant or chain on a different version: degrade
-        // to unknown rather than crashing the gauge.
-        let (v, l) = encode_role("\"SomeFutureRole\"");
-        assert_eq!(v, 0);
-        assert_eq!(l, "unknown");
-    }
-
-    #[test]
-    fn encode_handles_whitespace() {
-        let (v, l) = encode_role("  \"BatchProducer\"  \n");
-        assert_eq!(v, 2);
-        assert_eq!(l, "leader");
-    }
-}
-
 // ============================================================================
 // DA cost estimate (Track 4 follow-up to chain#446)
 //
@@ -1102,4 +1060,55 @@ pub fn spawn_economy_task(api_url: String, interval: Duration) {
             sample_economy(&api_url).await;
         }
     });
+}
+
+// ============================================================================
+// Unit tests
+//
+// Placed at the very end so clippy's `items_after_test_module` lint is
+// satisfied. When you add new test cases, add them HERE — don't insert
+// a new `#[cfg(test)] mod` higher up in the file or downstream items
+// stop compiling.
+// ============================================================================
+
+#[cfg(test)]
+mod sequencer_role_tests {
+    use super::encode_role;
+
+    #[test]
+    fn encode_leader() {
+        let (v, l) = encode_role("\"BatchProducer\"");
+        assert_eq!(v, 2);
+        assert_eq!(l, "leader");
+    }
+
+    #[test]
+    fn encode_replica() {
+        let (v, l) = encode_role("\"PgSyncReplica\"");
+        assert_eq!(v, 1);
+        assert_eq!(l, "replica");
+    }
+
+    #[test]
+    fn encode_unknown_on_empty() {
+        let (v, l) = encode_role("");
+        assert_eq!(v, 0);
+        assert_eq!(l, "unknown");
+    }
+
+    #[test]
+    fn encode_unknown_on_garbage() {
+        // Future role variant or chain on a different version: degrade
+        // to unknown rather than crashing the gauge.
+        let (v, l) = encode_role("\"SomeFutureRole\"");
+        assert_eq!(v, 0);
+        assert_eq!(l, "unknown");
+    }
+
+    #[test]
+    fn encode_handles_whitespace() {
+        let (v, l) = encode_role("  \"BatchProducer\"  \n");
+        assert_eq!(v, 2);
+        assert_eq!(l, "leader");
+    }
 }
