@@ -15,7 +15,7 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ### Changed
 
-- SDK pin bumped to `ligate-io/sovereign-sdk@847993648` ([chain-452 branch](https://github.com/ligate-io/sovereign-sdk/pull/new/ligate/chain-452-submit-blob-receipt-cost-fields)). The branch extends `SubmitBlobReceipt<T>` with `fee_paid: Option<u64>` (Celestia nanoTIA — currently `None` pending tx-body decode), `gas_used: Option<u64>` (Celestia PFB gas — populated), and `size_in_bytes: u64` (always populated). Mock-DA adapter sets fee/gas to `None`, size to the raw blob length.
+- SDK pin bumped to `ligate-io/sovereign-sdk@33e1f419f`. The branch extends `SubmitBlobReceipt<T>` with `fee_paid: Option<u64>` (Celestia nanoTIA), `gas_used: Option<u64>` (Celestia PFB gas), and `size_in_bytes: u64`. Celestia adapter currently leaves both `fee_paid` and `gas_used` as `None` (the celestia-grpc client's `TxInfo` only exposes `hash` + `height`; surfacing gas/fee needs a follow-up `get_tx` lookup against the DA node). Mock-DA adapter also sets fee/gas to `None`. `size_in_bytes` is always populated, making `ligate_da_blob_bytes_total` the one new authoritative counter shipping today.
 - `ligate_da_tia_burned_nano_estimate_total` now prefers the receipt's `fee_paid` when present (authoritative), falling back to the compiled-in `DA_BLOB_TIA_ESTIMATE_NANO` constant when the adapter leaves it `None`. The `_estimate_` suffix stays for now since the Celestia path still uses the constant. Once the Celestia tx-body decode lands the suffix will drop in a follow-up. (chain#452)
 
 ### Compatibility

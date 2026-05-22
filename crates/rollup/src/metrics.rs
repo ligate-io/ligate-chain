@@ -891,11 +891,14 @@ fn da_blob_bytes_total() -> &'static IntCounter {
     })
 }
 
-/// `ligate_da_blob_gas_total`: real PFB gas consumed on the DA layer,
-/// summed across every observed `Published` event. Only bumps when the
-/// adapter surfaces a value (Celestia: yes, mock-DA: no). Together with
-/// `ligate_da_blob_bytes_total` it gives ops a real gas-per-byte trace
-/// without needing to query Celestia's tx history.
+/// `ligate_da_blob_gas_total`: real DA-layer gas consumed, summed
+/// across every observed `Published` event. Only bumps when the
+/// adapter surfaces a value. Celestia leaves it `None` for now
+/// (the celestia-grpc client returns a `TxInfo { hash, height }`
+/// that drops the gas/fee fields; surfacing them needs a follow-up
+/// `get_tx` lookup); mock-DA always leaves it `None`. Once the
+/// Celestia follow-up lands this counter starts tracking real gas
+/// without code changes here.
 fn da_blob_gas_total() -> &'static IntCounter {
     static M: OnceLock<IntCounter> = OnceLock::new();
     M.get_or_init(|| {
