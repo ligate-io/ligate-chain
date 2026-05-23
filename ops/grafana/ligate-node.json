@@ -1638,12 +1638,237 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "GCP spend by service over the last 30 days. Sourced from the VM-1 BigQuery sidecar at /var/www/cost/by-service.json, refreshed every 6h. Compute Engine + Cloud Storage are usually the top two; if anything else creeps to the top, investigate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "currencyUSD",
+          "decimals": 2
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 66
+      },
+      "id": 801,
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "displayMode": "gradient",
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "url": "https://rpc.ligate.io/cost/by-service.json",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "service",
+              "text": "Service",
+              "type": "string"
+            },
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "refId": "A"
+        }
+      ],
+      "title": "GCP spend by service (last 30d)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Compute Engine spend by VM (resource.name) over the last 7 days. Sourced from /var/www/cost/by-vm.json. Today on a single-VM setup this shows one row; useful when the cluster scales back out to multi-sequencer mode.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "currencyUSD",
+          "decimals": 2
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 66
+      },
+      "id": 802,
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "displayMode": "gradient",
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "showLegend": false,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "url": "https://rpc.ligate.io/cost/by-vm.json",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "vm",
+              "text": "VM",
+              "type": "string"
+            },
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "refId": "A"
+        }
+      ],
+      "title": "Compute Engine spend by VM (last 7d)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "GCP total spend month-to-date (since the 1st of the current calendar month). Sourced from /var/www/cost/mtd.json. Snaps back to zero on the 1st of each month, then climbs.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 200
+              },
+              {
+                "color": "orange",
+                "value": 400
+              },
+              {
+                "color": "red",
+                "value": 800
+              }
+            ]
+          },
+          "unit": "currencyUSD",
+          "decimals": 2
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 66
+      },
+      "id": 803,
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^cost_usd$/"
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "type": "json",
+          "source": "url",
+          "url": "https://rpc.ligate.io/cost/mtd.json",
+          "url_options": {
+            "method": "GET"
+          },
+          "format": "table",
+          "root_selector": "",
+          "columns": [
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "refId": "A"
+        }
+      ],
+      "title": "GCP month-to-date burn (USD)",
+      "type": "stat"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 66
+        "y": 74
       },
       "id": 700,
       "panels": [],
@@ -1687,7 +1912,7 @@
         "h": 7,
         "w": 6,
         "x": 0,
-        "y": 67
+        "y": 75
       },
       "id": 23,
       "options": {
@@ -1752,7 +1977,7 @@
         "h": 7,
         "w": 6,
         "x": 6,
-        "y": 67
+        "y": 75
       },
       "id": 24,
       "options": {
@@ -1817,7 +2042,7 @@
         "h": 7,
         "w": 6,
         "x": 12,
-        "y": 67
+        "y": 75
       },
       "id": 25,
       "options": {
@@ -1881,7 +2106,7 @@
         "h": 7,
         "w": 6,
         "x": 18,
-        "y": 67
+        "y": 75
       },
       "id": 26,
       "options": {
@@ -1916,7 +2141,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 82
       },
       "id": 800,
       "panels": [],
@@ -1980,7 +2205,7 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 75
+        "y": 83
       },
       "id": 27,
       "options": {
@@ -2085,7 +2310,7 @@
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 75
+        "y": 83
       },
       "id": 28,
       "options": {
@@ -2190,7 +2415,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 75
+        "y": 83
       },
       "id": 29,
       "options": {

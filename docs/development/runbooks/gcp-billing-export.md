@@ -199,30 +199,40 @@ In Grafana Cloud (Infinity is pre-installed):
 
 The panel renders empty until BigQuery populates (~24 to 48h after Step 2's Console enable). Don't worry about the empty state until then.
 
-## Step 5: Optional break-down panels
+## Step 5: Extra break-down panels (chain#392)
 
-The fetch script's query is just the daily aggregate. To add per-service or per-VM breakdowns, write a sibling script that targets a different output file (e.g. `/var/www/cost/by-service.json`), wire a second handle_path in Caddy, and add the matching Grafana panel.
+The original v1 fetch script only wrote `daily.json`. As of chain#392 the source-of-truth script at [`ops/billing/gcp-cost-fetch.sh`](../../../ops/billing/gcp-cost-fetch.sh) runs four queries on every timer fire and writes:
 
-Useful complementary queries:
+| File | Window | Used by Grafana panel |
+|---|---|---|
+| `daily.json` | last 30 days | "GCP daily burn (USD, last 30d)" (time series) |
+| `by-service.json` | last 30 days | "GCP spend by service (last 30d)" (bar gauge) |
+| `by-vm.json` | last 7 days, Compute Engine only | "Compute Engine spend by VM (last 7d)" (bar gauge) |
+| `mtd.json` | calendar month-to-date | "GCP month-to-date burn (USD)" (stat) |
 
-```sql
--- Cost by service over the last 30d → /var/www/cost/by-service.json
-SELECT service.description AS service, SUM(cost) AS cost
-FROM `utopian-spring-494915-q1.ligate_billing.gcp_billing_export_resource_v1_*`
-WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 DAY)
-GROUP BY service ORDER BY cost DESC
+All four panels live in the dashboard's **Cost & economy** row and consume the same Infinity HTTP-JSON datasource. Caddy serves the whole `/cost/` directory with one `handle_path` block (no per-file routing needed); the four URLs just resolve to the four JSON files.
+
+To deploy the updated script on VM-1:
+
+```bash
+gcloud compute scp ops/billing/gcp-cost-fetch.sh \
+    ligate-devnet-1-sequencer:/tmp/gcp-cost-fetch.sh \
+    --zone=us-central1-a
+
+gcloud compute ssh ligate-devnet-1-sequencer --zone=us-central1-a --command='
+    sudo install -m 0755 -o ligate -g ligate \
+        /tmp/gcp-cost-fetch.sh /opt/ligate/bin/gcp-cost-fetch.sh
+
+    # Fire once now instead of waiting for the next 6h tick
+    sudo systemctl start gcp-cost.service
+'
 ```
 
-```sql
--- Cost by VM (resource name) over the last 7d → /var/www/cost/by-vm.json
-SELECT resource.name AS vm, SUM(cost) AS cost
-FROM `utopian-spring-494915-q1.ligate_billing.gcp_billing_export_resource_v1_*`
-WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
-  AND service.description = 'Compute Engine'
-GROUP BY vm ORDER BY cost DESC
-```
+Then re-import `ops/grafana/ligate-node.json` in Grafana to pick up the new panels.
 
-For both, the Grafana panel pattern is identical to the daily-burn time series, just pointed at the new URL with the matching columns.
+### Adding even more breakdowns later
+
+The script is structured so each query is its own `run_query` call. Add new ones the same shape, point them at a new `/var/www/cost/<name>.json`, then add a matching Infinity-datasource panel in `ligate-node.json`.
 
 ## Cost of the export itself
 
