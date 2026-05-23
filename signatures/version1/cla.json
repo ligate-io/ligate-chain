@@ -1,1 +1,12 @@
-{"signedContributors":[]}
+{
+  "signedContributors": [
+    {
+      "name": "proofmancer",
+      "id": 73234992,
+      "comment_id": 4525332264,
+      "created_at": "2026-05-23T12:23:22Z",
+      "repoId": 1219212370,
+      "pullRequestNo": 469
+    }
+  ]
+}
