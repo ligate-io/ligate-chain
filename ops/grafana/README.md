@@ -22,17 +22,21 @@ on `ligate-node:9100/metrics`. Nine rows, thirty-eight panels:
   transitions = steady state; spikes during a planned failover drill
   are expected; rapid flapping or two simultaneous leaders = page
   on-call.
-- **Cost & economy** (chain#446 Track 4) — cumulative TIA burned
-  (estimate, from `ligate_da_tia_burned_nano_estimate_total`), TIA
+- **Cost & economy** (chain#446 Track 4 + chain#392) — cumulative
+  TIA burned (estimate, from
+  `ligate_da_tia_burned_nano_estimate_total`; v0.2.14 made it a
+  live-gas-price calibration instead of a fixed per-blob constant,
+  flips to authoritative when celestiaorg/lumina#974 lands), TIA
   burn rate per hour, protocol treasury balance in LGT
-  (`ligate_protocol_treasury_balance_nano`), a 4-up stat row
+  (`ligate_protocol_treasury_balance_nano`), and a 4-up stat row
   mirroring api `/v1/stats/totals` (txs / attestations / schemas /
-  attestor sets), and **GCP daily burn (USD)** sourced from the
-  VM-1 BigQuery sidecar at `https://rpc.ligate.io/cost/daily.json`
-  (see `docs/development/runbooks/gcp-billing-export.md`). The TIA
-  burn is an estimate based on a fixed per-blob constant;
-  follow-up chain#452 covers the SDK receipt extension to make it
-  authoritative.
+  attestor sets). Plus the **GCP cost sub-row** sourced from the
+  VM-1 BigQuery sidecar (see
+  `docs/development/runbooks/gcp-billing-export.md`):
+  - **GCP daily burn (USD, last 30d)** time series — `/cost/daily.json`
+  - **GCP spend by service (last 30d)** horizontal bar gauge — `/cost/by-service.json`
+  - **Compute Engine spend by VM (last 7d)** horizontal bar gauge — `/cost/by-vm.json`
+  - **GCP month-to-date burn (USD)** stat — `/cost/mtd.json`
 - **VM capacity headroom** (chain#449 follow-up) — four threshold
   stat panels colored green / amber / red so you know when to
   upsize *before* a saturation incident:
