@@ -8,9 +8,23 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-05-23
+
+Cost telemetry gets meaningfully accurate. `ligate_da_tia_burned_nano_estimate_total` now bumps by a per-blob estimate derived from the live Mocha gas price (already polled by the Celestia adapter) times a calibrated per-blob gas usage, instead of a fixed 300_000 nanoTIA constant. Plumbing release; no behaviour shift, `chain_hash` unchanged.
+
 ### Changed
 
-- **Backup cadence: drop the daily tier; keep hourly (HOT, every 15 min) + weekly (COLD, Sundays 04:00 UTC).** The daily cold-snapshot at 03:30 UTC stopped `ligate-node` for ~60 s each day, costing one GCP-uptime-alert-fire per day under single-VM mode. It was redundant against the Sunday weekly + Celestia DA replay (the chain's actual source of truth). Net effect: 7 backup-induced downtimes/week → 1. Aligns with how Cosmos / Ethereum / Solana operators actually run snapshots in practice. Hourly tier (best-effort hot rsync, last-7-days rollback insurance) is unchanged. Filed as chain#468; the proper "no downtime even on weekly" fix (RocksDB hot-checkpoint API) needs upstream NOMT work and stays in the backlog. Removed: `ops/backup/systemd/ligate-backup-daily.timer`. Updated: `docs/development/runbooks/backup-restore.md`, `docs/development/public-devnet-deploy.md`.
+- SDK pin bumped to `ligate-io/sovereign-sdk@ffff9df` (PR #5). The Celestia adapter now caches the live `gas_price` from its existing periodic stat poll and computes `fee_paid = ceil(gas_price * (PFB_BASE_GAS + bytes * PFB_GAS_PER_BYTE)) * 1000` nanoTIA on every `SubmitBlobReceipt`. Constants calibrated against Mocha for our payload shapes; gas price is live, so spikes get captured automatically.
+- `ligate_da_tia_burned_nano_estimate_total` now reflects the estimated `fee_paid` from the receipt (via the `unwrap_or(constant)` fallback that's now hit only on mock-DA). For small attestation blobs the number is similar to v0.2.13; for larger proof blobs it's 10-15x more accurate.
+- **Backup cadence: drop the daily tier; keep hourly (HOT, every 15 min) + weekly (COLD, Sundays 04:00 UTC).** The daily cold-snapshot at 03:30 UTC stopped `ligate-node` for ~60 s each day, costing one GCP-uptime-alert-fire per day under single-VM mode. It was redundant against the Sunday weekly + Celestia DA replay (the chain's actual source of truth). Net effect: 7 backup-induced downtimes/week → 1. Filed as chain#468; the proper "no downtime even on weekly" fix (RocksDB hot-checkpoint API) needs upstream NOMT work and stays in the backlog. Removed: `ops/backup/systemd/ligate-backup-daily.timer`. Updated: `docs/development/runbooks/backup-restore.md`, `docs/development/public-devnet-deploy.md`.
+
+### What's still estimate-level
+
+`fee_paid` is calibrated but not authoritative. The proper fix needs upstream `celestia-client` to expose a `get_tx` query (filed as [celestiaorg/lumina#974](https://github.com/celestiaorg/lumina/pull/974)) so we can read the real fee + `gas_used` straight off the PFB tx receipt. Once that lands, the adapter calls `state().get_tx(hash)` and `fee_paid` becomes the real value with no further chain-side changes.
+
+### Compatibility
+
+`chain_hash` unchanged from v0.2.13. Safe binary swap. The `ligate_da_blob_bytes_total` and `ligate_da_blobs_published_total` counters keep counting the same things. Only the `ligate_da_tia_burned_nano_estimate_total` rate changes (it gets more accurate).
 
 ## [0.2.13] - 2026-05-22
 
