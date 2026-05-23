@@ -41,15 +41,22 @@ Backups give a known-good fast restore path. DA replay remains the ultimate-sour
                                                  │
                                                  │ lifecycle policy
                                                  ▼
-                                  hourly: 7 days │ daily: 60 days │ weekly: 1 year
+                                  hourly: 7 days │ weekly: 1 year
 ```
+
+> **Policy note (chain#468, 2026-05-23):** the **daily** tier was removed.
+> Its cold-stop cycle cost ~60 s of public RPC unavailability per day and was
+> redundant against the Sunday weekly snapshot + Celestia DA replay path
+> (the chain's actual source of truth). Two cadences only now:
+> hourly hot (zero downtime, last-7-days rollback) + weekly cold
+> (Sundays 04:00 UTC, single ~60 s window per week for clean restorable state).
 
 Two layers of pruning, each handles a different scope:
 
 | Layer | Where | Keeps | Configured by |
 |---|---|---|---|
-| Local snapshots | `/var/lib/ligate/snapshots/<tier>/` | last 24h / 7d / 4w per tier | `scripts/backup-rocksdb.sh` rotation |
-| GCS objects | `gs://$GCS_BUCKET/...` | 7d / 60d / 1y per tier | `ops/backup/gcs-lifecycle.json` |
+| Local snapshots | `/var/lib/ligate/snapshots/<tier>/` | last 24h hourly / 4w weekly | `scripts/backup-rocksdb.sh` rotation |
+| GCS objects | `gs://$GCS_BUCKET/...` | 7d hourly / 1y weekly | `ops/backup/gcs-lifecycle.json` |
 
 ---
 
@@ -67,7 +74,7 @@ gcloud storage buckets create gs://ligate-devnet-1-backups \
     --uniform-bucket-level-access \
     --public-access-prevention
 
-# Apply the rotation policy (hourly: 7d, daily: 60d, weekly: 365d)
+# Apply the rotation policy (hourly: 7d, weekly: 365d)
 gcloud storage buckets update gs://ligate-devnet-1-backups \
     --lifecycle-file=ops/backup/gcs-lifecycle.json
 
@@ -121,14 +128,15 @@ sudo install -o ligate -g ligate -m 0755 \
     scripts/restore-drill.sh /opt/ligate/scripts/
 
 # Place systemd units. ligate-backup@.service is a template unit;
-# the three timers each bind to an instance (hourly / daily / weekly)
-# whose name becomes %i, which the template sets as TIER.
+# the two timers each bind to an instance (hourly / weekly) whose
+# name becomes %i, which the template sets as TIER. The `daily`
+# tier was dropped on 2026-05-23 (chain#468): the cold-stop path it
+# used cost ~60 s of public RPC unavailability per day and was
+# redundant against the Sunday weekly + Celestia DA replay path.
 sudo install -o root -g root -m 0644 \
     ops/backup/systemd/ligate-backup@.service /etc/systemd/system/
 sudo install -o root -g root -m 0644 \
     ops/backup/systemd/ligate-backup-hourly.timer /etc/systemd/system/
-sudo install -o root -g root -m 0644 \
-    ops/backup/systemd/ligate-backup-daily.timer /etc/systemd/system/
 sudo install -o root -g root -m 0644 \
     ops/backup/systemd/ligate-backup-weekly.timer /etc/systemd/system/
 
@@ -143,10 +151,9 @@ sudo install -o root -g root -m 0600 \
 sudo mkdir -p /var/lib/ligate/snapshots
 sudo chown ligate:ligate /var/lib/ligate/snapshots
 
-# Enable all three timers
+# Enable both timers
 sudo systemctl daemon-reload
 sudo systemctl enable --now ligate-backup-hourly.timer
-sudo systemctl enable --now ligate-backup-daily.timer
 sudo systemctl enable --now ligate-backup-weekly.timer
 
 # Verify
@@ -160,7 +167,7 @@ systemctl list-timers 'ligate-backup-*.timer'
 # when the upload completes (~30-60s on a healthy devnet at ~1.2GB
 # state).
 sudo systemctl start ligate-backup@hourly.service
-sudo systemctl start ligate-backup@daily.service
+sudo systemctl start ligate-backup@weekly.service
 sudo journalctl -u 'ligate-backup@*.service' --since "5 minutes ago" --no-pager
 
 # Inspect what landed in GCS:
@@ -181,11 +188,10 @@ Handled by the systemd timers; no operator action required day-to-day. The timer
 
 | Timer | Binds to | When | GCS retention |
 |---|---|---|---|
-| `ligate-backup-hourly.timer` | `ligate-backup@hourly.service` | every 15 min | 7 days |
-| `ligate-backup-daily.timer` | `ligate-backup@daily.service` | 03:30 UTC nightly | 60 days |
-| `ligate-backup-weekly.timer` | `ligate-backup@weekly.service` | Sun 04:00 UTC | 1 year |
+| `ligate-backup-hourly.timer` | `ligate-backup@hourly.service` | every 15 min (HOT, no downtime) | 7 days |
+| `ligate-backup-weekly.timer` | `ligate-backup@weekly.service` | Sun 04:00 UTC (COLD, ~60 s downtime) | 1 year |
 
-The template unit `ligate-backup@.service` derives `TIER` from its instance name (`%i`), so the same service file backs all three tiers. Local rotation in `backup-rocksdb.sh` keeps the on-disk snapshots dir bounded per tier; GCS lifecycle in `ops/backup/gcs-lifecycle.json` keeps the bucket bounded by tier prefix.
+The template unit `ligate-backup@.service` derives `TIER` from its instance name (`%i`), so the same service file backs both tiers. Local rotation in `backup-rocksdb.sh` keeps the on-disk snapshots dir bounded per tier; GCS lifecycle in `ops/backup/gcs-lifecycle.json` keeps the bucket bounded by tier prefix.
 
 Observability: `journalctl -u 'ligate-backup@*.service'` shows each run. Failures cause `systemctl is-failed ligate-backup@<tier>.service` to report yes; pair with an Alertmanager rule (post-#268) for proactive notification.
 
@@ -209,7 +215,7 @@ gcloud storage ls gs://ligate-devnet-1-backups/$(hostname -s)/hourly/
 sudo /opt/ligate/scripts/restore-rocksdb.sh
 
 # Or pick a specific snapshot:
-sudo /opt/ligate/scripts/restore-rocksdb.sh --tier daily --timestamp 20260512
+sudo /opt/ligate/scripts/restore-rocksdb.sh --tier weekly --timestamp 2026-W19
 
 # 3. The script:
 #    - stops ligate-node

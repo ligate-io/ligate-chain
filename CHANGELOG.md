@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- **Backup cadence: drop the daily tier; keep hourly (HOT, every 15 min) + weekly (COLD, Sundays 04:00 UTC).** The daily cold-snapshot at 03:30 UTC stopped `ligate-node` for ~60 s each day, costing one GCP-uptime-alert-fire per day under single-VM mode. It was redundant against the Sunday weekly + Celestia DA replay (the chain's actual source of truth). Net effect: 7 backup-induced downtimes/week → 1. Aligns with how Cosmos / Ethereum / Solana operators actually run snapshots in practice. Hourly tier (best-effort hot rsync, last-7-days rollback insurance) is unchanged. Filed as chain#468; the proper "no downtime even on weekly" fix (RocksDB hot-checkpoint API) needs upstream NOMT work and stays in the backlog. Removed: `ops/backup/systemd/ligate-backup-daily.timer`. Updated: `docs/development/runbooks/backup-restore.md`, `docs/development/public-devnet-deploy.md`.
+
 ## [0.2.13] - 2026-05-22
 
 Hotfix for the v0.2.12 deploy panic on existing `blob_sender` RocksDB. Upgrading from v0.2.11 with a populated DB hit:
