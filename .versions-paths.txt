@@ -1,0 +1,13 @@
+# Paths the `bump-versions` workflow rewrites when the tracked chain
+# version bumps. One path per line; blank lines + `#` comments
+# ignored.
+#
+# These are the files Phase 1 (chain#470) hand-bumped on 2026-05-23;
+# Phase 2 automates the same sweep.
+README.md
+ops/cloud-init/sequencer.yaml
+examples/.env.example
+examples/README.md
+docs/development/public-devnet-deploy.md
+tests/smoke/multi-sequencer/docker-compose.yml
+tests/smoke/multi-sequencer/README.md

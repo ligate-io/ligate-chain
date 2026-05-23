@@ -1,0 +1,95 @@
+name: bump-versions
+
+# Auto-PR when the chain's own latest published release advances ahead
+# of the version literals embedded inside this repo (Docker tag
+# examples, cloud-init install URLs, smoke compose images, README
+# blurb, etc.). Reads the current pinned version from `.versions.yml`,
+# fetches the latest release tag, and on mismatch sed-replaces the
+# literal version (and v-prefix variant) across the paths listed in
+# `.versions-paths.txt`.
+#
+# Triggers:
+#   1. Daily cron — 24-hour safety net.
+#   2. `workflow_dispatch` — manual on-demand from the Actions tab.
+#   3. `repository_dispatch` — the `release.yml` workflow dispatches
+#      `chain-released` here AND to docs / landing repos.
+#
+# Note: this workflow does NOT bump the workspace `Cargo.toml`
+# version. That's a release-time human decision (the version bump is
+# the release-ceremony's first commit). This automates only the
+# downstream literal-string drift.
+
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [chain-released]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Read current pinned version
+        id: cur
+        run: echo "chain=$(yq '.chain' .versions.yml)" >> $GITHUB_OUTPUT
+
+      - name: Fetch latest chain release
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CHAIN_TAG=$(gh release view -R ligate-io/ligate-chain --json tagName --jq '.tagName')
+          echo "chain=${CHAIN_TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Bump version pins if changed
+        id: bump
+        env:
+          OLD: ${{ steps.cur.outputs.chain }}
+          NEW: ${{ steps.latest.outputs.chain }}
+        run: |
+          changed=0
+          if [[ "$OLD" != "$NEW" ]]; then
+            echo "::notice::chain $OLD → $NEW"
+            yq -i ".chain = \"$NEW\"" .versions.yml
+            paths=$(grep -vE '^\s*(#|$)' .versions-paths.txt | tr '\n' ' ')
+            if [[ -n "$paths" ]]; then
+              # shellcheck disable=SC2086
+              sed -i "s|v${OLD}|v${NEW}|g; s|${OLD}|${NEW}|g" $paths
+            fi
+            changed=1
+          fi
+          echo "changed=$changed" >> $GITHUB_OUTPUT
+
+      - name: Open auto-PR
+        if: steps.bump.outputs.changed == '1'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: bump internal chain pins to v${{ steps.latest.outputs.chain }}"
+          branch: chore/bump-chain-v${{ steps.latest.outputs.chain }}
+          delete-branch: true
+          title: "chore: bump internal chain pins to v${{ steps.latest.outputs.chain }}"
+          body: |
+            **Automated by `bump-versions.yml`.**
+
+            Internal chain pins bumped: `${{ steps.cur.outputs.chain }}` → `${{ steps.latest.outputs.chain }}`.
+
+            Files touched come from `.versions-paths.txt`. The literal version was replaced exactly, both bare-semver and v-prefixed.
+
+            [Chain release notes →](https://github.com/ligate-io/ligate-chain/releases/tag/v${{ steps.latest.outputs.chain }})
+
+            ---
+
+            Triggered by: `${{ github.event_name }}`.

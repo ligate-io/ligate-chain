@@ -1,0 +1,9 @@
+# Tracked upstream-artifact versions. Source of truth for the
+# `bump-versions` workflow at `.github/workflows/bump-versions.yml`.
+#
+# This file pins versions REFERENCED INSIDE the chain repo (Docker tag
+# examples, cloud-init install URLs, smoke-test image tags, etc).
+# The chain's OWN released version is the workspace `Cargo.toml`
+# version — that's separately bumped by hand when cutting a release
+# (see `docs/development/runbooks/chain-release.md`).
+chain: "0.2.13"
