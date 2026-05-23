@@ -120,12 +120,12 @@ render script produces.
 
 ## Image selection
 
-By default uses `ghcr.io/ligate-io/ligate-chain:0.2.3`. The v0.2.3
-SDK pin (`4b4a313b7`) has the full DbElected machinery; no newer
-chain version needed for this verification.
+By default uses `ghcr.io/ligate-io/ligate-chain:0.2.13` (current
+devnet-1 release as of 2026-05-23). The DbElected machinery has
+been stable since v0.2.3 (`4b4a313b7`); any v0.2.x image works
+for this verification.
 
-Override via env: `LIGATE_IMAGE=ghcr.io/ligate-io/ligate-chain:v0.2.4
-./run.sh up` once v0.2.4 is cut.
+Override via env: `LIGATE_IMAGE=ghcr.io/ligate-io/ligate-chain:vX.Y.Z ./run.sh up`.
 
 ## Cleanup notes
 
