@@ -41,7 +41,7 @@ Tracking issue: [#189](https://github.com/ligate-io/ligate-chain/issues/189). Si
 | Sequencer | `e2-standard-4` | 4 | 16 GB | 20 GB SSD | 150 GB SSD | ~135 USD |
 | Follower | `e2-medium` | 2 | 4 GB | 20 GB SSD | 100 GB SSD | ~30 USD |
 
-Sequencer sizing covers `ligate-node` + co-located Celestia light node + the local backup snapshot stage (`/var/lib/ligate/snapshots/`, which keeps last 24 hourly + 7 daily + 4 weekly per `backup-rocksdb.sh` rotation). RocksDB NOMT files are sparse but rsync inflates them on copy, so each local snapshot is currently ~5GB; steady-state worst case for local snapshots is ~120GB (tracked under #359 followups; `--sparse` flag in the backup script would cut this ~4x).
+Sequencer sizing covers `ligate-node` + co-located Celestia light node + the local backup snapshot stage (`/var/lib/ligate/snapshots/`, which keeps last 24 hourly + 4 weekly per `backup-rocksdb.sh` rotation; the daily tier was dropped in chain#468). RocksDB NOMT files are sparse but rsync inflates them on copy, so each local snapshot is currently ~5GB; steady-state worst case for local snapshots is ~120GB (tracked under #359 followups; `--sparse` flag in the backup script would cut this ~4x).
 
 Faucet and indexer **do not run on this VM**; they live in [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api), deployed to Railway alongside a Railway-managed Postgres. The Next.js explorer at `explorer.ligate.io` is yet another deploy on Vercel, talking to `api.ligate.io`. Follower sizing is smaller because followers don't keep the local backup stage (they restore from GCS or replay from DA if state is lost).
 
@@ -125,7 +125,7 @@ The cloud-init does the chassis. The operator still has to:
       --genesis-config-dir /opt/ligate/devnet-1/genesis
   ```
   At runtime the SDK's DbElected machinery elects one leader via the Postgres lock; the others heartbeat and serve reads. Non-leader nodes return 503 on `POST /v1/sequencer/txs` automatically (no chain-side middleware needed).
-- If you'll run cold backups (daily/weekly tiers stop ligate-node briefly for a consistent rsync — see `docs/development/runbooks/backup-restore.md`), install the sudoers drop-in:
+- If you'll run cold backups (weekly tier stops ligate-node briefly for a consistent rsync — see `docs/development/runbooks/backup-restore.md`), install the sudoers drop-in:
   ```bash
   sudo install -o root -g root -m 0440 \
       ops/backup/sudoers.d/ligate-backup /etc/sudoers.d/ligate-backup
