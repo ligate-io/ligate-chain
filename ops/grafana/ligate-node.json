@@ -73,7 +73,59 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Chain head slot number. Should climb monotonically. Flat for >30s means block production stalled.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 803,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "ligate_block_height{instance=\"ligate-devnet-1-sequencer\"}",
+          "legendFormat": "head slot",
+          "refId": "A"
+        }
+      ],
+      "title": "Block height",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
       },
       "description": "Per-second rate of accepted `submit_attestation` transactions (5m window). Headline metric for chain throughput.",
       "fieldConfig": {
@@ -126,7 +178,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "rate(ligate_attestations_submitted_total{instance=~\"$instance\"}[5m])",
           "legendFormat": "attestations / sec",
@@ -152,7 +204,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "Pending tx count in the sequencer mempool. Sustained growth means the chain isn't including txs as fast as they arrive (DA throughput, validator stalls, or a publish backlog).",
       "fieldConfig": {
@@ -211,7 +263,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "ligate_mempool_depth{instance=~\"$instance\"}",
           "legendFormat": "pending txs",
@@ -224,7 +276,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "Total on-disk allocation under `storage.path` (NOMT + RocksDB ledger + state-db). Reports actual on-disk allocation via `meta.blocks() * 512`, not nominal logical size.",
       "fieldConfig": {
@@ -283,7 +335,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "ligate_state_db_size_bytes{instance=~\"$instance\"}",
           "legendFormat": "state db",
@@ -309,7 +361,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "Rate of DA submission failures by typed-error discriminant. Non-zero is operator-actionable. Reasons: `submission` (RPC error), `publish_timeout` (no inclusion within deadline), `reorg` (DA re-org), `finality_check` (finality query failed), `max_retries_exhausted` (rollup shutdown).",
       "fieldConfig": {
@@ -367,7 +419,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "sum by (reason) (rate(ligate_da_submission_failures_total{instance=~\"$instance\"}[5m]))",
           "legendFormat": "{{reason}}",
@@ -380,7 +432,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "DA finalization latency: time from `Published` to `Finalized` for each blob. Mocha block time ~12s. Rising p99 means Celestia is slow to finalize, often a sign the network is congested or our light node is lagging.",
       "fieldConfig": {
@@ -439,7 +491,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "histogram_quantile(0.50, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket{instance=~\"$instance\"}[5m])))",
           "legendFormat": "p50",
@@ -448,7 +500,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "histogram_quantile(0.95, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket{instance=~\"$instance\"}[5m])))",
           "legendFormat": "p95",
@@ -457,7 +509,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "histogram_quantile(0.99, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket{instance=~\"$instance\"}[5m])))",
           "legendFormat": "p99",
@@ -468,12 +520,116 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Authoritative bytes posted to Celestia per second. From SubmitBlobReceipt.size_in_bytes via chain v0.2.12+. Drops to 0 when no blobs publish; climbs when attestation payloads grow.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "id": 801,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "rate(ligate_da_blob_bytes_total{instance=\"ligate-devnet-1-sequencer\"}[5m])",
+          "legendFormat": "bytes/sec",
+          "refId": "A"
+        }
+      ],
+      "title": "DA blob bytes posted (rate, B/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "description": "Rate of blobs reaching Celestia `Published` state. Useful denominator for cost-per-blob and the rate-of-publishing health signal.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 802,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "rate(ligate_da_blobs_published_total{instance=\"ligate-devnet-1-sequencer\"}[5m]) * 60",
+          "legendFormat": "blobs/min",
+          "refId": "A"
+        }
+      ],
+      "title": "Blobs published (rate, per min)",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 30
       },
       "id": 300,
       "panels": [],
@@ -483,7 +639,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "Top rejection reasons over the last hour. Each `reason` is one of the stable snake_case discriminants on `AttestationError`.",
       "fieldConfig": {
@@ -516,7 +672,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 31
       },
       "id": 7,
       "options": {
@@ -537,7 +693,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "topk(10, sum by (reason) (rate(ligate_attestations_rejected_total{instance=~\"$instance\"}[1h])))",
           "legendFormat": "{{reason}}",
@@ -553,7 +709,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 40
+        "y": 47
       },
       "id": 500,
       "panels": [],
@@ -563,7 +719,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "Current sequencer role on each VM (`ligate_sequencer_role`). 0 = unknown (chain HTTP unreachable / still booting), 1 = PgSyncReplica (following leader via Postgres state-sync), 2 = BatchProducer (this node holds the leader lock and posts blobs to DA). Exactly one VM should show `BatchProducer` at any time; two simultaneously = split-brain (page on-call), zero = leaderless (page on-call after 30s).",
       "fieldConfig": {
@@ -624,7 +780,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 41
+        "y": 48
       },
       "id": 16,
       "options": {
@@ -644,7 +800,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "ligate_sequencer_role{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}",
@@ -657,7 +813,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
+        "uid": "grafanacloud-prom"
       },
       "description": "Rate of sequencer-role transitions over 5-minute windows. Steady state should be flat at zero; a spike means a failover happened. Healthy failover drill: one `leader -> replica` and one `replica -> leader` within the same minute. Anything more chatty (rapid back-and-forth) is split-brain / flapping \u2014 page on-call.",
       "fieldConfig": {
@@ -679,7 +835,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 41
+        "y": 48
       },
       "id": 17,
       "options": {
@@ -699,7 +855,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
+            "uid": "grafanacloud-prom"
           },
           "expr": "sum by (instance, from, to) (rate(ligate_sequencer_role_transitions_total{instance=~\"$instance\"}[5m]))",
           "legendFormat": "{{instance}}: {{from}} -> {{to}}",
@@ -715,7 +871,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 89
       },
       "id": 800,
       "panels": [],
@@ -725,7 +881,7 @@
     {
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
+        "uid": "afm64tqkoba4ga"
       },
       "description": "Addresses ranked by total attestations submitted (api: GET /v1/stats/top-attesters). All-time count.",
       "fieldConfig": {
@@ -779,7 +935,7 @@
         "h": 9,
         "w": 8,
         "x": 0,
-        "y": 83
+        "y": 90
       },
       "id": 27,
       "options": {
@@ -811,7 +967,7 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
+            "uid": "afm64tqkoba4ga"
           },
           "format": "table",
           "refId": "A",
@@ -830,7 +986,7 @@
     {
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
+        "uid": "afm64tqkoba4ga"
       },
       "description": "Addresses ranked by schemas registered (api: GET /v1/stats/top-schema-owners). All-time count.",
       "fieldConfig": {
@@ -884,7 +1040,7 @@
         "h": 9,
         "w": 8,
         "x": 8,
-        "y": 83
+        "y": 90
       },
       "id": 28,
       "options": {
@@ -916,7 +1072,7 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
+            "uid": "afm64tqkoba4ga"
           },
           "format": "table",
           "refId": "A",
@@ -935,7 +1091,7 @@
     {
       "datasource": {
         "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
+        "uid": "afm64tqkoba4ga"
       },
       "description": "Attestor sets (las1...) ranked by `schema_count` (denormalised on chain, single index scan in the api). The most popular sets are the most-bound-to.",
       "fieldConfig": {
@@ -989,7 +1145,7 @@
         "h": 9,
         "w": 8,
         "x": 16,
-        "y": 83
+        "y": 90
       },
       "id": 29,
       "options": {
@@ -1021,7 +1177,7 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
+            "uid": "afm64tqkoba4ga"
           },
           "format": "table",
           "refId": "A",
@@ -1078,7 +1234,7 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+          "uid": "grafanacloud-prom"
         },
         "includeAll": true,
         "label": "Sequencer instance",
@@ -1100,6 +1256,6 @@
   "timezone": "",
   "title": "Ligate Chain \u2014 Engineering",
   "uid": "ligate-node",
-  "version": 3,
+  "version": 6,
   "weekStart": ""
 }
