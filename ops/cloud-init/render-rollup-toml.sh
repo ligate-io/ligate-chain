@@ -2,7 +2,7 @@
 # Renders the per-instance rollup.toml for the multi-sequencer DbElected
 # topology (chain #82, sub-issue #412).
 #
-# Reads the canonical `devnet/rollup.toml` from disk, fetches the
+# Reads the canonical `localnet/rollup.toml` from disk, fetches the
 # Cloud SQL app-role password from GCP Secret Manager, substitutes
 # `${LIGATE_NODE_ID}` and `${POSTGRES_PASSWORD}` into the commented
 # `[sequencer.preferred.postgres_config]` block, and writes the
@@ -18,7 +18,7 @@
 #   POSTGRES_SECRET_NAME   defaults to cloudsql-ligate-sequencer-db-app
 #
 # Optional env:
-#   SOURCE_TOML            defaults to /opt/ligate/devnet/rollup.toml
+#   SOURCE_TOML            defaults to /opt/ligate/localnet/rollup.toml
 #   TARGET_TOML            defaults to /var/lib/ligate/rollup.toml
 #   POSTGRES_HOST          defaults to 10.123.0.2 (Cloud SQL private IP)
 #   POSTGRES_PORT          defaults to 5432
@@ -37,7 +37,7 @@ LIGATE_NODE_ID="${LIGATE_NODE_ID:?LIGATE_NODE_ID env var is required (distinct p
 GCP_PROJECT="${GCP_PROJECT:?GCP_PROJECT env var is required}"
 POSTGRES_SECRET_NAME="${POSTGRES_SECRET_NAME:-cloudsql-ligate-sequencer-db-app}"
 
-SOURCE_TOML="${SOURCE_TOML:-/opt/ligate/devnet/rollup.toml}"
+SOURCE_TOML="${SOURCE_TOML:-/opt/ligate/localnet/rollup.toml}"
 TARGET_TOML="${TARGET_TOML:-/var/lib/ligate/rollup.toml}"
 POSTGRES_HOST="${POSTGRES_HOST:-10.123.0.2}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"

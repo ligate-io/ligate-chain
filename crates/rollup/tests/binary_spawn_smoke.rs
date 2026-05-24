@@ -43,8 +43,8 @@
 //!
 //! ## Why temp config / ephemeral port
 //!
-//! The repo's `devnet/rollup.toml` hardcodes `bind_port = 12346` and
-//! `[storage].path = "devnet/data"`. Running multiple tests (or a
+//! The repo's `localnet/rollup.toml` hardcodes `bind_port = 12346` and
+//! `[storage].path = "localnet/data"`. Running multiple tests (or a
 //! local dev node) in parallel would collide on both. The test
 //! materialises a temp rollup.toml with the port + storage path
 //! rewritten, and points the binary at it.
@@ -88,14 +88,14 @@ const CHAIN_ID_NUMERIC: u64 = 4242;
 
 /// Per-tx fee envelope for test txs (nano-AVOW). Generous enough that
 /// no test failure is fee-related; the dev key in
-/// `devnet/genesis/bank.json` has 10_000_000_000_000 nano-AVOW
+/// `localnet/genesis/bank.json` has 10_000_000_000_000 nano-AVOW
 /// (10,000 AVOW), plenty of headroom.
 const TEST_MAX_FEE_NANO: u128 = 100_000_000;
 
-/// Localnet dev key per `devnet/local-dev-key.json`. Committed to the
+/// Localnet dev key per `localnet/local-dev-key.json`. Committed to the
 /// chain repo on purpose so localnet tests + tutorials can re-sign
 /// against it. Address derives to `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`
-/// which is pre-funded in `devnet/genesis/bank.json`.
+/// which is pre-funded in `localnet/genesis/bank.json`.
 const DEV_PRIVATE_KEY_BYTES: [u8; 32] = [0x01; 32];
 
 /// Hard ceiling on how long we'll wait for the node's `/v1/rollup/info`
@@ -138,14 +138,14 @@ async fn pick_ephemeral_port() -> u16 {
 /// blank lines, which would make the diff between this and the
 /// committed template noisy and hard to audit.
 fn render_rollup_toml(bind_port: u16, data_dir: &Path) -> String {
-    let template = include_str!("../../../devnet/rollup.toml");
+    let template = include_str!("../../../localnet/rollup.toml");
     let data_dir = data_dir.to_string_lossy();
     template
         .replace(
-            "connection_string = \"sqlite://devnet/data/da.sqlite?mode=rwc\"",
+            "connection_string = \"sqlite://localnet/data/da.sqlite?mode=rwc\"",
             &format!("connection_string = \"sqlite://{data_dir}/da.sqlite?mode=rwc\""),
         )
-        .replace("path = \"devnet/data\"", &format!("path = \"{data_dir}\""))
+        .replace("path = \"localnet/data\"", &format!("path = \"{data_dir}\""))
         .replace("bind_port = 12346", &format!("bind_port = {bind_port}"))
         .replace(
             "telegraf_address = \"udp://127.0.0.1:8094\"",
@@ -175,7 +175,7 @@ async fn spawn_node(temp_dir: &TempDir, port: u16) -> Child {
     // append-only for tests — none of the configs reference paths
     // that need rewriting (they're all in-process module configs).
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let genesis_dir = format!("{manifest_dir}/../../devnet/genesis");
+    let genesis_dir = format!("{manifest_dir}/../../localnet/genesis");
 
     Command::new(ligate_node_binary())
         .arg("--rollup-config-path")

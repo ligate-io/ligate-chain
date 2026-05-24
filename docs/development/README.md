@@ -62,7 +62,7 @@ Each Prometheus alert has its own runbook describing what fired, why, and the re
 
 ## Cross-references
 
-- [`devnet/README.md`](../../devnet/README.md) — localnet config + dev-key documentation
+- [`localnet/README.md`](../../localnet/README.md) — localnet config + dev-key documentation
 - [`devnet-1/README.md`](../../devnet-1/README.md) — public-devnet config + genesis substitution flow
 - [`ops/`](../../ops/) — Prometheus rules, Alertmanager config, Fluent Bit config, backup scripts, GCS lifecycle policies
 - [`ops/grafana/`](../../ops/grafana/) — all four Grafana dashboard JSONs (engineering / operator / investor / cost) plus the README documenting ownership boundaries

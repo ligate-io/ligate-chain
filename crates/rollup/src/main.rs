@@ -64,7 +64,7 @@ struct Args {
     ///
     /// Format mirrors the SDK's `RollupConfig` (storage, sequencer,
     /// proof-manager sections). The `[da]` section's shape depends on
-    /// `--da-layer`. Defaults pick the matching `devnet/*.toml` file
+    /// `--da-layer`. Defaults pick the matching `localnet/*.toml` file
     /// for the chosen DA layer.
     #[arg(long, default_value = None)]
     rollup_config_path: Option<String>,
@@ -72,7 +72,7 @@ struct Args {
     /// Directory containing per-module genesis JSON files
     /// (`bank.json`, `accounts.json`, …). See
     /// [`ligate_stf::genesis_config`] for the expected layout.
-    #[arg(long, default_value = "devnet/genesis")]
+    #[arg(long, default_value = "localnet/genesis")]
     genesis_config_dir: PathBuf,
 
     /// Address to bind the Prometheus `/metrics` endpoint on.
@@ -102,8 +102,8 @@ impl SupportedDaLayer {
     /// doesn't pass `--rollup-config-path`.
     fn default_rollup_config_path(self) -> &'static str {
         match self {
-            SupportedDaLayer::Mock => "devnet/rollup.toml",
-            SupportedDaLayer::Celestia => "devnet/celestia.toml",
+            SupportedDaLayer::Mock => "localnet/rollup.toml",
+            SupportedDaLayer::Celestia => "localnet/celestia.toml",
         }
     }
 }

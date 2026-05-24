@@ -44,18 +44,18 @@ Acceptable when state is disposable (devnet still bootstrapping, no partner data
 
 2. **Wipe state.**
    ```sh
-   rm -rf devnet/data/*
+   rm -rf localnet/data/*
    ```
 
 3. **Generate the new key.**
    ```sh
-   ligate-genesis-tool keys generate --roles sequencer --output devnet/genesis/keys/
+   ligate-genesis-tool keys generate --roles sequencer --output localnet/genesis/keys/
    # writes sequencer.key (mode 0600) + sequencer.address
    ```
 
 4. **Update genesis.**
-   - `devnet/genesis/sequencer_registry.json`: replace `address` with the new bech32m.
-   - `devnet/rollup.toml`: update `[sequencer].rollup_address` to match.
+   - `localnet/genesis/sequencer_registry.json`: replace `address` with the new bech32m.
+   - `localnet/rollup.toml`: update `[sequencer].rollup_address` to match.
    - Bump the chain id if state surgery would have leaked old data: `chain_id = "ligate-devnet-2"`.
 
 5. **Recompute `CHAIN_HASH`** (auto on next build — the chain pins it via `chain_hash_pin.rs`).
@@ -87,7 +87,7 @@ Pre-devnet only. Use case: operator machine died, RocksDB exists on backup, key 
 
 1. **Stop the node.** (It can't sign anything anyway.)
 2. **Generate a fresh key.** Same as Procedure A step 3.
-3. **Edit `devnet/genesis/sequencer_registry.json`** to swap in the new address.
+3. **Edit `localnet/genesis/sequencer_registry.json`** to swap in the new address.
 4. **Recompute `CHAIN_HASH`** — this WILL change because the registered sequencer pubkey is part of the hash.
 5. **Re-genesis.** Even though the state directory exists, the chain hash mismatch makes it invalid. Wipe + rebuild from snapshot, see [#273](https://github.com/ligate-io/ligate-chain/issues/273) (state snapshot publishing) once that ships.
 

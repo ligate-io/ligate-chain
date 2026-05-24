@@ -6,7 +6,7 @@
 //! returns the runtime's derive-generated [`GenesisConfig`]. Before
 //! returning, it runs [`validate_config`] to catch cross-module
 //! inconsistencies that the per-module deserialisers can't see — most
-//! importantly, that the attestation module's `$AVOW` token id matches
+//! importantly, that the attestation module's `AVOW` token id matches
 //! the bank's gas token id.
 //!
 //! # JSON layout
@@ -16,7 +16,7 @@
 //! module:
 //!
 //! ```text
-//! devnet/
+//! localnet/
 //!   bank.json
 //!   accounts.json
 //!   sequencer_registry.json
@@ -40,7 +40,7 @@
 //!    token can't charge fees, can't run, and is almost certainly the
 //!    result of a config typo.
 //! 2. `attestation.avow_token_id` equals [`sov_bank::config_gas_token_id`].
-//!    Attestation fees are denominated in `$AVOW`; if the two ids
+//!    Attestation fees are denominated in `AVOW`; if the two ids
 //!    disagree, fee charges would route to a token nobody holds and
 //!    every attestation submission would revert.
 //!

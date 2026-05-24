@@ -2,7 +2,7 @@
 //! TOML.
 //!
 //! Lives next to `[storage]`, `[runner]`, `[da]`, `[sequencer]`, etc.
-//! in the same `devnet/*.toml` file. Logically distinct from the SDK's
+//! in the same `localnet/*.toml` file. Logically distinct from the SDK's
 //! `RollupConfig` because the SDK doesn't model chain identity, the
 //! ladder is a Ligate convention layered on top.
 //!

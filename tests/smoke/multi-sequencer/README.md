@@ -109,7 +109,7 @@ Each container starts via `entrypoint.sh`, which runs `envsubst` over
 `rollup.toml.template` with per-instance env vars (`LIGATE_NODE_ID`,
 `LIGATE_BIND_PORT`, `LIGATE_STORAGE_PATH`), then execs `ligate-node`
 against the rendered file. The template is a pared-down version of
-`devnet/rollup.toml` with the postgres_config block uncommented and
+`localnet/rollup.toml` with the postgres_config block uncommented and
 parametrised.
 
 This is intentionally simpler than the production

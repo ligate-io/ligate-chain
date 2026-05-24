@@ -50,7 +50,7 @@ type SovAddress = <S as Spec>::Address;
 /// Default per-tx fee envelope for registration calls (nano-AVOW).
 /// Generous so a registration never fails for fee reasons under devnet
 /// conditions. Operators can override via `--max-fee-nano`.
-pub const DEFAULT_MAX_FEE_NANO: u128 = 200_000_000; // 0.2 $AVOW
+pub const DEFAULT_MAX_FEE_NANO: u128 = 200_000_000; // 0.2 AVOW
 
 /// Inputs to [`run`]: everything needed to drive the ceremony.
 pub struct RegisterParams<'a> {

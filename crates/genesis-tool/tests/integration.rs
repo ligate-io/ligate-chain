@@ -27,8 +27,8 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn devnet_genesis_dir() -> PathBuf {
-    workspace_root().join("devnet").join("genesis")
+fn localnet_genesis_dir() -> PathBuf {
+    workspace_root().join("localnet").join("genesis")
 }
 
 /// Locate the freshly-built genesis-tool binary.
@@ -47,14 +47,14 @@ fn verify_succeeds_on_localnet_bundle() {
     let output = Command::new(binary())
         .arg("verify")
         .arg("--dir")
-        .arg(devnet_genesis_dir())
+        .arg(localnet_genesis_dir())
         .arg("--da")
         .arg("mock")
         .output()
         .expect("invoke binary");
     assert!(
         output.status.success(),
-        "verify on devnet/genesis/ should succeed; stderr:\n{}",
+        "verify on localnet/genesis/ should succeed; stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -68,7 +68,7 @@ fn verify_fails_on_corrupted_bundle() {
     // so the gas-token config is unparseable. The validator should
     // surface the I/O / parse error rather than a panic.
     let tmp = TempDir::new().expect("tempdir");
-    for entry in std::fs::read_dir(devnet_genesis_dir()).expect("read template") {
+    for entry in std::fs::read_dir(localnet_genesis_dir()).expect("read template") {
         let entry = entry.expect("dirent");
         let dst = tmp.path().join(entry.file_name());
         std::fs::copy(entry.path(), dst).expect("copy file");
@@ -104,7 +104,7 @@ fn generate_with_empty_substitutions_round_trips() {
     let result = Command::new(binary())
         .arg("generate")
         .arg("--template")
-        .arg(devnet_genesis_dir())
+        .arg(localnet_genesis_dir())
         .arg("--substitutions")
         .arg(&subs_path)
         .arg("--output")
@@ -150,14 +150,14 @@ fn generate_substitutes_addresses_and_balances() {
     let subs_path = tmp.path().join("subs.toml");
 
     // Override bootstrap's balance to a value slightly above the
-    // localnet default (100M $AVOW in nanos). Any value above the
+    // localnet default (100M AVOW in nanos). Any value above the
     // sum of bonds bootstrap holds across attester / prover /
     // sequencer would also work; we pick a specifically larger
     // number so the verify step (which the binary runs internally
     // post-generate) doesn't complain about insufficient funds for
     // the modules' bonds.
     let bootstrap = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt";
-    let new_balance = "200000000000000000"; // 200M $AVOW in nanos
+    let new_balance = "200000000000000000"; // 200M AVOW in nanos
     let subs_toml = format!(
         r#"
 [balances]
@@ -169,7 +169,7 @@ fn generate_substitutes_addresses_and_balances() {
     let result = Command::new(binary())
         .arg("generate")
         .arg("--template")
-        .arg(devnet_genesis_dir())
+        .arg(localnet_genesis_dir())
         .arg("--substitutions")
         .arg(&subs_path)
         .arg("--output")

@@ -5,13 +5,13 @@
 # the postgres connection vars), then execs `ligate-node` against the
 # rendered file.
 #
-# Modelled directly on `devnet/rollup.toml` so we don't have config
+# Modelled directly on `localnet/rollup.toml` so we don't have config
 # drift between the smoke and the production-canonical config — only
 # the fields that need to differ per instance + the activated
 # postgres_config block.
 
 [chain]
-# Same chain_id used by `devnet/rollup.toml`. All three containers boot
+# Same chain_id used by `localnet/rollup.toml`. All three containers boot
 # against the same genesis + chain identity; they're hot replicas of
 # the same sequencer identity.
 chain_id = "ligate-localnet"

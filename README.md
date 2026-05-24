@@ -52,13 +52,13 @@ SOV_CELESTIA_SIGNER_KEY=$(pass celestia/devnet-signer) \
 cargo run --bin ligate-node -- --da-layer celestia
 ```
 
-Defaults pick up `devnet/rollup.toml` (or `devnet/celestia.toml`) and the `devnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$AVOW` so you can exercise transfers without minting.
+Defaults pick up `localnet/rollup.toml` (or `localnet/celestia.toml`) and the `localnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `AVOW` so you can exercise transfers without minting.
 
 #### Local dev key
 
-The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`devnet/local-dev-key.json`](devnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `$AVOW`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
+The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`localnet/local-dev-key.json`](localnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `AVOW`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
 
-Operators deploying `ligate-devnet-1` MUST remove this address from `devnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
+Operators deploying `ligate-devnet-1` MUST remove this address from `localnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
 
 To use the dev key with [`ligate-cli`](https://github.com/ligate-io/ligate-cli):
 
@@ -82,7 +82,7 @@ ligate transfer --signer dev --to lig1xyz... --amount 1.0 \
 
 The previous `--mode {sequencer,follower}` flag and its corresponding 503-on-submit middleware were removed in chain#446 after a paper-leader incident (a Follower-mode node promoted via in-process role transition kept the boot-time `automatic_batch_production = false` flag, holding the lock but never posting). DbElected gates posting on the lock and the SDK already returns 503 on `POST /v1/sequencer/txs` when not the leader, so the chain-level mode toggle was redundant.
 
-A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`devnet/README.md`](devnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
+A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`localnet/README.md`](localnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 
 ## What is this repo
 
@@ -104,7 +104,7 @@ Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contrac
 
 **It is:**
 
-- A sovereign rollup on Celestia DA. Own state, own token ($AVOW), own sequencer, own protocol logic.
+- A sovereign rollup on Celestia DA. Own state, own token (AVOW), own sequencer, own protocol logic.
 - A curated module set. Today: `attestation`. Planned: `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) in v1, `payments`, `agents`, `identity`, `disputes` later. Each module is a designed product surface, not a sandbox.
 - Permissionless at the **schema** level: anyone registers a schema on the attestation module and submits attestations under it. No gatekeeper.
 
@@ -204,7 +204,7 @@ Cargo workspace (resolver 2). Members:
 - [`crates/genesis-tool`](crates/genesis-tool): operator-facing offline tool. `keys generate`, `verify`, `generate` (substitute keys into a template genesis bundle).
 - [`crates/bootstrap-cli`](crates/bootstrap-cli): operator-facing online tool. Runs the post-genesis canonical-schema registration ceremony — submits one `RegisterAttestorSet` + one `RegisterSchema` tx per entry in `canonical-schemas.toml`. Idempotent. See [`docs/development/canonical-schema-registration.md`](docs/development/canonical-schema-registration.md).
 
-Devnet config (genesis files, Celestia and rollup TOMLs) lives in [`devnet/`](devnet) and is checked in so anyone can boot a local devnet against Celestia mocha-testnet.
+Localnet config (genesis files, Celestia and rollup TOMLs) lives in [`localnet/`](localnet) and is checked in so anyone can boot a local node against Celestia mocha-testnet.
 
 Protocol docs:
 
@@ -295,7 +295,7 @@ A quorum of ed25519 signers with an M-of-N threshold. Identified by `SHA-256(sor
 
 ### Schema
 
-An application's attestation shape: `owner`, `name`, `version`, the `AttestorSetId` that must sign under it, and optional fee routing (cap 50% to the schema owner, remainder to treasury). Identified by `SHA-256(owner || name || version)`, so two different owners can safely reuse the same human-readable name. Registration is permissionless and gated only by the registration fee in `$AVOW`.
+An application's attestation shape: `owner`, `name`, `version`, the `AttestorSetId` that must sign under it, and optional fee routing (cap 50% to the schema owner, remainder to treasury). Identified by `SHA-256(owner || name || version)`, so two different owners can safely reuse the same human-readable name. Registration is permissionless and gated only by the registration fee in `AVOW`.
 
 ### Attestation
 
@@ -309,7 +309,7 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 - Runtime: `ligate-stf` composes the curated module set on the upgraded Sovereign SDK.
 - DA: Celestia adapter wired for block submission and ingestion.
 - ZK: Risc0 inner zkVM with a Celestia guest binary that runs the full STF.
-- Fees: real `$AVOW` transfers through `sov-bank`, with up to 50% of attestation fees routable to the schema owner.
+- Fees: real `AVOW` transfers through `sov-bank`, with up to 50% of attestation fees routable to the schema owner.
 - Genesis: checked-in devnet config (bank, attestation, attester incentives, prover incentives, sequencer registry, operator incentives).
 - Addresses: `lig1` accounts, `lpk1` pubkeys, `lsc1` schema IDs, `las1` attestor set IDs, `lph1` payload hashes (Bech32m).
 - Chain id ladder (Cosmos-style strings): `ligate-localnet` (single-node local dev), `ligate-devnet-1` (public devnet), `ligate-testnet-1` (later), `ligate-1` (mainnet). Trailing number bumps only on state-breaking restarts. Spec section [`Chain id`](docs/protocol/attestation-v0.md#chain-id).
@@ -323,7 +323,7 @@ Operator and builder surface lives outside this repo. Each tool is a thin consum
 | Repo | Purpose | Tracking |
 |---|---|---|
 | [`ligate-io/ligate-cli`](https://github.com/ligate-io/ligate-cli) | Operator and builder CLI: keys, balance, transfer, faucet | [#112](https://github.com/ligate-io/ligate-chain/issues/112) |
-| [`ligate-io/faucet`](https://github.com/ligate-io/faucet) | Devnet faucet, rate-limited `$AVOW` drip | [#95](https://github.com/ligate-io/ligate-chain/issues/95) |
+| [`ligate-io/faucet`](https://github.com/ligate-io/faucet) | Devnet faucet, rate-limited `AVOW` drip | [#95](https://github.com/ligate-io/ligate-chain/issues/95) |
 | [`ligate-io/ligate-explorer`](https://github.com/ligate-io/ligate-explorer) | Block explorer + indexer service | [#80](https://github.com/ligate-io/ligate-chain/issues/80) |
 
 v0 scope is the attestation protocol only. Identity, disputes/slashing, payments, and the agent registry are explicit v1 and v2 non-goals documented in the spec.

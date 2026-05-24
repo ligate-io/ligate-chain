@@ -60,7 +60,7 @@ Schema {
 }
 ```
 
-Registration is **permissionless** (anyone can register), spam mitigated by the registration fee in $AVOW.
+Registration is **permissionless** (anyone can register), spam mitigated by the registration fee in AVOW.
 
 **Namespace ownership:** `schema_id` is derived from `owner` too, so two different owners registering the same `name` produce different `schema_id`s. No protocol-level name squatting. Social identity (who is the "real" Themisra) is handled off-chain via owner address + verified-tag metadata in SDKs and explorers. Same model as ERC-20 token names.
 
@@ -269,17 +269,17 @@ Signatures don't cover the `signatures` field of `Attestation` (that would be ci
 
 ## Fees
 
-All amounts in $AVOW.
+All amounts in AVOW.
 
-`$AVOW` uses **9 decimals** on the wire. The smallest representable unit is `1 nano` = `0.000000001 $AVOW`. Genesis configs and SDK call sites carry amounts as `u64` base units (nanos); user-facing UIs format as decimal `$AVOW`. The 9-decimal choice mirrors Solana (lamport) and Cosmos micro-precision conventions while leaving 18.4x headroom over a 1B-supply cap inside `u64`, the amount type `sov-bank` enforces.
+`AVOW` uses **9 decimals** on the wire. The smallest representable unit is `1 nano` = `0.000000001 AVOW`. Genesis configs and SDK call sites carry amounts as `u64` base units (nanos); user-facing UIs format as decimal `AVOW`. The 9-decimal choice mirrors Solana (lamport) and Cosmos micro-precision conventions while leaving 18.4x headroom over a 1B-supply cap inside `u64`, the amount type `sov-bank` enforces.
 
 | Event | Fee | Split |
 |---|---|---|
-| `RegisterAttestorSet` | `ATTESTOR_SET_FEE` (governance; devnet-1 genesis 0.05 $AVOW) | 100% treasury |
-| `RegisterSchema` | `SCHEMA_REGISTRATION_FEE` (governance; devnet-1 genesis 0.1 $AVOW) | 100% treasury |
-| `SubmitAttestation` | `ATTESTATION_FEE` (governance; devnet-1 genesis 0.0001 $AVOW) | See below |
+| `RegisterAttestorSet` | `ATTESTOR_SET_FEE` (governance; devnet-1 genesis 0.05 AVOW) | 100% treasury |
+| `RegisterSchema` | `SCHEMA_REGISTRATION_FEE` (governance; devnet-1 genesis 0.1 AVOW) | 100% treasury |
+| `SubmitAttestation` | `ATTESTATION_FEE` (governance; devnet-1 genesis 0.0001 AVOW) | See below |
 
-Devnet-1 genesis values live in `devnet-1/genesis/attestation.json` and are stored in nano-AVOW (9 decimals); e.g. `attestation_fee = "100000"` nano = 0.0001 $AVOW.
+Devnet-1 genesis values live in `devnet-1/genesis/attestation.json` and are stored in nano-AVOW (9 decimals); e.g. `attestation_fee = "100000"` nano = 0.0001 AVOW.
 
 ### Attestation fee split
 

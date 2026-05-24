@@ -22,9 +22,9 @@
 //!
 //! | Module | Status | Reason |
 //! |---|---|---|
-//! | `sov-bank` | included | mandatory; holds `$AVOW` |
+//! | `sov-bank` | included | mandatory; holds `AVOW` |
 //! | `sov-accounts` | included | mandatory; per-address nonces |
-//! | `sov-sequencer-registry` | included | sequencer permissioning + `$AVOW` collateral |
+//! | `sov-sequencer-registry` | included | sequencer permissioning + `AVOW` collateral |
 //! | `sov-chain-state` | included | kernel; slot / block-header bookkeeping |
 //! | `sov-blob-storage` | included | kernel; DA blob staging |
 //! | `sov-uniqueness` | included | replay protection |
@@ -58,7 +58,7 @@ use sov_modules_api::{DispatchCall, Event, Genesis, Hooks, MessageCodec, Spec};
 /// `Module::genesis` runs in declaration order. Modules that read
 /// another module's state at genesis (e.g. `sequencer_registry`
 /// reading `bank` to lock collateral, `attestation` reading `bank`
-/// for the `$AVOW` token id) must come after their dependencies.
+/// for the `AVOW` token id) must come after their dependencies.
 ///
 /// The address bound `S::Address: FromVmAddress<EthereumAddress>`
 /// comes from the SDK's standard module interfaces (bank/accounts
@@ -72,7 +72,7 @@ pub struct Runtime<S: Spec>
 where
     S::Address: FromVmAddress<EthereumAddress>,
 {
-    /// Bank module: holds `$AVOW` and any other fungible tokens.
+    /// Bank module: holds `AVOW` and any other fungible tokens.
     /// Genesis-first because every module that charges fees or locks
     /// collateral reads bank state at genesis time.
     pub bank: sov_bank::Bank<S>,
@@ -82,7 +82,7 @@ where
     pub accounts: sov_accounts::Accounts<S>,
 
     /// Sequencer registry: gates DA-layer addresses allowed to
-    /// submit blobs. Locks `$AVOW` collateral from each registered
+    /// submit blobs. Locks `AVOW` collateral from each registered
     /// sequencer.
     pub sequencer_registry: sov_sequencer_registry::SequencerRegistry<S>,
 

@@ -82,7 +82,7 @@ pub fn generate_role(role: &str, output_dir: &Path) -> Result<GeneratedKey> {
     // Operators who substitute keys into `keys.toml` need the keypair
     // → address derivation to match what the chain re-derives at
     // signature-verification time. Using `SHA-256(pubkey)[..28]`
-    // (which is what `crates/stf/tests/devnet_addresses.rs` does for
+    // (which is what `crates/stf/tests/localnet_addresses.rs` does for
     // string-label-derived devnet fixtures) produces a different
     // address that fails the chain's lookup. See ligate-chain#245.
     let mut addr_bytes = [0u8; 28];

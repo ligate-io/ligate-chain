@@ -77,14 +77,14 @@ async fn pick_ephemeral_port() -> u16 {
 /// `binary_spawn_smoke.rs`; kept inline so the two tests stay
 /// independent of each other's churn.
 fn render_rollup_toml(bind_port: u16, data_dir: &Path) -> String {
-    let template = include_str!("../../../devnet/rollup.toml");
+    let template = include_str!("../../../localnet/rollup.toml");
     let data_dir = data_dir.to_string_lossy();
     template
         .replace(
-            "connection_string = \"sqlite://devnet/data/da.sqlite?mode=rwc\"",
+            "connection_string = \"sqlite://localnet/data/da.sqlite?mode=rwc\"",
             &format!("connection_string = \"sqlite://{data_dir}/da.sqlite?mode=rwc\""),
         )
-        .replace("path = \"devnet/data\"", &format!("path = \"{data_dir}\""))
+        .replace("path = \"localnet/data\"", &format!("path = \"{data_dir}\""))
         .replace("bind_port = 12346", &format!("bind_port = {bind_port}"))
         .replace(
             "telegraf_address = \"udp://127.0.0.1:8094\"",
@@ -109,7 +109,7 @@ async fn spawn_node(temp_dir: &Path, port: u16) -> Child {
     drop(rollup_file);
 
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let genesis_dir = format!("{manifest_dir}/../../devnet/genesis");
+    let genesis_dir = format!("{manifest_dir}/../../localnet/genesis");
 
     // Disable the metrics endpoint. `ligate-node` defaults
     // `--metrics-bind` to `127.0.0.1:9100`, which races with parallel

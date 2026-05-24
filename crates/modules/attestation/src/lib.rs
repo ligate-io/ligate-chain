@@ -287,7 +287,7 @@ pub struct AttestorSignature {
 
 /// An app's attestation shape and rules.
 ///
-/// Registration is permissionless, anyone with enough $AVOW to pay the
+/// Registration is permissionless, anyone with enough AVOW to pay the
 /// registration fee can register a schema. Name collisions across owners
 /// are allowed (different `owner` bytes → different [`SchemaId`]); social
 /// identity of the "real" schema owner lives off-chain.
@@ -566,8 +566,8 @@ impl<S: Spec> SignedAttestationPayload<S> {
 pub enum CallMessage<S: Spec> {
     /// Register a new [`AttestorSet`].
     ///
-    /// Costs `ATTESTOR_SET_FEE` $AVOW (governance parameter). On
-    /// devnet-1 genesis this is `50_000_000` nano-AVOW = 0.05 $AVOW
+    /// Costs `ATTESTOR_SET_FEE` AVOW (governance parameter). On
+    /// devnet-1 genesis this is `50_000_000` nano-AVOW = 0.05 AVOW
     /// (see `devnet-1/genesis/attestation.json`).
     /// Derivation: `SHA-256(borsh(members) ‖ threshold)`. Rejected if a
     /// set with the derived id already exists.
@@ -599,8 +599,8 @@ pub enum CallMessage<S: Spec> {
 
     /// Register a new [`Schema`].
     ///
-    /// Costs `SCHEMA_REGISTRATION_FEE` $AVOW (governance parameter). On
-    /// devnet-1 genesis this is `100_000_000` nano-AVOW = 0.1 $AVOW
+    /// Costs `SCHEMA_REGISTRATION_FEE` AVOW (governance parameter). On
+    /// devnet-1 genesis this is `100_000_000` nano-AVOW = 0.1 AVOW
     /// (see `devnet-1/genesis/attestation.json`).
     /// Owner is the transaction submitter. `attestor_set` must reference
     /// an already-registered [`AttestorSet`]. `fee_routing_bps` must be
@@ -648,8 +648,8 @@ pub enum CallMessage<S: Spec> {
 
     /// Submit a new [`Attestation`] under an existing schema.
     ///
-    /// Costs `ATTESTATION_FEE` $AVOW (governance parameter). On devnet-1
-    /// genesis this is `100_000` nano-AVOW = 0.0001 $AVOW (see
+    /// Costs `ATTESTATION_FEE` AVOW (governance parameter). On devnet-1
+    /// genesis this is `100_000` nano-AVOW = 0.0001 AVOW (see
     /// `devnet-1/genesis/attestation.json`),
     /// split per [`Schema::fee_routing_bps`]. Signatures are validated
     /// against the schema's [`AttestorSet`] at submission time.
@@ -717,7 +717,7 @@ pub struct AttestationModule<S: Spec> {
     #[id]
     pub id: ModuleId,
 
-    /// Reference to the `sov-bank` module. Used to charge `$AVOW` fees on
+    /// Reference to the `sov-bank` module. Used to charge `AVOW` fees on
     /// every successful `RegisterAttestorSet`, `RegisterSchema`, and
     /// `SubmitAttestation` call. Bank transfers run before any state
     /// mutation; on `Err` the SDK's tx state unwinds the whole tx.
@@ -742,7 +742,7 @@ pub struct AttestationModule<S: Spec> {
     #[state]
     pub treasury: StateValue<S::Address>,
 
-    /// `$AVOW` token id used for all attestation-module fee charges.
+    /// `AVOW` token id used for all attestation-module fee charges.
     ///
     /// Set once at genesis from
     /// [`AttestationConfig::avow_token_id`]. Identifies the token inside
@@ -751,27 +751,27 @@ pub struct AttestationModule<S: Spec> {
     /// `attestor_set_fee`. Immutable after genesis; rotation requires a
     /// chain upgrade.
     ///
-    /// `$AVOW` is genuinely chain-global; storing it on the attestation
+    /// `AVOW` is genuinely chain-global; storing it on the attestation
     /// module is pragmatic for v0 because attestation is the only fee
     /// consumer. Extract to a chain-wide config primitive when the second
     /// consumer (Iris relayer module v0.5, `tokens` module v1) lands.
     #[state]
     pub avow_token_id: StateValue<TokenId>,
 
-    /// Flat per-attestation fee in `$AVOW` nanos. Set at genesis.
+    /// Flat per-attestation fee in `AVOW` nanos. Set at genesis.
     /// `Amount` is the bank module's u128 newtype around fee values.
     #[state]
     pub attestation_fee: StateValue<Amount>,
 
-    /// Flat schema-registration fee in `$AVOW` nanos. Set at genesis.
+    /// Flat schema-registration fee in `AVOW` nanos. Set at genesis.
     #[state]
     pub schema_registration_fee: StateValue<Amount>,
 
-    /// Flat attestor-set registration fee in `$AVOW` nanos. Set at genesis.
+    /// Flat attestor-set registration fee in `AVOW` nanos. Set at genesis.
     #[state]
     pub attestor_set_fee: StateValue<Amount>,
 
-    /// Running counter of `$AVOW` nanos booked to the treasury.
+    /// Running counter of `AVOW` nanos booked to the treasury.
     ///
     /// Accumulates the treasury share of every successful
     /// `SubmitAttestation` plus the full registration fees from
@@ -782,7 +782,7 @@ pub struct AttestationModule<S: Spec> {
     #[state]
     pub total_treasury_collected: StateValue<Amount>,
 
-    /// Running counter of `$AVOW` nanos booked per builder address.
+    /// Running counter of `AVOW` nanos booked per builder address.
     ///
     /// Keyed by `Schema::fee_routing_addr`. Incremented on each
     /// `SubmitAttestation` under a schema with non-zero `fee_routing_bps`
@@ -820,32 +820,32 @@ pub struct AttestationModule<S: Spec> {
 /// mid-upgrade) and the genesis-config default.
 pub const DEFAULT_MAX_BUILDER_BPS: u16 = 5000;
 
-/// Default attestation fee in $AVOW, in the chain's smallest unit.
+/// Default attestation fee in AVOW, in the chain's smallest unit.
 /// Compile-time fallback used only when the genesis config omits the
 /// field; devnet-1 genesis sets every fee explicitly. Real fee sizing
 /// is a governance parameter set at launch.
 ///
-/// `$AVOW` uses **9 decimals** (Solana lamport convention). The smallest
-/// representable unit is `1 nano` = `0.000000001 $AVOW`. The new SDK
+/// `AVOW` uses **9 decimals** (Solana lamport convention). The smallest
+/// representable unit is `1 nano` = `0.000000001 AVOW`. The new SDK
 /// uses [`sov_bank::Amount`] (a `u128` newtype) for token amounts;
 /// our defaults still fit comfortably in `u64`, but using `Amount`
 /// for state values + helpers keeps types aligned with bank.
 ///
-/// Note: this constant (`1_000_000` nano = 0.001 $AVOW) is the
+/// Note: this constant (`1_000_000` nano = 0.001 AVOW) is the
 /// compile-time fallback only. Devnet-1 genesis configures
-/// `attestation_fee = 100_000` nano = 0.0001 $AVOW
+/// `attestation_fee = 100_000` nano = 0.0001 AVOW
 /// (`devnet-1/genesis/attestation.json`).
 pub const DEFAULT_ATTESTATION_FEE_LGT_NANOS: Amount = Amount::new(1_000_000);
 
 /// Default schema-registration fee. Compile-time fallback only;
 /// devnet-1 genesis configures
-/// `schema_registration_fee = 100_000_000` nano = 0.1 $AVOW
+/// `schema_registration_fee = 100_000_000` nano = 0.1 AVOW
 /// (`devnet-1/genesis/attestation.json`).
 pub const DEFAULT_SCHEMA_REGISTRATION_FEE_LGT_NANOS: Amount = Amount::new(100_000_000_000);
 
 /// Default attestor-set registration fee. Compile-time fallback only;
 /// devnet-1 genesis configures
-/// `attestor_set_fee = 50_000_000` nano = 0.05 $AVOW
+/// `attestor_set_fee = 50_000_000` nano = 0.05 AVOW
 /// (`devnet-1/genesis/attestation.json`).
 pub const DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS: Amount = Amount::new(10_000_000_000);
 
@@ -910,7 +910,7 @@ pub struct AttestationConfig<S: Spec> {
     /// explicitly in real configs; only test scaffolding should rely
     /// on a default value.
     pub treasury: S::Address,
-    /// `$AVOW` [`TokenId`] inside `sov-bank` used for every fee charge.
+    /// `AVOW` [`TokenId`] inside `sov-bank` used for every fee charge.
     ///
     /// In the new SDK, `TokenId`s are explicit at genesis (no
     /// `(name, salt)` derivation), so this value is taken verbatim
@@ -918,11 +918,11 @@ pub struct AttestationConfig<S: Spec> {
     /// `crates/stf/src/genesis_config.rs` cross-checks that this
     /// matches the bank's gas-token id.
     pub avow_token_id: TokenId,
-    /// Flat per-attestation fee in `$AVOW` nanos (9 decimals).
+    /// Flat per-attestation fee in `AVOW` nanos (9 decimals).
     pub attestation_fee: Amount,
-    /// Flat schema-registration fee in `$AVOW` nanos.
+    /// Flat schema-registration fee in `AVOW` nanos.
     pub schema_registration_fee: Amount,
-    /// Flat attestor-set registration fee in `$AVOW` nanos.
+    /// Flat attestor-set registration fee in `AVOW` nanos.
     pub attestor_set_fee: Amount,
     /// Attestor sets to register at genesis, in order.
     pub initial_attestor_sets: Vec<InitialAttestorSet>,
@@ -1082,7 +1082,7 @@ pub enum AttestationError {
     /// a misconfigured chain. Should be unreachable for a chain that ran
     /// `Module::genesis` cleanly, but surfaced as an error so handlers
     /// fail honestly instead of panicking.
-    #[error("attestation module not initialised: missing $AVOW token address or treasury")]
+    #[error("attestation module not initialised: missing AVOW token address or treasury")]
     ChainNotConfigured,
 }
 
@@ -1417,7 +1417,7 @@ impl<S: Spec> AttestationModule<S> {
 
         // Charge the registration fee after validation and duplicate
         // check, before state mutation. If the submitter has insufficient
-        // `$AVOW`, the bank transfer returns `Err`, the tx state unwinds,
+        // `AVOW`, the bank transfer returns `Err`, the tx state unwinds,
         // and the whole tx fails atomically.
         let fee = self.attestor_set_fee.get(state)?.unwrap_or(DEFAULT_ATTESTOR_SET_FEE_LGT_NANOS);
         self.charge_to_treasury(context.sender(), fee, state)?;
@@ -1618,7 +1618,7 @@ impl<S: Spec> AttestationModule<S> {
         Ok(())
     }
 
-    /// Move `amount` `$AVOW` nanos from `submitter` to the treasury via
+    /// Move `amount` `AVOW` nanos from `submitter` to the treasury via
     /// `sov-bank`, then bump the cumulative
     /// [`AttestationModule::total_treasury_collected`] counter.
     ///
@@ -1648,7 +1648,7 @@ impl<S: Spec> AttestationModule<S> {
         Ok(())
     }
 
-    /// Move `amount` `$AVOW` nanos from `submitter` to `builder_addr` via
+    /// Move `amount` `AVOW` nanos from `submitter` to `builder_addr` via
     /// `sov-bank`, then bump the cumulative
     /// [`AttestationModule::builder_fees_collected`] counter for that
     /// address. Same `amount == 0` short-circuit and same atomicity

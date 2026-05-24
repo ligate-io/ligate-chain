@@ -496,7 +496,7 @@ mod tests {
     fn balance_overrides_targets_only_gas_token_config() {
         let mut bank = serde_json::json!({
             "gas_token_config": {
-                "token_name": "$AVOW",
+                "token_name": "AVOW",
                 "address_and_balances": [
                     ["lig1real", "1000"],
                     ["lig1other", "500"]

@@ -89,7 +89,7 @@ These attack the protocol primitive itself: schemas, attestor sets, attestations
 
 **Attack:** flood the chain with worthless attestations to degrade availability or storage.
 
-**Defense:** per-attestation fee (devnet-1 genesis: 0.0001 `$AVOW`) plus one-time registration fees (`SCHEMA_REGISTRATION_FEE` 0.1 `$AVOW`, `ATTESTOR_SET_FEE` 0.05 `$AVOW`). Fees are stored in nano-AVOW (9 decimals) in `devnet-1/genesis/attestation.json`. Costs scale linearly with volume.
+**Defense:** per-attestation fee (devnet-1 genesis: 0.0001 `AVOW`) plus one-time registration fees (`SCHEMA_REGISTRATION_FEE` 0.1 `AVOW`, `ATTESTOR_SET_FEE` 0.05 `AVOW`). Fees are stored in nano-AVOW (9 decimals) in `devnet-1/genesis/attestation.json`. Costs scale linearly with volume.
 
 **Where:** [`attestation-v0.md` §Fees](attestation-v0.md#fees); enforced via `sov-bank` integration in `crates/modules/attestation/src/lib.rs`.
 
@@ -121,7 +121,7 @@ The single permissioned sequencer is a v0 trust assumption. v1 hardens this.
 
 **Defense in v3 mainnet:** PoUA ([#126](https://github.com/ligate-io/ligate-chain/issues/126)) reputation update penalizes selective censorship via the A2 detector ([§4.5](https://github.com/ligate-io/ligate-research/blob/main/papers/poua/poua.pdf), Appendix A.1) once enough traffic exists to calibrate.
 
-**Where:** v0 single-sequencer architecture documented in [`devnet/README.md`](../../devnet/README.md) and [`devnet.md` §5](../development/devnet.md).
+**Where:** v0 single-sequencer architecture documented in [`localnet/README.md`](../../localnet/README.md) and [`devnet.md` §5](../development/devnet.md).
 
 ### 2.2 Sequencer DoS
 
@@ -308,7 +308,7 @@ Public GitHub issues for suspected vulnerabilities are not appropriate; a public
 - [`da-layers.md`](da-layers.md): DA-agnostic architecture and adapter playbook (DA-layer trust posture)
 - [`rest-api.md`](rest-api.md): full REST endpoint reference
 - [`SECURITY.md`](../../SECURITY.md): disclosure policy
-- [`devnet/README.md`](../../devnet/README.md): local boot recipe
+- [`localnet/README.md`](../../localnet/README.md): local boot recipe
 - [`docs/development/devnet.md`](../development/devnet.md): operator runbook
 
 ## Related issues
