@@ -15,7 +15,7 @@ Wait ~10 minutes for Celestia to header-sync, then:
 
 ```bash
 curl http://localhost:12346/v1/rollup/info
-# {"chain_id":"ligate-devnet-1","chain_hash":"...","version":"0.2.13"}
+# {"chain_id":"ligate-devnet-1","chain_hash":"...","version":"0.2.14"}
 
 curl http://localhost:12346/health
 # {"status":"ok"}

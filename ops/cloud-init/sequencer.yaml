@@ -231,8 +231,8 @@ runcmd:
   # (or operator-side `systemctl stop && curl + tar && systemctl start`
   # for in-place swaps — the standard path for running VMs).
   - |
-    LIGATE_TAG=v0.2.13
-    LIGATE_VERSION=0.2.13
+    LIGATE_TAG=v0.2.14
+    LIGATE_VERSION=0.2.14
     ARTIFACT="ligate-node-${LIGATE_VERSION}-linux-amd64.tar.gz"
     # Keep the artifact's original filename so `sha256sum -c` can find
     # it via the relative path written into the .sha256 file by the
@@ -254,7 +254,7 @@ runcmd:
   # Idempotent: --depth 1 + a fresh tmp clone every cloud-init run;
   # cp -rn so we don't clobber an operator-edited /opt/ligate/devnet-1/.
   - |
-    LIGATE_TAG=v0.2.13
+    LIGATE_TAG=v0.2.14
     rm -rf /tmp/ligate-chain
     git clone --depth 1 --branch ${LIGATE_TAG} \
       https://github.com/ligate-io/ligate-chain.git /tmp/ligate-chain

@@ -6,4 +6,4 @@
 # The chain's OWN released version is the workspace `Cargo.toml`
 # version — that's separately bumped by hand when cutting a release
 # (see `docs/development/runbooks/chain-release.md`).
-chain: "0.2.13"
+chain: "0.2.14"
