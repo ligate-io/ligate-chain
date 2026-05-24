@@ -84,7 +84,7 @@ A MetaMask-signed transaction:
 the transaction at parse time. There is no second auth path that
 *does* understand them, today.
 
-This is why the `0x…` addresses we briefly had in `devnet/genesis/`
+This is why the `0x…` addresses we briefly had in `localnet/genesis/`
 were a mistake: a `$AVOW` balance sat there, but no signature
 producible by anybody could ever spend it. The Anvil dev keys
 (`0xac0974…`, `0x59c699…`, etc.) make secp256k1 signatures, which
@@ -92,7 +92,7 @@ our chain can't verify. Funds in those accounts were stuck forever.
 
 We removed them in favour of `lig1…` addresses derived from real
 ed25519 keys — see
-[`crates/stf/tests/devnet_addresses.rs`](../../crates/stf/tests/devnet_addresses.rs)
+[`crates/stf/tests/localnet_addresses.rs`](../../crates/stf/tests/localnet_addresses.rs)
 for the deterministic derivation.
 
 ## What changes when [#72](https://github.com/ligate-io/ligate-chain/issues/72) lands

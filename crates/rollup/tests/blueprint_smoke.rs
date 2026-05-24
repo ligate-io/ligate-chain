@@ -10,7 +10,7 @@
 //! against RocksDB / mock DA / the sequencer task graph. That needs
 //! a full `RollupConfig` (storage dirs, ports, prover paths) and is
 //! the territory of an integration harness in Phase A.2.3, where
-//! we'll have a real `devnet/rollup.toml` to load.
+//! we'll have a real `localnet/rollup.toml` to load.
 
 use std::fs;
 

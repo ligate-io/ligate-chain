@@ -1,4 +1,4 @@
-//! Validate the checked-in `devnet/` config end-to-end.
+//! Validate the checked-in `localnet/` config end-to-end.
 //!
 //! These tests guard against drift between the runtime types and the
 //! committed JSON / TOML. If a module's `Config` shape changes, or a
@@ -45,14 +45,14 @@ fn devnet_1_dir() -> PathBuf {
 #[test]
 fn rollup_toml_parses_against_mock_blueprint_types() {
     // Catches TOML keys renamed/removed in the SDK between pins, or
-    // keys we typoed in `devnet/rollup.toml`. Uses the same two-pass
+    // keys we typoed in `localnet/rollup.toml`. Uses the same two-pass
     // split (`[chain]` extracted, residual handed to the SDK) the
     // binary uses; see #181.
     let path = devnet_dir().join("rollup.toml");
     let (chain, residual) = load_split_config(&path)
-        .unwrap_or_else(|e| panic!("devnet/rollup.toml failed [chain] split: {e:?}"));
+        .unwrap_or_else(|e| panic!("localnet/rollup.toml failed [chain] split: {e:?}"));
     let _config: RollupConfig<MultiAddressEvm, StorableMockDaService> = toml::from_str(&residual)
-        .unwrap_or_else(|e| panic!("devnet/rollup.toml residual failed to parse: {e:?}"));
+        .unwrap_or_else(|e| panic!("localnet/rollup.toml residual failed to parse: {e:?}"));
     // Pin the committed chain id so a typo in the TOML (e.g.
     // accidentally bumping localnet to devnet on the localnet config)
     // surfaces here rather than at first boot.
@@ -69,9 +69,9 @@ fn celestia_toml_parses_against_celestia_blueprint_types() {
     // override via `SOV_CELESTIA_SIGNER_KEY` at runtime.
     let path = devnet_dir().join("celestia.toml");
     let (chain, residual) = load_split_config(&path)
-        .unwrap_or_else(|e| panic!("devnet/celestia.toml failed [chain] split: {e:?}"));
+        .unwrap_or_else(|e| panic!("localnet/celestia.toml failed [chain] split: {e:?}"));
     let _config: RollupConfig<MultiAddressEvm, CelestiaService> = toml::from_str(&residual)
-        .unwrap_or_else(|e| panic!("devnet/celestia.toml residual failed to parse: {e:?}"));
+        .unwrap_or_else(|e| panic!("localnet/celestia.toml residual failed to parse: {e:?}"));
     assert_eq!(chain.chain_id, "ligate-localnet");
 }
 
@@ -85,7 +85,7 @@ fn genesis_jsons_load_and_pass_cross_module_validation() {
     let paths = GenesisPaths::from_dir(devnet_dir().join("genesis"));
     let _config = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)
         .unwrap_or_else(|e| {
-            panic!("devnet/genesis/ failed to load + validate: {e:?}");
+            panic!("localnet/genesis/ failed to load + validate: {e:?}");
         });
 }
 
@@ -114,7 +114,7 @@ fn devnet_1_celestia_toml_parses_against_celestia_blueprint_types() {
 #[test]
 fn devnet_1_genesis_jsons_load_and_pass_cross_module_validation() {
     // The committed devnet-1/genesis/ uses placeholder lig1 addresses
-    // shared with devnet/genesis/, plus a Celestia bech32 placeholder
+    // shared with localnet/genesis/, plus a Celestia bech32 placeholder
     // for `seq_da_address` (test fixtures, not for production deploy;
     // operators substitute via the genesis-tool — see #191 / #325).
     // devnet-1 is Celestia-only by design, so validate against the
@@ -130,8 +130,8 @@ fn devnet_1_genesis_jsons_load_and_pass_cross_module_validation() {
 #[test]
 fn devnet_1_does_not_ship_a_rollup_toml() {
     // Devnet-1 is Celestia-only by design (`devnet-1/README.md`):
-    // MockDA only exists in `devnet/` for local smoke testing. If
-    // someone copy-pastes `devnet/rollup.toml` into `devnet-1/` by
+    // MockDA only exists in `localnet/` for local smoke testing. If
+    // someone copy-pastes `localnet/rollup.toml` into `devnet-1/` by
     // mistake (a plausible cargo-culting accident), operators booting
     // with `--rollup-config-path devnet-1/rollup.toml` would silently
     // get a MockDA flavour instead of Celestia and never publish to

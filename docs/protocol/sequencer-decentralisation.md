@@ -145,7 +145,7 @@ Whatever option we pick must satisfy:
 
 The plumbing audit located the seam in two places:
 
-- **Config seam (ours):** `devnet/rollup.toml`'s `[sequencer.preferred]` section is missing an optional `postgres_config` block. When that block is present, the SDK switches from single-instance RocksDb to Postgres-backed multi-instance with leader election. Today the block is absent — that is why we run single-sequencer.
+- **Config seam (ours):** `localnet/rollup.toml`'s `[sequencer.preferred]` section is missing an optional `postgres_config` block. When that block is present, the SDK switches from single-instance RocksDb to Postgres-backed multi-instance with leader election. Today the block is absent — that is why we run single-sequencer.
 - **Code seam (upstream SDK):** `sov-sequencer/src/preferred/db/mod.rs:543-564` is the actual `match ConfiguredNodeRole {...}` branch where leader-vs-replica behaviour diverges. `// SEAM:` comment in `crates/rollup/src/lib.rs` (next to `NodeRole`) marks the discovery point for readers.
 
 The Sovereign SDK **already implements** the bulk of Option 3.1:
@@ -169,7 +169,7 @@ Original §5 from v1 of this doc assumed we'd implement `LeaderSchedule` + view-
 
 3. ~~Failure detection + view-change~~ — **dropped.** SDK's heartbeat timeout + grace period IS the failure detection; the next election cycle IS the view-change. Both fully configurable via `LeaderElectionConfig`.
 
-4. **Postgres provisioning + config.** Provision a managed Postgres instance (Cloud SQL with regional HA, or a small managed Postgres on the same VPC) accessible from every sequencer VM. Wire `[sequencer.preferred.postgres]` into `devnet/rollup.toml` with `node_role = "DbElected"` for all three sequencer instances, distinct `node_id` per instance. Acceptance: three local sequencers running against a single Postgres see one elected leader and two replicas; killing the leader triggers a new election within the configured timeout.
+4. **Postgres provisioning + config.** Provision a managed Postgres instance (Cloud SQL with regional HA, or a small managed Postgres on the same VPC) accessible from every sequencer VM. Wire `[sequencer.preferred.postgres]` into `localnet/rollup.toml` with `node_role = "DbElected"` for all three sequencer instances, distinct `node_id` per instance. Acceptance: three local sequencers running against a single Postgres see one elected leader and two replicas; killing the leader triggers a new election within the configured timeout.
 
 5. **Multi-sequencer prod deploy.** Spin up two additional GCP instances (`ligate-node-2`, `ligate-node-3`); extend the cloud-init template for per-instance index. Update Caddyfile to fan reads out across all healthy instances and route writes (`POST /v1/sequencer/txs`) to the current leader (Postgres-derived via a small health endpoint, or the SDK's existing leader-info API if it exposes one). Add per-instance Grafana labels. Acceptance: prod runs 3 sequencers for 24h with at least one forced-failover incident successfully handled.
 

@@ -393,7 +393,7 @@ Steps:
 2. In `ligate-chain`, copy `devnet-1/` to `devnet-2/`. Edit:
    - `celestia.toml`: bump `chain_id = "ligate-devnet-2"`, update `storage.path = "devnet-2/data-celestia"`.
    - `genesis/`: regenerate via `ligate-genesis-tool` ([#191](https://github.com/ligate-io/ligate-chain/issues/191)), keeping the same operator-controlled keys.
-3. Add CI test rows in `crates/rollup/tests/devnet_config.rs` for `devnet-2/` (mirror the `devnet_1_*` tests).
+3. Add CI test rows in `crates/rollup/tests/localnet_config.rs` for `devnet-2/` (mirror the `devnet_1_*` tests).
 4. Land the PR; tag a new release (`v0.2.0-devnet-2` or similar).
 5. Operators redeploy: pull the new binary + new `devnet-2/` configs, point at the new Mocha endpoint, restart.
 6. Update DNS: `rpc.ligate.io` continues pointing at the same VM; the chain just runs the new chain-id from now on.

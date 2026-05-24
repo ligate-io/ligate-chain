@@ -52,13 +52,13 @@ SOV_CELESTIA_SIGNER_KEY=$(pass celestia/devnet-signer) \
 cargo run --bin ligate-node -- --da-layer celestia
 ```
 
-Defaults pick up `devnet/rollup.toml` (or `devnet/celestia.toml`) and the `devnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$AVOW` so you can exercise transfers without minting.
+Defaults pick up `localnet/rollup.toml` (or `localnet/celestia.toml`) and the `localnet/genesis/*.json` files. The bootstrap account holds treasury, sequencer, attester, and prover roles for v0; two extra accounts (`lig1d0vqhk…` and `lig1njjery…`) ship with `$AVOW` so you can exercise transfers without minting.
 
 #### Local dev key
 
-The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`devnet/local-dev-key.json`](devnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `$AVOW`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
+The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`localnet/local-dev-key.json`](localnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `$AVOW`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
 
-Operators deploying `ligate-devnet-1` MUST remove this address from `devnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
+Operators deploying `ligate-devnet-1` MUST remove this address from `localnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
 
 To use the dev key with [`ligate-cli`](https://github.com/ligate-io/ligate-cli):
 
@@ -82,7 +82,7 @@ ligate transfer --signer dev --to lig1xyz... --amount 1.0 \
 
 The previous `--mode {sequencer,follower}` flag and its corresponding 503-on-submit middleware were removed in chain#446 after a paper-leader incident (a Follower-mode node promoted via in-process role transition kept the boot-time `automatic_batch_production = false` flag, holding the lock but never posting). DbElected gates posting on the lock and the SDK already returns 503 on `POST /v1/sequencer/txs` when not the leader, so the chain-level mode toggle was redundant.
 
-A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`devnet/README.md`](devnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
+A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`localnet/README.md`](localnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 
 ## What is this repo
 
@@ -204,7 +204,7 @@ Cargo workspace (resolver 2). Members:
 - [`crates/genesis-tool`](crates/genesis-tool): operator-facing offline tool. `keys generate`, `verify`, `generate` (substitute keys into a template genesis bundle).
 - [`crates/bootstrap-cli`](crates/bootstrap-cli): operator-facing online tool. Runs the post-genesis canonical-schema registration ceremony — submits one `RegisterAttestorSet` + one `RegisterSchema` tx per entry in `canonical-schemas.toml`. Idempotent. See [`docs/development/canonical-schema-registration.md`](docs/development/canonical-schema-registration.md).
 
-Devnet config (genesis files, Celestia and rollup TOMLs) lives in [`devnet/`](devnet) and is checked in so anyone can boot a local devnet against Celestia mocha-testnet.
+Localnet config (genesis files, Celestia and rollup TOMLs) lives in [`localnet/`](localnet) and is checked in so anyone can boot a local node against Celestia mocha-testnet.
 
 Protocol docs:
 

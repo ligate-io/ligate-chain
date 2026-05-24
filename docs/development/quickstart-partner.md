@@ -127,7 +127,7 @@ The `payload_shape_hash` is what every attestation must commit to. You hash your
 
 ## 5. Submit your first attestation
 
-⚠ **Preview**: `ligate-cli attest` subcommand is on the pre-devnet feature list (chain repo issue #112's v0 surface). Until it ships, the chain repo's `bootstrap-cli` is the path; see [`devnet/README.md`](../../devnet/README.md).
+⚠ **Preview**: `ligate-cli attest` subcommand is on the pre-devnet feature list (chain repo issue #112's v0 surface). Until it ships, the chain repo's `bootstrap-cli` is the path; see [`localnet/README.md`](../../localnet/README.md).
 
 For the v0 partner flow with `ligate-cli`:
 

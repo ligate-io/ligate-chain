@@ -9,7 +9,7 @@ infrastructure** (hosted RPC, faucet, explorer) — those sections are
 marked **Future work** and link to their tracking issues.
 
 For a fast local-only boot (single-node mock-DA, no ceremony), see
-[`devnet/README.md`](../../devnet/README.md). This document is the
+[`localnet/README.md`](../../localnet/README.md). This document is the
 multi-operator playbook for when public devnet spins up.
 
 This document is **operations**. For the on-chain protocol (types, state,
@@ -127,7 +127,7 @@ You will need:
 ## 4. Genesis ceremony
 
 > **Future work.** The genesis loader runs today (per-module JSON files
-> under `devnet/genesis/`, assembled by `crates/stf::genesis_config`).
+> under `localnet/genesis/`, assembled by `crates/stf::genesis_config`).
 > What's still future-only is the **multi-org coordination process**
 > below — picking attestor pubkeys, agreeing on the threshold, and
 > committing a signed-off `genesis.json` set across orgs. That ceremony
@@ -166,7 +166,7 @@ set of per-module genesis JSONs (today: `bank.json`, `accounts.json`,
 **Output**
 
 A directory of per-module JSON files committed to this repo (under
-`devnet/genesis/`), signed off on by all participating orgs. The
+`localnet/genesis/`), signed off on by all participating orgs. The
 sequencer and every full node boot from an identical copy of those
 files. A canonical example lives at
 [`docs/development/genesis.example.json`](genesis.example.json) (the
@@ -177,7 +177,7 @@ attestation module's slice; the runbook example expands this set).
 The current `ligate-node` binary takes a `--da-layer` flag (`mock` or
 `celestia`) and points at a rollup config TOML plus a genesis directory.
 Per-flavour boot details live in
-[`devnet/README.md`](../../devnet/README.md). The shapes below are the
+[`localnet/README.md`](../../localnet/README.md). The shapes below are the
 intended **devnet operator** form, layered on top of that local-boot
 flow with hardened defaults (persistent state dir, externalised auth
 tokens, public RPC bind).
@@ -196,7 +196,7 @@ cargo run --release --bin ligate-node -- \
 The `[storage]` section of `celestia.toml` controls the data
 directory; CLI flags for it land in a future binary release.
 
-For the full Celestia setup runbook (light-node provisioning, auth tokens, env-var hygiene, common failure modes), see [`celestia-ops.md`](celestia-ops.md). It assumes you've already validated the chain against Mock DA via [`devnet/README.md`](../../devnet/README.md).
+For the full Celestia setup runbook (light-node provisioning, auth tokens, env-var hygiene, common failure modes), see [`celestia-ops.md`](celestia-ops.md). It assumes you've already validated the chain against Mock DA via [`localnet/README.md`](../../localnet/README.md).
 
 **Attestor or full node**
 

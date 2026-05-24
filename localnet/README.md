@@ -75,7 +75,7 @@ These let you exercise transfers without minting more.
 **Address derivation.** All three are deterministic:
 `SHA256("ligate-devnet-{bootstrap,dev-1,dev-2}")[..28]`, encoded
 Bech32m with the `lig` HRP from `constants.toml`. The
-`crates/stf/tests/devnet_addresses.rs` test re-derives them and
+`crates/stf/tests/localnet_addresses.rs` test re-derives them and
 fails if the genesis files drift.
 
 **Why not `0x…` Ethereum addresses.** The chain's tx authentication

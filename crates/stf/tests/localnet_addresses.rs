@@ -1,6 +1,6 @@
 //! Deterministic devnet address derivation.
 //!
-//! The `lig1…` strings in `devnet/genesis/*.json` are derived from
+//! The `lig1…` strings in `localnet/genesis/*.json` are derived from
 //! SHA-256 hashes of well-known labels. This test re-derives them
 //! from those labels and pins the expected output, so a future
 //! refactor of the address Bech32 prefix or layout fails loudly

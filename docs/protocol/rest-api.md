@@ -44,13 +44,13 @@ graph LR
 
 ## Quick start
 
-Boot a single-node devnet against MockDa from the repo root (full setup in [`devnet/README.md`](../../devnet/README.md)):
+Boot a single-node devnet against MockDa from the repo root (full setup in [`localnet/README.md`](../../localnet/README.md)):
 
 ```bash
 cargo run --bin ligate-node
 ```
 
-The REST API binds to `127.0.0.1:12346` per [`devnet/rollup.toml`](../../devnet/rollup.toml). Verify it is up:
+The REST API binds to `127.0.0.1:12346` per [`localnet/rollup.toml`](../../localnet/rollup.toml). Verify it is up:
 
 ```bash
 curl http://127.0.0.1:12346/v1/rollup/sync-status
@@ -552,7 +552,7 @@ See [`upgrades.md`](upgrades.md) for the full soft-fork vs hard-fork policy.
 - [`addresses-and-signing.md`](addresses-and-signing.md): what `lig1...`, `lpk1...`, `lsc1...`, `las1...`, `lph1...` Bech32m prefixes mean
 - [`upgrades.md`](upgrades.md): soft-fork vs hard-fork policy, `CHAIN_HASH` guard, post-mainnet upgrade flow
 - [`docs/development/devnet.md`](../development/devnet.md): how to run a local node that serves these endpoints
-- [`devnet/README.md`](../../devnet/README.md): default mock-DA boot recipe
+- [`localnet/README.md`](../../localnet/README.md): default mock-DA boot recipe
 - [`crates/modules/attestation/src/query.rs`](../../crates/modules/attestation/src/query.rs): source for the three custom attestation routes
 - [`crates/client-rs/src/lib.rs`](../../crates/client-rs/src/lib.rs): Rust client SDK that wraps these endpoints
 

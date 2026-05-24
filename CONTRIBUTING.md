@@ -90,7 +90,7 @@ The `README.md` `## Workspace layout` section is the canonical reference. Quick 
 - `crates/rollup` — the `ligate-node` binary
 - `crates/rollup/provers/risc0` — Risc0 inner zkVM prover, with a Celestia guest sub-workspace
 - `crates/client-rs` — Rust client SDK
-- `devnet/` — checked-in genesis JSONs + Mock/Celestia rollup TOMLs
+- `localnet/` — checked-in genesis JSONs + Mock/Celestia rollup TOMLs
 - `docs/protocol/` — protocol specifications
 - `docs/development/` — operator runbooks
 
@@ -193,7 +193,7 @@ don't block merges.
 
 ## Required reading for protocol PRs
 
-If your PR touches `crates/modules/attestation`, the runtime composition in `crates/stf`, or any state shape that ends up in `devnet/genesis/*.json`, read these first:
+If your PR touches `crates/modules/attestation`, the runtime composition in `crates/stf`, or any state shape that ends up in `localnet/genesis/*.json`, read these first:
 
 1. [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md) — the protocol specification (entities, state layout, fees, invariants)
 2. [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md) — why the chain signs ed25519 natively, what `lig1...` addresses are, and what changes when EVM auth lands (#72)

@@ -54,7 +54,7 @@ fn verify_succeeds_on_localnet_bundle() {
         .expect("invoke binary");
     assert!(
         output.status.success(),
-        "verify on devnet/genesis/ should succeed; stderr:\n{}",
+        "verify on localnet/genesis/ should succeed; stderr:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let stderr = String::from_utf8_lossy(&output.stderr);

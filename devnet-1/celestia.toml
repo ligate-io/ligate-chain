@@ -88,7 +88,7 @@ rpc_url = "ws://127.0.0.1:26658"
 # an invalid key ("Failed to build celestia-client: Invalid private
 # key"). So the field is omitted: operators inject the real key via
 # `SOV_CELESTIA_SIGNER_KEY` and the env-var default picks it up.
-# Parse tests (`crates/rollup/tests/devnet_config.rs`) are unaffected
+# Parse tests (`crates/rollup/tests/localnet_config.rs`) are unaffected
 # -- the field is optional, so an absent value parses fine.
 
 # Conservative retry tuning. Public-devnet leans towards faster

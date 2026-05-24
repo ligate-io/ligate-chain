@@ -1,6 +1,6 @@
 # Celestia operations runbook
 
-How to run `ligate-node` against a real Celestia DA layer (Mocha testnet by default). Covers the parts of operator setup that aren't obvious from `devnet/celestia.toml` alone: light-node provisioning, auth-token handling, namespace configuration, and the verification commands that confirm a healthy chain.
+How to run `ligate-node` against a real Celestia DA layer (Mocha testnet by default). Covers the parts of operator setup that aren't obvious from `localnet/celestia.toml` alone: light-node provisioning, auth-token handling, namespace configuration, and the verification commands that confirm a healthy chain.
 
 Tracking issue: [#166](https://github.com/ligate-io/ligate-chain/issues/166).
 
@@ -15,11 +15,11 @@ Tracking issue: [#166](https://github.com/ligate-io/ligate-chain/issues/166).
 
 - **Multi-node operation (follower mode).** v0 chain doesn't have a passive / read-only mode. Every running instance attempts to act as the registered sequencer. Two nodes against the same Celestia namespace would either fork (if both have valid signer keys) or waste blob fees (if the second has a non-registered DA address). Multi-node lands when the SDK exposes follower-mode APIs; tracked under [#166](https://github.com/ligate-io/ligate-chain/issues/166)'s scope-extension thread.
 - **Production hardening** (systemd units, Docker compose, k8s manifests, alerting rules). Pre-mainnet runbook scope only.
-- **Mock DA setup.** That's the default `cargo run --bin ligate-node` flow documented in [`devnet/README.md`](../../devnet/README.md). This runbook assumes you've already validated the chain against Mock DA and want to graduate to real DA.
+- **Mock DA setup.** That's the default `cargo run --bin ligate-node` flow documented in [`localnet/README.md`](../../localnet/README.md). This runbook assumes you've already validated the chain against Mock DA and want to graduate to real DA.
 
 ## Prerequisites
 
-- A working `cargo run --bin ligate-node --da-layer mock` against the genesis files in `devnet/genesis/`. If that doesn't boot cleanly, fix it first; Celestia adds operational complexity, not capability.
+- A working `cargo run --bin ligate-node --da-layer mock` against the genesis files in `localnet/genesis/`. If that doesn't boot cleanly, fix it first; Celestia adds operational complexity, not capability.
 - A Celestia light node binary (`celestia` from celestiaorg/celestia-node) installed locally OR a remote light-node endpoint you control.
 - ~5 GB of disk for the rollup state dir. RocksDB + NOMT preallocation reports much higher in `meta.len()` terms; the chain reports actual block usage via `ligate_state_db_size_bytes`.
 
@@ -53,7 +53,7 @@ For Mocha public RPCs (skip the local light-node setup), known providers include
 
 ## Step 2: Configure secrets via env vars
 
-`devnet/celestia.toml` ships with placeholder values for the secret fields. Override via env vars at runtime; do NOT commit real values:
+`localnet/celestia.toml` ships with placeholder values for the secret fields. Override via env vars at runtime; do NOT commit real values:
 
 ```bash
 export SOV_CELESTIA_RPC_URL='ws://127.0.0.1:26658'
@@ -73,8 +73,8 @@ SOV_CELESTIA_RPC_AUTH_TOKEN="$AUTH_TOKEN" \
 SOV_CELESTIA_SIGNER_KEY="$SIGNER_KEY" \
 cargo run --release --bin ligate-node -- \
     --da-layer celestia \
-    --rollup-config-path devnet/celestia.toml \
-    --genesis-config-dir devnet/genesis \
+    --rollup-config-path localnet/celestia.toml \
+    --genesis-config-dir localnet/genesis \
     --metrics-bind 127.0.0.1:9100
 ```
 
@@ -141,7 +141,7 @@ This is operationally a hard fork, exactly as documented in the upgrades policy.
 
 ## Cross-references
 
-- [`devnet/celestia.toml`](../../devnet/celestia.toml): the rollup config this runbook drives.
-- [`devnet/README.md`](../../devnet/README.md): local-boot recipe (mock-DA), what to validate before attempting Celestia.
+- [`localnet/celestia.toml`](../../localnet/celestia.toml): the rollup config this runbook drives.
+- [`localnet/README.md`](../../localnet/README.md): local-boot recipe (mock-DA), what to validate before attempting Celestia.
 - [`devnet.md`](devnet.md): full devnet operator runbook covering topology, attestor onboarding, and monitoring.
 - [`docs/protocol/upgrades.md`](../protocol/upgrades.md): chain-id ladder + reset policy.

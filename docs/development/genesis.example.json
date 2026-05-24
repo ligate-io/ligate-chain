@@ -4,7 +4,7 @@
     "fill in real values, and pass it to the chain at devnet launch.",
     "",
     "Chain id (NOT a field in this file): the canonical string chain id lives",
-    "in the rollup config TOML (`devnet/rollup.toml` / `devnet/celestia.toml`),",
+    "in the rollup config TOML (`localnet/rollup.toml` / `localnet/celestia.toml`),",
     "not the attestation genesis. Use the locked ladder per #54 and the spec",
     "section `Chain id` in `docs/protocol/attestation-v0.md`:",
     "  ligate-localnet   single-node local dev",

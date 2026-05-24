@@ -16,7 +16,7 @@
 //! module:
 //!
 //! ```text
-//! devnet/
+//! localnet/
 //!   bank.json
 //!   accounts.json
 //!   sequencer_registry.json

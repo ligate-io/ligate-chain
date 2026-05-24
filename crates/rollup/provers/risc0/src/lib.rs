@@ -5,7 +5,7 @@
 //! - `ROLLUP_ELF: &[u8]` — the guest binary, fed into
 //!   `sov_risc0_adapter::host::Risc0Host::new`.
 //! - `ROLLUP_ID: [u32; 8]` — the image hash. Pin this in
-//!   `devnet/genesis/chain_state.json` as the runtime's
+//!   `localnet/genesis/chain_state.json` as the runtime's
 //!   `inner_code_commitment`.
 //! - `ROLLUP_PATH: &str` — the on-disk path of the compiled ELF
 //!   (debugging only).

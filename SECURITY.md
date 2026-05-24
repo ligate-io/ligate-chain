@@ -79,7 +79,7 @@ In scope:
   guest (`crates/rollup/provers/risc0/guest-celestia`).
 - The Rust client SDK (`crates/client-rs`).
 - The CI workflows under `.github/workflows/`.
-- Devnet bootstrap configs in `devnet/` (genesis JSONs, rollup/celestia
+- Devnet bootstrap configs in `localnet/` (genesis JSONs, rollup/celestia
   TOMLs).
 - Any documentation in `docs/protocol/` whose claims a real chain user
   would rely on.

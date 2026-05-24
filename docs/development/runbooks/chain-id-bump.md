@@ -46,11 +46,11 @@ If you don't take one of those steps and you DO want clean state, the DA replay 
 - [ ] Issue filed describing the wire-format / runtime-composition change requiring the bump. Linked to this runbook execution.
 - [ ] PR with the breaking change merged to a `bump-target` branch (NOT `main`).
 - [ ] New `CHAIN_HASH` pinned in `crates/stf/src/chain_hash_pin.rs`. Verified deterministic across two clean checkouts.
-- [ ] New genesis files prepared at `devnet/genesis-${NEW_CHAIN_ID}/`. Includes:
+- [ ] New genesis files prepared at `localnet/genesis-${NEW_CHAIN_ID}/`. Includes:
   - Updated `chain_id` in `genesis.json`
   - Same sequencer registry as the outgoing chain (unless rotating per [`sequencer-key-rotation.md`](./sequencer-key-rotation.md))
   - Canonical Themisra schemas (via `ligate-bootstrap` binary, or `cargo run -p ligate-bootstrap-cli`, if re-registering)
-- [ ] `devnet/rollup.toml` updated to point at the new genesis dir and chain id
+- [ ] `localnet/rollup.toml` updated to point at the new genesis dir and chain id
 
 ### Operations
 
@@ -78,7 +78,7 @@ These templates aren't checked in yet — file them as a follow-up to this runbo
 - [ ] T-24h reminder broadcast (email + Discord pending) to partners. Template: `templates/partner-notification-t24h.md`.
 - [ ] New genesis hash published. Two locations:
   - GitHub release on `ligate-io/ligate-chain` tagged `v0.1.0-devnet-N+1-genesis` (or appropriate)
-  - Pinned in `docs.ligate.io/devnet/genesis` page
+  - Pinned in `docs.ligate.io/localnet/genesis` page
 - [ ] Faucet pre-funded on the new chain id. Confirm by querying balance of the bootstrap address on the new genesis.
 - [ ] Status banner live on `docs.ligate.io` + `ligate.io`.
 - [ ] Indexer / explorer Postgres backup taken (`pg_dump` to GCS bucket). Restore-from-snapshot will not be needed but the rollback path is "restore Postgres, point indexer at old chain RPC archive" if the bump aborts.

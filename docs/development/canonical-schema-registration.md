@@ -97,7 +97,7 @@ Both should return `200 OK` with bodies matching the IDs printed in step 3.
 The `schema_id` (bech32m `lsc1...`) and `attestor_set_id` (`las1...`) are the canonical handles partners use to query the chain. Publish them in:
 
 - This repo's `CHANGELOG.md` under the `v0.1.0-devnet` entry.
-- `docs.ligate.io/devnet/schemas` (marketing site, post-launch).
+- `docs.ligate.io/localnet/schemas` (marketing site, post-launch).
 - `ligate-js` README + cli docs.
 
 Once published, downstream code can compute the same `schema_id` offline via `Schema::derive_id(<owner_addr>, "themisra.proof-of-prompt", 1)` (Rust) or the equivalent `@ligate/sdk` helper (TypeScript), so consumers don't have to round-trip the chain to know what id to query.

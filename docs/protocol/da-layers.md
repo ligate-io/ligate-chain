@@ -64,7 +64,7 @@ crates/rollup/src/lib.rs                         # re-exports both blueprint imp
 crates/rollup/src/mock_rollup.rs                 # MockLigateRollup + MockRollupSpec
 crates/rollup/src/celestia_rollup.rs             # CelestiaLigateRollup + CelestiaRollupSpec
 crates/rollup/Cargo.toml                         # sov-celestia-adapter + sov-mock-da deps
-crates/rollup/tests/devnet_config.rs             # config-loader tests for both flavours
+crates/rollup/tests/localnet_config.rs             # config-loader tests for both flavours
 crates/rollup/provers/risc0/build.rs             # guest crate name pin
 crates/rollup/provers/risc0/Cargo.toml           # guest path declaration
 crates/rollup/provers/risc0/guest-celestia/      # DA-specific Risc0 guest sub-crate
@@ -151,7 +151,7 @@ If we want real ZK proofs against Avail (Phase A.4 work), copy `crates/rollup/pr
 
 ### 6. Update integration tests
 
-[`crates/rollup/tests/devnet_config.rs`](../../crates/rollup/tests/devnet_config.rs) loads a per-DA config fixture. Add an `avail.toml` flavour and a corresponding test case.
+[`crates/rollup/tests/localnet_config.rs`](../../crates/rollup/tests/localnet_config.rs) loads a per-DA config fixture. Add an `avail.toml` flavour and a corresponding test case.
 
 ### 7. Extend the CI guardrail
 
@@ -169,7 +169,7 @@ This is the line that defends "DA-agnostic by construction" going forward. Witho
 
 ### 8. Document the new flavour
 
-Update `devnet/README.md` boot instructions, add an entry to `docs/development/devnet.md`'s flavour table, refresh this page's inventory section (the "Allowed" block grows by a few entries).
+Update `localnet/README.md` boot instructions, add an entry to `docs/development/devnet.md`'s flavour table, refresh this page's inventory section (the "Allowed" block grows by a few entries).
 
 ### Total effort
 
