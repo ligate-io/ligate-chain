@@ -62,11 +62,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Linux gnu builds run on ubuntu-22.04 (GLIBC 2.35) instead
+          # of the latest ubuntu-24.04 (GLIBC 2.39) so the produced
+          # binaries work on the common Linux server distros operators
+          # actually run. glibc is forward-compatible (binary works
+          # on newer glibc) but NOT backward-compatible — a binary
+          # built on 24.04 won't load on Debian 12 (GLIBC 2.36),
+          # Ubuntu 22.04 (2.35), RHEL 9 (2.34), or Amazon Linux 2023
+          # (2.34). Bug originally surfaced on v0.1.0-devnet's first
+          # Debian 12 deploy (chain#345). Building on 22.04 covers
+          # all of those; the few operators on bleeding-edge distros
+          # have glibc ≥2.35 anyway. Once an operator-relevant distro
+          # drops 2.35 support we revisit.
           - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-24.04
+            runner: ubuntu-22.04
             archive_suffix: linux-amd64
           - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-24.04-arm
+            runner: ubuntu-22.04-arm
             archive_suffix: linux-arm64
           - target: aarch64-apple-darwin
             runner: macos-14
