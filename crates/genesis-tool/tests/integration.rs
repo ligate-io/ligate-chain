@@ -150,14 +150,14 @@ fn generate_substitutes_addresses_and_balances() {
     let subs_path = tmp.path().join("subs.toml");
 
     // Override bootstrap's balance to a value slightly above the
-    // localnet default (100M $AVOW in nanos). Any value above the
+    // localnet default (100M AVOW in nanos). Any value above the
     // sum of bonds bootstrap holds across attester / prover /
     // sequencer would also work; we pick a specifically larger
     // number so the verify step (which the binary runs internally
     // post-generate) doesn't complain about insufficient funds for
     // the modules' bonds.
     let bootstrap = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt";
-    let new_balance = "200000000000000000"; // 200M $AVOW in nanos
+    let new_balance = "200000000000000000"; // 200M AVOW in nanos
     let subs_toml = format!(
         r#"
 [balances]

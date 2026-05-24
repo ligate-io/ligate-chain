@@ -186,7 +186,7 @@ curl -sSL https://raw.githubusercontent.com/ligate-io/ligate-chain/main/scripts/
 
 This script:
 1. Reads the partner's address
-2. POSTs to the faucet endpoint on the new chain (1 $AVOW drip)
+2. POSTs to the faucet endpoint on the new chain (1 AVOW drip)
 3. Re-submits each schema registration from a local `schemas.json` if present
 4. Prints the new schema ids (deterministic; should match the old chain unless attestor-set membership changed)
 

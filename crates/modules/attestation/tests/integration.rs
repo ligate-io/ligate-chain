@@ -9,7 +9,7 @@
 //! `/tmp/attestation_tests_v0_3.rs` for reference: validation
 //! invariants on the registration paths, fee splitting on
 //! [`SubmitAttestation`], and bank-balance integration that proves
-//! `$AVOW` actually moves.
+//! `AVOW` actually moves.
 //!
 //! [`SubmitAttestation`]: attestation::CallMessage::SubmitAttestation
 
@@ -32,10 +32,10 @@ type S = sov_test_utils::TestSpec;
 type RT = AttestationRuntime<S>;
 
 /// Per-test scaffolding: a `TestRunner` plus the test users genesis
-/// allocated `$AVOW` to.
+/// allocated `AVOW` to.
 struct TestEnv {
     runner: TestRunner<RT, S>,
-    /// Submitter for attestation txs. Holds enough `$AVOW` to cover
+    /// Submitter for attestation txs. Holds enough `AVOW` to cover
     /// all the fee-charging paths.
     submitter: TestUser<S>,
     /// Treasury address; receives the treasury share of every fee.
@@ -43,7 +43,7 @@ struct TestEnv {
     /// can deposit into it), which means the genesis allocation
     /// gives it a non-zero balance.
     treasury: <S as sov_modules_api::Spec>::Address,
-    /// `$AVOW` token id. Same value across all tests, comes from the
+    /// `AVOW` token id. Same value across all tests, comes from the
     /// SDK's gas-token convention via `config_gas_token_id()`.
     avow_token_id: TokenId,
 }
@@ -225,7 +225,7 @@ fn register_attestor_set_happy_path() {
                 Some(Amount::new(7))
             );
 
-            // Bank moved real $AVOW to the treasury. We don't pin the
+            // Bank moved real AVOW to the treasury. We don't pin the
             // exact balance because the treasury account starts with
             // the default genesis balance; we only assert the
             // post-condition is at least that plus the fee.
@@ -236,7 +236,7 @@ fn register_attestor_set_happy_path() {
                 .unwrap_or(Amount::ZERO);
             assert!(
                 treasury_bal >= Amount::new(7),
-                "treasury holds at least the fee in $AVOW, got {treasury_bal:?}"
+                "treasury holds at least the fee in AVOW, got {treasury_bal:?}"
             );
         }),
     });

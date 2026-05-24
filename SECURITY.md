@@ -1,6 +1,6 @@
 # Security policy
 
-Ligate Chain is a sovereign rollup that handles attestation receipts, $AVOW
+Ligate Chain is a sovereign rollup that handles attestation receipts, AVOW
 balances, and (via the curated module set) tokens, NFTs, and identity records.
 Security issues in this repository can affect chain liveness, the integrity
 of attestations, or user funds once mainnet launches. We take them
@@ -98,7 +98,7 @@ Out of scope here (report to the relevant project's policy):
 ## Bug bounty
 
 There is **no formal bug bounty programme yet**. Pre-public-devnet, the
-chain holds testnet $AVOW only and there are no real funds at risk;
+chain holds testnet AVOW only and there are no real funds at risk;
 running a paid programme on a pre-launch system attracts noise more than
 signal. We plan to introduce a programme alongside the v1 mainnet
 launch, scaled to the protocol's TVL at the time.

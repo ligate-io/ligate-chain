@@ -85,7 +85,7 @@ the transaction at parse time. There is no second auth path that
 *does* understand them, today.
 
 This is why the `0x…` addresses we briefly had in `localnet/genesis/`
-were a mistake: a `$AVOW` balance sat there, but no signature
+were a mistake: a `AVOW` balance sat there, but no signature
 producible by anybody could ever spend it. The Anvil dev keys
 (`0xac0974…`, `0x59c699…`, etc.) make secp256k1 signatures, which
 our chain can't verify. Funds in those accounts were stuck forever.
@@ -112,7 +112,7 @@ The `Evm` variant verifies a MetaMask-style RLP-encoded transaction:
 it parses the RLP, verifies the secp256k1 signature, derives the
 sender's `0x…` address, and dispatches the call to our **native
 modules** (bank, attestation, etc.). A user signs with MetaMask, the
-chain accepts it, and `$AVOW` debits from their `0x…` account.
+chain accepts it, and `AVOW` debits from their `0x…` account.
 
 What this **does not** do: run Solidity contracts. The signed
 transaction's payload is still a Ligate-native call (e.g.,
@@ -125,7 +125,7 @@ So after #72:
 - ✅ Both `lig1…` and `0x…` addresses are spendable.
 - ✅ Our `Auth` accepts two cryptographic universes side by side.
 - ❌ You still can't deploy `MyContract.sol` on Ligate.
-- ❌ ERC-20 tokens can't be created via Solidity. (`$AVOW` and other tokens come via the curated `bank` module and the future `tokens` module — [#47](https://github.com/ligate-io/ligate-chain/issues/47)).
+- ❌ ERC-20 tokens can't be created via Solidity. (`AVOW` and other tokens come via the curated `bank` module and the future `tokens` module — [#47](https://github.com/ligate-io/ligate-chain/issues/47)).
 
 ## What changes when [#52](https://github.com/ligate-io/ligate-chain/issues/52) lands (v4)
 
@@ -136,7 +136,7 @@ execution environment, so:
 - Users can deploy Solidity contracts to Ligate Chain.
 - Existing dApps (Uniswap clones, ERC-20 / ERC-721 implementations)
   deploy without rewrites.
-- `$AVOW` becomes a gas token in the EVM sense (a contract calls
+- `AVOW` becomes a gas token in the EVM sense (a contract calls
   another contract, gas debits from the EVM account).
 
 This is **explicitly deferred to v4**, after the attestation thesis
@@ -154,7 +154,7 @@ choice, not a missing feature.
 | Native modules (bank, attestation, tokens) | ✅ | ✅ | ✅ |
 | Solidity contract execution | ❌ | ❌ | ✅ |
 | ERC-20 deploy via tx | ❌ | ❌ | ✅ |
-| `$AVOW` exists on Ethereum / L2s as wrapped ERC-20 | ❌ | ❌ | ✅ once [#73](https://github.com/ligate-io/ligate-chain/issues/73) ships, independent of #52 |
+| `AVOW` exists on Ethereum / L2s as wrapped ERC-20 | ❌ | ❌ | ✅ once [#73](https://github.com/ligate-io/ligate-chain/issues/73) ships, independent of #52 |
 
 ## Mental model in one sentence
 

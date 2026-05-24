@@ -65,7 +65,7 @@ the boot story narrow:
 | Operator reward addr | same | |
 | Prover reward addr | same | |
 
-The two other accounts seeded with `$AVOW`:
+The two other accounts seeded with `AVOW`:
 
 - `lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7` — dev wallet 1
 - `lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx` — dev wallet 2
@@ -87,7 +87,7 @@ authentication is tracked separately in
 [#72](https://github.com/ligate-io/ligate-chain/issues/72) and
 lands before any retail wallet UX.
 
-## $AVOW layout
+## AVOW layout
 
 - 9 decimals (Solana-style nano units).
 - Genesis supply: 1,000,000,000 AVOW (1B), per
