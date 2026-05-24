@@ -20,7 +20,7 @@
 ## Quick start
 
 > **Just want to run a node, not build from source?**
-> Pre-built Linux x86_64 / Linux arm64 / macOS arm64 binaries ship on every release: <https://github.com/ligate-io/ligate-chain/releases>. A multi-arch container image is also published on every release tag at `ghcr.io/ligate-io/ligate-chain:<version>` (e.g. `:0.2.14`, plus `:latest`). See [docs.ligate.io/nodes](https://docs.ligate.io/nodes) for the operator-facing install + boot recipes.
+> Pre-built Linux x86_64 / Linux arm64 / macOS arm64 binaries ship on every release: <https://github.com/ligate-io/ligate-chain/releases>. A multi-arch container image is also published on every release tag at `ghcr.io/ligate-io/ligate-chain:<version>` (e.g. `:0.3.0`, plus `:latest`). See [docs.ligate.io/nodes](https://docs.ligate.io/nodes) for the operator-facing install + boot recipes.
 
 ### Build and test
 
