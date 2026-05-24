@@ -81,20 +81,15 @@ jobs:
           - target: x86_64-apple-darwin
             runner: macos-13
             archive_suffix: darwin-amd64
-          # Static musl binaries (chain#358). The audience is anyone
-          # running `ligate-node` in Alpine, distroless, or `scratch`
-          # Docker images. Static-linking dodges glibc-version drift
-          # between the build runner and the deploy host (we hit this
-          # with GLIBC 2.39 vs Debian 12's 2.36 — see
-          # `docs/development/public-devnet-deploy.md`'s OS-choice
-          # note). musl-tools install + `rustup target add` happens
-          # in the conditional step below.
-          - target: x86_64-unknown-linux-musl
-            runner: ubuntu-24.04
-            archive_suffix: linux-amd64-musl
-          - target: aarch64-unknown-linux-musl
-            runner: ubuntu-24.04-arm
-            archive_suffix: linux-arm64-musl
+          # Static musl binaries (`x86_64-unknown-linux-musl` +
+          # `aarch64-unknown-linux-musl`) are deferred. First attempt
+          # in this PR (2026-05-24) failed with `failed to find tool
+          # "x86_64-linux-musl-g++"` because `librocksdb-sys` needs a
+          # C++ compiler and `musl-tools` only provides `musl-gcc` /
+          # `musl-cc`, not `g++`. The fix is to switch the musl
+          # entries to `cross-rs` (Docker-based toolchain with both
+          # musl-gcc + musl-g++ + glibc-pinned image). Tracked
+          # separately, link below.
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -130,18 +125,6 @@ jobs:
       - name: Install libclang (Linux only)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
-
-      # musl targets need `musl-tools` (provides musl-gcc) so cargo
-      # can link the produced binary statically against musl libc.
-      # Also need to register the target with rustup since
-      # dtolnay/rust-toolchain only auto-installs `${{ matrix.target }}`
-      # the first time it appears, and the runner image's default
-      # toolchain doesn't ship the musl targets.
-      - name: Install musl-tools (musl targets only)
-        if: contains(matrix.target, 'musl')
-        run: |
-          sudo apt-get install -y musl-tools
-          rustup target add "${{ matrix.target }}"
 
       # macOS runners ship Xcode + CLI tools, but `libclang.dylib`
       # lives inside the active developer toolchain rather than on
