@@ -34,8 +34,8 @@ fn config_dir(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn devnet_dir() -> PathBuf {
-    config_dir("devnet")
+fn localnet_dir() -> PathBuf {
+    config_dir("localnet")
 }
 
 fn devnet_1_dir() -> PathBuf {
@@ -48,7 +48,7 @@ fn rollup_toml_parses_against_mock_blueprint_types() {
     // keys we typoed in `localnet/rollup.toml`. Uses the same two-pass
     // split (`[chain]` extracted, residual handed to the SDK) the
     // binary uses; see #181.
-    let path = devnet_dir().join("rollup.toml");
+    let path = localnet_dir().join("rollup.toml");
     let (chain, residual) = load_split_config(&path)
         .unwrap_or_else(|e| panic!("localnet/rollup.toml failed [chain] split: {e:?}"));
     let _config: RollupConfig<MultiAddressEvm, StorableMockDaService> = toml::from_str(&residual)
@@ -67,7 +67,7 @@ fn celestia_toml_parses_against_celestia_blueprint_types() {
     // so the two configs need independent parse coverage. The
     // checked-in `signer_private_key` is a placeholder; operators
     // override via `SOV_CELESTIA_SIGNER_KEY` at runtime.
-    let path = devnet_dir().join("celestia.toml");
+    let path = localnet_dir().join("celestia.toml");
     let (chain, residual) = load_split_config(&path)
         .unwrap_or_else(|e| panic!("localnet/celestia.toml failed [chain] split: {e:?}"));
     let _config: RollupConfig<MultiAddressEvm, CelestiaService> = toml::from_str(&residual)
@@ -82,7 +82,7 @@ fn genesis_jsons_load_and_pass_cross_module_validation() {
     // Catches schema mismatches in any per-module JSON, plus the
     // `attestation.avow_token_id == config_gas_token_id()` invariant.
     type S = MockRollupSpec<Native>;
-    let paths = GenesisPaths::from_dir(devnet_dir().join("genesis"));
+    let paths = GenesisPaths::from_dir(localnet_dir().join("genesis"));
     let _config = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)
         .unwrap_or_else(|e| {
             panic!("localnet/genesis/ failed to load + validate: {e:?}");
