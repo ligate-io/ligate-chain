@@ -47,7 +47,7 @@ Faucet and indexer **do not run on this VM**; they live in [`ligate-io/ligate-ap
 
 Persistent data disk can be **live-resized without downtime** via `gcloud compute disks resize` + `resize2fs /dev/sdb`; ext4 supports online growth. Done on `ligate-devnet-1-sequencer` on 2026-05-16 (50GB → 150GB) when local snapshot accumulation projected to fill the original 50GB within ~24h.
 
-**OS choice: Ubuntu 24.04 LTS, not Debian 12.** The released `ligate-node` binary is built on Ubuntu 24.04 and links against GLIBC 2.39. Debian 12 ships GLIBC 2.36, so the binary fails to load with `version GLIBC_2.39 not found`. If you want Debian for some reason, build from source (`cargo build --release --bin ligate-node`) on the same Debian VM, but that pulls in a Rust toolchain + ~30 min of compile time. Ubuntu is the pragmatic default.
+**OS choice.** As of chain#345 the released `ligate-node` Linux binary is built on Ubuntu 22.04 (GLIBC 2.35), so it runs cleanly on every common server distro: Ubuntu 22.04+, Debian 12+, RHEL 9, Amazon Linux 2023. Older distros (GLIBC <2.35) still need a from-source build. Ubuntu 24.04 stays the canonical operator choice for the rest of the runbook because cloud-init + GCP image families are stable on it, but Debian 12 works fine too if you prefer.
 
 ## Step 1: Provision the VM
 
