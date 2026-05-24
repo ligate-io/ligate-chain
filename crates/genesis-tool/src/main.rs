@@ -185,7 +185,7 @@ enum KeysAction {
 ///
 /// # Optional: override token balances. Key is the post-substitution
 /// # address (i.e. the value side of [addresses]); value is the new
-/// # nano-LGT balance to write into bank.json's `address_and_balances`.
+/// # nano-AVOW balance to write into bank.json's `address_and_balances`.
 /// [balances]
 /// "lig1real..." = "100000000000000000"
 /// ```
@@ -195,7 +195,7 @@ struct Substitutions {
     #[serde(default)]
     addresses: BTreeMap<String, String>,
     /// Optional balance override map. Key is the post-substitution
-    /// address; value is the nano-LGT balance as a decimal string
+    /// address; value is the nano-AVOW balance as a decimal string
     /// (matches the bank module's serde shape for `Amount`).
     #[serde(default)]
     balances: BTreeMap<String, String>,
@@ -496,7 +496,7 @@ mod tests {
     fn balance_overrides_targets_only_gas_token_config() {
         let mut bank = serde_json::json!({
             "gas_token_config": {
-                "token_name": "$LGT",
+                "token_name": "$AVOW",
                 "address_and_balances": [
                     ["lig1real", "1000"],
                     ["lig1other", "500"]

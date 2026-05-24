@@ -159,7 +159,7 @@ set of per-module genesis JSONs (today: `bank.json`, `accounts.json`,
    share of attestation fees).
 5. Fee constants: `ATTESTOR_SET_FEE`, `SCHEMA_REGISTRATION_FEE`,
    `ATTESTATION_FEE`. Devnet-1 genesis values (0.05 / 0.1 / 0.0001
-   $LGT, expressed in nano-LGT at 9 decimals in
+   $AVOW, expressed in nano-AVOW at 9 decimals in
    `devnet-1/genesis/attestation.json`) unless agreed otherwise on the
    call.
 

@@ -95,12 +95,12 @@ Two modules will land in v1 to formalise upgrade flow:
 
 On-chain proposals + voting + execution for **parameter** changes. Initial scope:
 
-- `attestation_fee`, `schema_registration_fee`, `attestor_set_fee` (fees in `$LGT`)
+- `attestation_fee`, `schema_registration_fee`, `attestor_set_fee` (fees in `$AVOW`)
 - `max_builder_bps` cap (default 5000 = 50%)
 - Treasury address
 - Later: attestor set rotation policy, slashing thresholds (when [`disputes`](https://github.com/ligate-io/ligate-chain/issues/51) lands)
 
-Mechanism: a proposal includes the new value; `$LGT` stakers vote; if it passes the configured threshold, the parameter updates **without a binary upgrade**. The mechanism for this is the v0 hygiene work tracked in [#40](https://github.com/ligate-io/ligate-chain/issues/40) — moving governance-tunable constants from compile-time `const` to on-chain state — which is a precondition for governance to do anything.
+Mechanism: a proposal includes the new value; `$AVOW` stakers vote; if it passes the configured threshold, the parameter updates **without a binary upgrade**. The mechanism for this is the v0 hygiene work tracked in [#40](https://github.com/ligate-io/ligate-chain/issues/40) — moving governance-tunable constants from compile-time `const` to on-chain state — which is a precondition for governance to do anything.
 
 Governance proposals are **not** hard forks. They don't change `CHAIN_HASH`. Existing signatures still verify. The chain id stays the same. They're the chain saying "use this new value going forward" without anyone restarting their node.
 

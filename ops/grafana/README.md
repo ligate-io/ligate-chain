@@ -19,7 +19,7 @@ these JSON files to restore or replicate.
 | [`ligate-node.json`](ligate-node.json) | `ligate-node` | Chain engineers (DA pipeline + sequencer state machine) | [/d/ligate-node](https://ligate.grafana.net/d/ligate-node) |
 | [`ligate-operator.json`](ligate-operator.json) | `ligate-operator` | 24/7 on-call (host health + service SLA) | [/d/ligate-operator](https://ligate.grafana.net/d/ligate-operator) |
 | [`ligate-investor.json`](ligate-investor.json) | `ligate-investor` | Partners + investors (chain growth + token economy) | [/d/ligate-investor](https://ligate.grafana.net/d/ligate-investor) |
-| [`ligate-devnet-1-cost.json`](ligate-devnet-1-cost.json) | `ligate-devnet-1-cost` | Money-flow watching (TIA + LGT + GCP burn) | [/d/ligate-devnet-1-cost](https://ligate.grafana.net/d/ligate-devnet-1-cost) |
+| [`ligate-devnet-1-cost.json`](ligate-devnet-1-cost.json) | `ligate-devnet-1-cost` | Money-flow watching (TIA + AVOW + GCP burn) | [/d/ligate-devnet-1-cost](https://ligate.grafana.net/d/ligate-devnet-1-cost) |
 
 ## Ownership boundaries
 
@@ -42,13 +42,13 @@ headroom** stat row sized against the current e2-standard-2 shape
 
 **`ligate-investor` (Public-facing).** How is the chain growing?
 Cumulative totals (txs, wallets, schemas, attestor sets, attestations),
-LGT supply and treasury balance, top-10 LGT holders, growth-over-time
+AVOW supply and treasury balance, top-10 AVOW holders, growth-over-time
 charts (new wallets/day, tx rate stacked by kind), DA finality (last
 1h), block cadence summary. No process metrics, no host noise.
 
 **`ligate-devnet-1-cost` (Money flow).** What's the chain costing? TIA
 balance + draw-down rate against the sequencer's Celestia wallet,
-faucet LGT balance + runway estimate, daily drips counter, plus the
+faucet AVOW balance + runway estimate, daily drips counter, plus the
 DA + infra spend section (TIA burned cumulative + per-hour, GCP daily
 burn time series, GCP by-service + by-VM bar gauges, GCP month-to-date
 stat). Single dashboard for everyone watching the burn.

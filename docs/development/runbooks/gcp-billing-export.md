@@ -5,7 +5,7 @@
 > as a second datasource alongside the existing Prometheus one. After
 > setup, the chain Grafana dashboard can show a "Monthly burn rate"
 > alongside `ligate_da_tia_burned_nano_estimate_total` (TIA spend) and
-> `ligate_protocol_treasury_balance_nano` (LGT on treasury) for full
+> `ligate_protocol_treasury_balance_nano` (AVOW on treasury) for full
 > cost + economy visibility.
 
 ## Why this lives outside `ligate-node`

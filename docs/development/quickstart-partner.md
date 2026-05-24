@@ -13,7 +13,7 @@ If you're building the protocol (chain core, modules, SDK), [`docs/protocol/atte
 | Item | Source |
 |---|---|
 | `ligate-cli` binary | Pre-built tarball from [`ligate-io/ligate-cli` releases](https://github.com/ligate-io/ligate-cli/releases), or `cargo install --git` (fallback). [Install docs](https://github.com/ligate-io/ligate-cli#install). |
-| A ligate address with `$LGT` | Generate locally + claim from the devnet faucet. Steps 1–3. |
+| A ligate address with `$AVOW` | Generate locally + claim from the devnet faucet. Steps 1–3. |
 | Optional: an attestor set you trust | The canonical Themisra set ships with devnet-1. Step 4 documents how to discover it. |
 
 You do NOT need:
@@ -69,13 +69,13 @@ lig1u8z2rxh6ymjwkqsasme64f5kfphtfm2kf4kkn0clusfpr34amezsp5j7yp
 
 ---
 
-## 3. Get `$LGT` from the faucet
+## 3. Get `$AVOW` from the faucet
 
 ⚠ **Preview**: `faucet.ligate.io` infrastructure is on the pre-devnet checklist. Until then, the flow uses the same endpoint from a localnet node.
 
 ```bash
 $ ligate faucet $(ligate keys show first)
-dripped 1 $LGT to lig1u8z2rxh6ymjwkqsasme64f5kfphtfm2kf4kkn0clusfpr34amezsp5j7yp
+dripped 1 $AVOW to lig1u8z2rxh6ymjwkqsasme64f5kfphtfm2kf4kkn0clusfpr34amezsp5j7yp
 tx_hash: ltx1qqu226ttcgnq8rv5x0klvxalv9pkk2hwkj8s8w834a4p7tgznvts0sekwe
 ```
 
@@ -84,7 +84,7 @@ Verify the balance arrived (the faucet waits for chain inclusion before returnin
 ```bash
 $ ligate balance $(ligate keys show first) \
     --token-id token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2xxx3vs0y07u7
-lig1u8z2rxh6ymjwkqsasme64f5kfphtfm2kf4kkn0clusfpr34amezsp5j7yp: 1.000000000 $LGT (1000000000 nano)
+lig1u8z2rxh6ymjwkqsasme64f5kfphtfm2kf4kkn0clusfpr34amezsp5j7yp: 1.000000000 $AVOW (1000000000 nano)
 ```
 
 Rate limit: one drip per address per 24 hours on devnet-1. If you need more for testing, ask in `#dev` (Discord pending) or run a localnet node.

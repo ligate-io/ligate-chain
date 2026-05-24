@@ -86,10 +86,10 @@ type SovAddress = <S as Spec>::Address;
 /// the SDK uses at different layers.
 const CHAIN_ID_NUMERIC: u64 = 4242;
 
-/// Per-tx fee envelope for test txs (nano-LGT). Generous enough that
+/// Per-tx fee envelope for test txs (nano-AVOW). Generous enough that
 /// no test failure is fee-related; the dev key in
-/// `devnet/genesis/bank.json` has 10_000_000_000_000 nano-LGT
-/// (10,000 LGT), plenty of headroom.
+/// `devnet/genesis/bank.json` has 10_000_000_000_000 nano-AVOW
+/// (10,000 AVOW), plenty of headroom.
 const TEST_MAX_FEE_NANO: u128 = 100_000_000;
 
 /// Localnet dev key per `devnet/local-dev-key.json`. Committed to the

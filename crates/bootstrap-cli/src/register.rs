@@ -47,10 +47,10 @@ type ChainRuntime = ligate_stf::runtime::Runtime<S>;
 type SovPrivateKey = <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey;
 type SovAddress = <S as Spec>::Address;
 
-/// Default per-tx fee envelope for registration calls (nano-LGT).
+/// Default per-tx fee envelope for registration calls (nano-AVOW).
 /// Generous so a registration never fails for fee reasons under devnet
 /// conditions. Operators can override via `--max-fee-nano`.
-pub const DEFAULT_MAX_FEE_NANO: u128 = 200_000_000; // 0.2 $LGT
+pub const DEFAULT_MAX_FEE_NANO: u128 = 200_000_000; // 0.2 $AVOW
 
 /// Inputs to [`run`]: everything needed to drive the ceremony.
 pub struct RegisterParams<'a> {
@@ -68,7 +68,7 @@ pub struct RegisterParams<'a> {
     pub chain_hash: [u8; 32],
     /// Chain RPC URL (with or without `/v1`; idempotent append).
     pub rpc_url: String,
-    /// Max fee per tx in nano-LGT. Defaults to [`DEFAULT_MAX_FEE_NANO`].
+    /// Max fee per tx in nano-AVOW. Defaults to [`DEFAULT_MAX_FEE_NANO`].
     pub max_fee_nano: Option<u128>,
 }
 

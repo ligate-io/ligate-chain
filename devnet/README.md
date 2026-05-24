@@ -58,14 +58,14 @@ the boot story narrow:
 | Role | Address | Notes |
 |---|---|---|
 | Treasury / bank admin | `lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt` | Receives attestation fees. |
-| Initial sequencer (rollup) | same | Locks 5 000 LGT collateral |
+| Initial sequencer (rollup) | same | Locks 5 000 AVOW collateral |
 | Initial sequencer (DA) | `0000…0000` (32 bytes hex) | DA-layer address (Celestia / MockDa). Unrelated to Ligate accounts; lives in a different cryptographic namespace. |
-| Initial attester | same | Bonds 1 000 LGT |
-| Initial prover | same | Bonds 1 000 LGT |
+| Initial attester | same | Bonds 1 000 AVOW |
+| Initial prover | same | Bonds 1 000 AVOW |
 | Operator reward addr | same | |
 | Prover reward addr | same | |
 
-The two other accounts seeded with `$LGT`:
+The two other accounts seeded with `$AVOW`:
 
 - `lig1d0vqhkvnlaga6xe8rfed900qxnzhqnmhweqe3rxqdexp56lvqv7` — dev wallet 1
 - `lig1njjerykggkxvwa55x4lupkl67qnxsx9rwqxpuq4s3cmh7vmn7kx` — dev wallet 2
@@ -87,15 +87,15 @@ authentication is tracked separately in
 [#72](https://github.com/ligate-io/ligate-chain/issues/72) and
 lands before any retail wallet UX.
 
-## $LGT layout
+## $AVOW layout
 
 - 9 decimals (Solana-style nano units).
-- Genesis supply: 1,000,000,000 LGT (1B), per
+- Genesis supply: 1,000,000,000 AVOW (1B), per
   `devnet/genesis/bank.json`:
-  - Bootstrap (`lig1h72nh5c7…`): 899,990,000 LGT (~900M).
-  - Demo #1 (`lig1d0vqhk…`): 50,000,000 LGT (50M).
-  - Demo #2 (`lig1njjery…`): 50,000,000 LGT (50M).
-  - Local dev key (`lig132yw8ht…`): 10,000 LGT.
+  - Bootstrap (`lig1h72nh5c7…`): 899,990,000 AVOW (~900M).
+  - Demo #1 (`lig1d0vqhk…`): 50,000,000 AVOW (50M).
+  - Demo #2 (`lig1njjery…`): 50,000,000 AVOW (50M).
+  - Local dev key (`lig132yw8ht…`): 10,000 AVOW.
 - `lgt_token_id` is the deterministic `config_gas_token_id()` from
   `constants.toml`. The genesis loader cross-checks this against
   `attestation.lgt_token_id` and refuses to boot on mismatch.

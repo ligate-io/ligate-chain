@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- **Token symbol renamed `$LGT` → `$AVOW`**. New ticker semantically matches what the chain actually does (every attestation is an avowal). 4-char ticker, unclaimed across CoinGecko/CoinMarketCap/ETH/BSC/Solana. Concrete substitutions: `$LGT` prose → `$AVOW`; on-chain `bank.gas_token_config.token_name` flips from `"LGT"` to `"AVOW"` in `devnet/genesis/bank.json` + `devnet-1/genesis/bank.json`; base-unit references `ulgt` → `uavow`, `nano-LGT` → `nano-AVOW`. Internal field names (`lgt_token_id`, error variant `LgtTokenIdMismatch`, HTTP path `/v1/modules/attestation/state/lgt-token-id`) are preserved deliberately — the rename is a **token-symbol rename only**, not an internal identifier rename. The chain stays **Ligate Chain**; the company stays **Ligate Labs**. Brand identity does not change. Touches 35 files across `constants.toml`, `crates/`, `devnet*/`, `docs/`, `ops/grafana/`, `README.md`, `SECURITY.md`. **Breaking for `chain_hash`**: this changes `devnet-1/genesis/bank.json`, which is part of the genesis hash; existing `ligate-devnet-1` runtime state cannot deserialize against this binary. A new devnet id (likely `ligate-devnet-2`) launches from clean genesis with `uavow` as the base denom. Mainnet is not yet live, so no migration concern there. Cross-repo follow-ups tracked in #457: `ligate-marketing#205`, `ligate-io/docs#23`, `ligate-research#100`, `ligate-api#68`, `ligate-js#41`, `ligate-cli#39`, `ligate-explorer#54`, `themisra-dashboard#33`. Closes [#457](https://github.com/ligate-io/ligate-chain/issues/457).
+
 ## [0.2.14] - 2026-05-23
 
 Cost telemetry gets meaningfully accurate. `ligate_da_tia_burned_nano_estimate_total` now bumps by a per-blob estimate derived from the live Mocha gas price (already polled by the Celestia adapter) times a calibrated per-blob gas usage, instead of a fixed 300_000 nanoTIA constant. Plumbing release; no behaviour shift, `chain_hash` unchanged.
