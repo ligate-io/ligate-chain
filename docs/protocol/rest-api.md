@@ -167,7 +167,7 @@ The `/v1/sequencer/unstable/events` surface is **unstable by design**: it is the
 |---|---|---|
 | `/v1/rollup/info` | GET | Chain identity: `chain_id` (Cosmos-style ladder string), `chain_hash` (hex, 64 chars), and `version` (binary `CARGO_PKG_VERSION`). See [#181](https://github.com/ligate-io/ligate-chain/issues/181). |
 | `/v1/rollup/sync-status` | GET | Whether the node is caught up to the DA layer |
-| `/v1/rollup/base-fee-per-gas/latest` | GET | The current per-gas base fee, denominated in `$LGT` |
+| `/v1/rollup/base-fee-per-gas/latest` | GET | The current per-gas base fee, denominated in `$AVOW` |
 | `/v1/rollup/constants` | GET | Governance-tunable constants (current values; see [#40](https://github.com/ligate-io/ligate-chain/issues/40) for the constants-to-state migration) |
 | `/v1/rollup/schema` | GET | **Universal-wallet TX schema**: type/template metadata for canonical Borsh encoding of every `CallMessage` variant. Not the OpenAPI spec; that is at `/v1/openapi-v3.json`. |
 | `/v1/rollup/addresses/{credential_id}/dedup` | GET | Account dedup state for a given credential id (multi-credential accounts) |
@@ -280,12 +280,12 @@ curl 'http://127.0.0.1:12346/v1/modules/attestation/attestations/lsc1...:lph1...
 
 | Path | Returns |
 |---|---|
-| `GET /v1/modules/attestation/state/attestation-fee` | Current per-attestation fee in `$LGT` nanos |
+| `GET /v1/modules/attestation/state/attestation-fee` | Current per-attestation fee in `$AVOW` nanos |
 | `GET /v1/modules/attestation/state/schema-registration-fee` | One-time fee to register a schema |
 | `GET /v1/modules/attestation/state/attestor-set-fee` | One-time fee to register an attestor set |
 | `GET /v1/modules/attestation/state/treasury` | Treasury address that receives non-routed fees |
-| `GET /v1/modules/attestation/state/lgt-token-id` | The token id used for fees |
-| `GET /v1/modules/attestation/state/total-treasury-collected` | Cumulative `$LGT` to treasury |
+| `GET /v1/modules/attestation/state/avow-token-id` | The token id used for fees |
+| `GET /v1/modules/attestation/state/total-treasury-collected` | Cumulative `$AVOW` to treasury |
 | `GET /v1/modules/attestation/state/schemas` | Schemas state-map metadata |
 | `GET /v1/modules/attestation/state/schemas/items/{key}` | A schema by raw state-map key |
 | `GET /v1/modules/attestation/state/attestor-sets` | Attestor-sets state-map metadata |
@@ -303,7 +303,7 @@ The attestation `StateMap<AttestationId, Attestation<S>>` is keyed by a 64-byte 
 
 The full list of derived queries (by schema, by submitter, by time range, top-N, search) lives in the indexer ([#91](https://github.com/ligate-io/ligate-chain/issues/91)). See [`attestation-v0.md` §Query RPC](attestation-v0.md#query-rpc-read-path) for the architectural rationale.
 
-## 5. `sov-bank` module (`$LGT` and other tokens)
+## 5. `sov-bank` module (`$AVOW` and other tokens)
 
 Mounted at `/v1/modules/bank`. Five custom routes plus four auto-mounted state endpoints.
 
@@ -312,12 +312,12 @@ Mounted at `/v1/modules/bank`. Five custom routes plus four auto-mounted state e
 | Path | Returns |
 |---|---|
 | `GET /v1/modules/bank/tokens` | Find a token id by name (query param `?name=...`) |
-| `GET /v1/modules/bank/tokens/gas_token` | The chain's gas token (`$LGT`) metadata |
-| `GET /v1/modules/bank/tokens/gas_token/balances/{address}` | A specific holder's `$LGT` balance |
+| `GET /v1/modules/bank/tokens/gas_token` | The chain's gas token (`$AVOW`) metadata |
+| `GET /v1/modules/bank/tokens/gas_token/balances/{address}` | A specific holder's `$AVOW` balance |
 | `GET /v1/modules/bank/tokens/{token_id}/balances/{address}` | A specific holder's balance for a non-gas token |
 | `GET /v1/modules/bank/tokens/{token_id}/total-supply` | Total supply of a token |
 
-`$LGT` uses 9 decimals on the wire (smallest unit = `1 nano = 0.000000001 $LGT`). All amounts in this API are base units (`u64` nanos).
+`$AVOW` uses 9 decimals on the wire (smallest unit = `1 nano = 0.000000001 $AVOW`). All amounts in this API are base units (`u64` nanos).
 
 ### Auto-mounted state endpoints
 
@@ -330,7 +330,7 @@ Mounted at `/v1/modules/bank`. Five custom routes plus four auto-mounted state e
 
 ### Examples
 
-`$LGT` balance:
+`$AVOW` balance:
 
 ```bash
 curl http://127.0.0.1:12346/v1/modules/bank/tokens/gas_token/balances/lig1...
@@ -375,8 +375,8 @@ Bonded attesters, bonded challengers, finality params, slashing pools.
 | `GET /v1/modules/attester-incentives/state/bad-transition-pool/items/{key}` | One slashable transition by key |
 | `GET /v1/modules/attester-incentives/state/light-client-finalized-height` | Last height the light client finalized |
 | `GET /v1/modules/attester-incentives/state/maximum-attested-height` | Highest height attested by anyone |
-| `GET /v1/modules/attester-incentives/state/minimum-attester-bond` | Minimum `$LGT` bond required to attest |
-| `GET /v1/modules/attester-incentives/state/minimum-challenger-bond` | Minimum `$LGT` bond required to challenge |
+| `GET /v1/modules/attester-incentives/state/minimum-attester-bond` | Minimum `$AVOW` bond required to attest |
+| `GET /v1/modules/attester-incentives/state/minimum-challenger-bond` | Minimum `$AVOW` bond required to challenge |
 | `GET /v1/modules/attester-incentives/state/reward-burn-rate` | Fraction of rewards burned vs paid |
 | `GET /v1/modules/attester-incentives/state/rollup-finality-period` | Finality window in slots |
 
@@ -387,7 +387,7 @@ Bonded attesters, bonded challengers, finality params, slashing pools.
 | `GET /v1/modules/prover-incentives/state/bonded-provers` | Bonded provers state-map |
 | `GET /v1/modules/prover-incentives/state/bonded-provers/items/{key}` | One bonded prover by address |
 | `GET /v1/modules/prover-incentives/state/last-claimed-reward` | Most recent claimed prover reward |
-| `GET /v1/modules/prover-incentives/state/minimum-bond` | Minimum `$LGT` bond required to prove |
+| `GET /v1/modules/prover-incentives/state/minimum-bond` | Minimum `$AVOW` bond required to prove |
 | `GET /v1/modules/prover-incentives/state/proving-penalty` | Penalty applied for late or missing proofs |
 
 ### `operator-incentives` (1 endpoint)
@@ -402,7 +402,7 @@ Bonded attesters, bonded challengers, finality params, slashing pools.
 |---|---|
 | `GET /v1/modules/sequencer-registry/state/known-sequencers` | Registered sequencers state-map |
 | `GET /v1/modules/sequencer-registry/state/known-sequencers/items/{key}` | One sequencer's record |
-| `GET /v1/modules/sequencer-registry/state/minimum-bond` | Minimum `$LGT` bond to register as sequencer |
+| `GET /v1/modules/sequencer-registry/state/minimum-bond` | Minimum `$AVOW` bond to register as sequencer |
 | `GET /v1/modules/sequencer-registry/state/preferred-sequencer` | Genesis-preferred sequencer address |
 
 ### `uniqueness` (4 endpoints)

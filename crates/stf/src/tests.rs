@@ -82,7 +82,7 @@ mod genesis_loader {
     ///
     /// The 9 SDK module configs come from
     /// [`HighLevelOptimisticGenesisConfig::generate`]. The
-    /// attestation config is hand-built with `lgt_token_id` set to
+    /// attestation config is hand-built with `avow_token_id` set to
     /// the bank's gas-token id, satisfying [`validate_config`].
     fn happy_config() -> GenesisConfig<TestSpec> {
         type S = TestSpec;
@@ -94,7 +94,7 @@ mod genesis_loader {
 
         let attestation = AttestationConfig::<S> {
             treasury: attester_addr,
-            lgt_token_id: config_gas_token_id(),
+            avow_token_id: config_gas_token_id(),
             attestation_fee: Amount(0),
             schema_registration_fee: Amount(0),
             attestor_set_fee: Amount(0),
@@ -163,20 +163,20 @@ mod genesis_loader {
     }
 
     #[test]
-    fn validate_rejects_lgt_token_id_mismatch() {
+    fn validate_rejects_avow_token_id_mismatch() {
         let mut cfg = happy_config();
         // Any non-default TokenId works; we just need it to differ
         // from `config_gas_token_id()`. `[7; 32]` is unrelated to
         // both the gas token's deterministic id and any token a real
         // genesis would mint.
-        cfg.attestation.lgt_token_id = TokenId::from([7u8; 32]);
+        cfg.attestation.avow_token_id = TokenId::from([7u8; 32]);
 
         match validate_config(&cfg) {
-            Err(GenesisError::LgtTokenIdMismatch { attestation, bank }) => {
+            Err(GenesisError::AvowTokenIdMismatch { attestation, bank }) => {
                 assert_ne!(attestation, bank);
                 assert_eq!(bank, config_gas_token_id().to_string());
             }
-            other => panic!("expected LgtTokenIdMismatch, got {other:?}"),
+            other => panic!("expected AvowTokenIdMismatch, got {other:?}"),
         }
     }
 
@@ -191,10 +191,10 @@ mod genesis_loader {
         // The bank's gas-token id is injected at apply-time via
         // `config_gas_token_id()`, so we can't compare bank configs
         // byte-for-byte. The cross-module invariant we *do* care
-        // about is that attestation.lgt_token_id survived the JSON
+        // about is that attestation.avow_token_id survived the JSON
         // round-trip and still matches the bank's id.
-        assert_eq!(loaded.attestation.lgt_token_id, original.attestation.lgt_token_id);
-        assert_eq!(loaded.attestation.lgt_token_id, config_gas_token_id());
+        assert_eq!(loaded.attestation.avow_token_id, original.attestation.avow_token_id);
+        assert_eq!(loaded.attestation.avow_token_id, config_gas_token_id());
     }
 
     #[test]

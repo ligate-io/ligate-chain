@@ -7,7 +7,7 @@
 //!   JSONs, without booting the chain. Fast feedback for operators
 //!   iterating on a hand-crafted bundle. Catches:
 //!   - Schema drift in any per-module config
-//!   - The cross-module `attestation.lgt_token_id == bank.gas_token_id` invariant
+//!   - The cross-module `attestation.avow_token_id == bank.gas_token_id` invariant
 //!   - The 7 typed `GenesisError` variants for `AttestationConfig`
 //!     (#175): empty members, invalid threshold, duplicate set,
 //!     unknown set reference, duplicate schema, orphan routing,
@@ -185,7 +185,7 @@ enum KeysAction {
 ///
 /// # Optional: override token balances. Key is the post-substitution
 /// # address (i.e. the value side of [addresses]); value is the new
-/// # nano-LGT balance to write into bank.json's `address_and_balances`.
+/// # nano-AVOW balance to write into bank.json's `address_and_balances`.
 /// [balances]
 /// "lig1real..." = "100000000000000000"
 /// ```
@@ -195,7 +195,7 @@ struct Substitutions {
     #[serde(default)]
     addresses: BTreeMap<String, String>,
     /// Optional balance override map. Key is the post-substitution
-    /// address; value is the nano-LGT balance as a decimal string
+    /// address; value is the nano-AVOW balance as a decimal string
     /// (matches the bank module's serde shape for `Amount`).
     #[serde(default)]
     balances: BTreeMap<String, String>,
@@ -292,14 +292,14 @@ fn run_verify(dir: &Path, da: DaFlavor) -> anyhow::Result<()> {
     // The `seq_da_address` field is `<S::Da as DaSpec>::Address`; its
     // serde shape depends on the chosen DA. Validate against whichever
     // spec matches the operator's deployment target.
-    let (treasury, lgt_token_id, n_sets, n_schemas) = match da {
+    let (treasury, avow_token_id, n_sets, n_schemas) = match da {
         DaFlavor::Celestia => {
             let cfg = create_genesis_config::<CelestiaSpec>(&paths).with_context(|| {
                 format!("genesis bundle at {} failed Celestia-DA validation", dir.display())
             })?;
             (
                 cfg.attestation.treasury.to_string(),
-                cfg.attestation.lgt_token_id.to_string(),
+                cfg.attestation.avow_token_id.to_string(),
                 cfg.attestation.initial_attestor_sets.len(),
                 cfg.attestation.initial_schemas.len(),
             )
@@ -310,7 +310,7 @@ fn run_verify(dir: &Path, da: DaFlavor) -> anyhow::Result<()> {
             })?;
             (
                 cfg.attestation.treasury.to_string(),
-                cfg.attestation.lgt_token_id.to_string(),
+                cfg.attestation.avow_token_id.to_string(),
                 cfg.attestation.initial_attestor_sets.len(),
                 cfg.attestation.initial_schemas.len(),
             )
@@ -319,7 +319,7 @@ fn run_verify(dir: &Path, da: DaFlavor) -> anyhow::Result<()> {
 
     eprintln!("verify: OK (DA={:?})", da);
     eprintln!("  treasury: {}", treasury);
-    eprintln!("  lgt_token_id: {}", lgt_token_id);
+    eprintln!("  avow_token_id: {}", avow_token_id);
     eprintln!("  initial_attestor_sets: {}", n_sets);
     eprintln!("  initial_schemas: {}", n_schemas);
     Ok(())
@@ -496,7 +496,7 @@ mod tests {
     fn balance_overrides_targets_only_gas_token_config() {
         let mut bank = serde_json::json!({
             "gas_token_config": {
-                "token_name": "$LGT",
+                "token_name": "$AVOW",
                 "address_and_balances": [
                     ["lig1real", "1000"],
                     ["lig1other", "500"]

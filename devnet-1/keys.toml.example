@@ -41,7 +41,7 @@
 #   - sequencer registry's `seq_rollup_address`
 #   - operator-incentives `reward_address`
 #   - bank `treasury` + minting authority (admins)
-#   - 900M nano-LGT initial balance
+#   - 900M nano-AVOW initial balance
 #
 # For real devnet-1 deploy, you can either:
 #   (a) Map this single placeholder to ONE real address and reuse it
@@ -55,13 +55,13 @@
 # the tool then hand-edit the four JSONs that reference this address.
 "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "<YOUR_OPERATOR_ADDRESS>"
 
-# Demo wallet 1 (placeholder ships with 50M LGT). Optional; you can:
+# Demo wallet 1 (placeholder ships with 50M AVOW). Optional; you can:
 #   - Substitute with a real demo / faucet-source address
 #   - Or set `balances` below to 0 to deactivate it without
 #     substituting
 "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "<YOUR_DEMO_WALLET_1>"
 
-# Demo wallet 2 (placeholder ships with 50M LGT). Same notes as above.
+# Demo wallet 2 (placeholder ships with 50M AVOW). Same notes as above.
 "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "<YOUR_DEMO_WALLET_2>"
 
 # Celestia DA wallet that signs blob-submission transactions. The
@@ -77,28 +77,28 @@
 "celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as" = "<YOUR_CELESTIA_DA_ADDRESS>"
 
 # ---------------------------------------------------------------------
-# [balances]: optional override of nano-LGT balances post-substitution.
+# [balances]: optional override of nano-AVOW balances post-substitution.
 # Key is the POST-substitution address (the value side of [addresses]).
 # Value is the new balance as a decimal string (matches `Amount` shape
 # in `bank.json`).
 #
 # Defaults from the placeholder genesis (post-#324, 1B total supply):
-#   bootstrap address: 900_000_000_000_000_000 (900M LGT)
-#   demo wallet 1:      50_000_000_000_000_000 (50M LGT)
-#   demo wallet 2:      50_000_000_000_000_000 (50M LGT)
+#   bootstrap address: 900_000_000_000_000_000 (900M AVOW)
+#   demo wallet 1:      50_000_000_000_000_000 (50M AVOW)
+#   demo wallet 2:      50_000_000_000_000_000 (50M AVOW)
 #
 # Bond requirements at genesis (from `sequencer_registry.json`,
 # `prover_incentives.json`, `attester_incentives.json`):
-#   sequencer bond: 5_000_000_000_000 nano-LGT (5 LGT)
+#   sequencer bond: 5_000_000_000_000 nano-AVOW (5 AVOW)
 #
 # The bootstrap address must hold at least the sequencer bond + some
 # slack for fees. If you split roles, ensure each role's address holds
 # its bond requirement.
 # ---------------------------------------------------------------------
 [balances]
-# "<YOUR_OPERATOR_ADDRESS>" = "900000000000000000"   # 900M nano-LGT
-# "<YOUR_DEMO_WALLET_1>"    = "50000000000000000"    # 50M  nano-LGT
-# "<YOUR_DEMO_WALLET_2>"    = "50000000000000000"    # 50M  nano-LGT
+# "<YOUR_OPERATOR_ADDRESS>" = "900000000000000000"   # 900M nano-AVOW
+# "<YOUR_DEMO_WALLET_1>"    = "50000000000000000"    # 50M  nano-AVOW
+# "<YOUR_DEMO_WALLET_2>"    = "50000000000000000"    # 50M  nano-AVOW
 
 # ---------------------------------------------------------------------
 # Out of scope for this file (configured separately):

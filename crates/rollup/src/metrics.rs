@@ -968,8 +968,8 @@ fn protocol_treasury_balance_nano() -> &'static IntGauge {
     M.get_or_init(|| {
         register_int_gauge!(
             "ligate_protocol_treasury_balance_nano",
-            "Current LGT balance of the protocol treasury address, in nanoLGT \
-             (1 LGT = 1_000_000_000 nanoLGT). Sourced from the api's \
+            "Current AVOW balance of the protocol treasury address, in nanoAVOW \
+             (1 AVOW = 1_000_000_000 nanoAVOW). Sourced from the api's \
              `/v1/stats/totals.treasury_balance_nano`."
         )
         .expect("gauge registers once")
@@ -981,7 +981,7 @@ fn protocol_total_supply_nano() -> &'static IntGauge {
     M.get_or_init(|| {
         register_int_gauge!(
             "ligate_protocol_total_supply_nano",
-            "Total LGT supply, in nanoLGT. Genesis-fixed at 1B LGT for devnet-1; this gauge \
+            "Total AVOW supply, in nanoAVOW. Genesis-fixed at 1B AVOW for devnet-1; this gauge \
              tracks the chain's reported value so a future emission policy is auto-picked-up."
         )
         .expect("gauge registers once")
@@ -1107,7 +1107,7 @@ pub async fn sample_economy(api_url: &str) {
 }
 
 /// Spawn the protocol-economy poller. Polls `api_url` every
-/// `interval` (default 60s) and updates the LGT-economy gauges.
+/// `interval` (default 60s) and updates the AVOW-economy gauges.
 /// Fire-and-forget; lives until the runtime drops. Safe before the
 /// api is reachable — early polls just skip-update until the network
 /// path comes up.

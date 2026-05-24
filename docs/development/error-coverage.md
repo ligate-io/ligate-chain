@@ -40,7 +40,7 @@ All in `crates/stf/src/genesis_config.rs`. Tests in `crates/stf/src/tests.rs::ge
 | `Io` | `create_genesis_config_surfaces_io_error_with_path` |
 | `ParseJson` | `create_genesis_config_surfaces_parse_error_with_path` |
 | `MissingGasToken` | `validate_rejects_missing_gas_token` |
-| `LgtTokenIdMismatch` | `validate_rejects_lgt_token_id_mismatch` |
+| `AvowTokenIdMismatch` | `validate_rejects_avow_token_id_mismatch` |
 | `InitialAttestorSetEmpty` | `validate_rejects_initial_attestor_set_empty_members` |
 | `InitialAttestorSetInvalidThreshold` | `validate_rejects_initial_attestor_set_zero_threshold` + `validate_rejects_initial_attestor_set_threshold_above_members` |
 | `InitialAttestorSetDuplicate` | `validate_rejects_initial_attestor_set_duplicate` |
@@ -70,7 +70,7 @@ Fires when a `Schema` references an `AttestorSetId` that no longer exists in `St
 
 ### `AttestationError::ChainNotConfigured`
 
-Fires when the attestation module is invoked before `seed_from_config` has run (i.e., `lgt_token_id` or `treasury` is `None` in state). Every test path goes through `TestRunner` which always seeds via genesis, so this code path isn't reachable from `TransactionTestCase`. Two ways to fire it would be:
+Fires when the attestation module is invoked before `seed_from_config` has run (i.e., `avow_token_id` or `treasury` is `None` in state). Every test path goes through `TestRunner` which always seeds via genesis, so this code path isn't reachable from `TransactionTestCase`. Two ways to fire it would be:
 
 1. A direct module-level unit test that constructs an `AttestationModule` without genesis seeding and calls a handler. Plumbing-heavy because it requires building a `Context` + `TxState` by hand.
 2. An end-to-end test that boots a runtime without an `AttestationConfig` (which currently fails at `validate_config` time, not at handler time).

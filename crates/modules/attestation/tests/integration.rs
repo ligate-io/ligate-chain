@@ -9,7 +9,7 @@
 //! `/tmp/attestation_tests_v0_3.rs` for reference: validation
 //! invariants on the registration paths, fee splitting on
 //! [`SubmitAttestation`], and bank-balance integration that proves
-//! `$LGT` actually moves.
+//! `$AVOW` actually moves.
 //!
 //! [`SubmitAttestation`]: attestation::CallMessage::SubmitAttestation
 
@@ -32,10 +32,10 @@ type S = sov_test_utils::TestSpec;
 type RT = AttestationRuntime<S>;
 
 /// Per-test scaffolding: a `TestRunner` plus the test users genesis
-/// allocated `$LGT` to.
+/// allocated `$AVOW` to.
 struct TestEnv {
     runner: TestRunner<RT, S>,
-    /// Submitter for attestation txs. Holds enough `$LGT` to cover
+    /// Submitter for attestation txs. Holds enough `$AVOW` to cover
     /// all the fee-charging paths.
     submitter: TestUser<S>,
     /// Treasury address; receives the treasury share of every fee.
@@ -43,9 +43,9 @@ struct TestEnv {
     /// can deposit into it), which means the genesis allocation
     /// gives it a non-zero balance.
     treasury: <S as sov_modules_api::Spec>::Address,
-    /// `$LGT` token id. Same value across all tests, comes from the
+    /// `$AVOW` token id. Same value across all tests, comes from the
     /// SDK's gas-token convention via `config_gas_token_id()`.
-    lgt_token_id: TokenId,
+    avow_token_id: TokenId,
 }
 
 /// Build a fresh `TestEnv` with the given attestation fee values.
@@ -74,11 +74,11 @@ fn setup_with_initial(
     let treasury_user = genesis_config.additional_accounts()[1].clone();
     let treasury = treasury_user.address();
 
-    let lgt_token_id = config_gas_token_id();
+    let avow_token_id = config_gas_token_id();
 
     let attestation_config = AttestationConfig::<S> {
         treasury,
-        lgt_token_id,
+        avow_token_id,
         attestation_fee,
         schema_registration_fee,
         attestor_set_fee,
@@ -91,7 +91,7 @@ fn setup_with_initial(
 
     let runner = TestRunner::new_with_genesis(genesis.into_genesis_params(), RT::default());
 
-    TestEnv { runner, submitter, treasury, lgt_token_id }
+    TestEnv { runner, submitter, treasury, avow_token_id }
 }
 
 /// Like [`setup_with_initial`] but lets the test override the
@@ -106,11 +106,11 @@ fn setup_with_cap(initial_attestor_sets: Vec<InitialAttestorSet>, max_builder_bp
     let treasury_user = genesis_config.additional_accounts()[1].clone();
     let treasury = treasury_user.address();
 
-    let lgt_token_id = config_gas_token_id();
+    let avow_token_id = config_gas_token_id();
 
     let attestation_config = AttestationConfig::<S> {
         treasury,
-        lgt_token_id,
+        avow_token_id,
         attestation_fee: Amount::ZERO,
         schema_registration_fee: Amount::ZERO,
         attestor_set_fee: Amount::ZERO,
@@ -121,7 +121,7 @@ fn setup_with_cap(initial_attestor_sets: Vec<InitialAttestorSet>, max_builder_bp
 
     let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), attestation_config);
     let runner = TestRunner::new_with_genesis(genesis.into_genesis_params(), RT::default());
-    TestEnv { runner, submitter, treasury, lgt_token_id }
+    TestEnv { runner, submitter, treasury, avow_token_id }
 }
 
 /// Three deterministic ed25519 signing keys for use as attestors.
@@ -201,7 +201,7 @@ fn register_attestor_set_happy_path() {
     let derived_id = AttestorSet::derive_id(&pubkeys_of(&signers), 2);
 
     let treasury_addr = env.treasury;
-    let lgt = env.lgt_token_id;
+    let avow = env.avow_token_id;
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
@@ -225,18 +225,18 @@ fn register_attestor_set_happy_path() {
                 Some(Amount::new(7))
             );
 
-            // Bank moved real $LGT to the treasury. We don't pin the
+            // Bank moved real $AVOW to the treasury. We don't pin the
             // exact balance because the treasury account starts with
             // the default genesis balance; we only assert the
             // post-condition is at least that plus the fee.
             let bank = Bank::<S>::default();
             let treasury_bal = bank
-                .get_balance_of(&treasury_addr, lgt, state)
+                .get_balance_of(&treasury_addr, avow, state)
                 .unwrap_infallible()
                 .unwrap_or(Amount::ZERO);
             assert!(
                 treasury_bal >= Amount::new(7),
-                "treasury holds at least the fee in $LGT, got {treasury_bal:?}"
+                "treasury holds at least the fee in $AVOW, got {treasury_bal:?}"
             );
         }),
     });
@@ -466,7 +466,7 @@ fn submit_attestation_routes_treasury_share_via_bank() {
         SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(sigs).unwrap();
 
     let treasury_addr = env.treasury;
-    let lgt = env.lgt_token_id;
+    let avow = env.avow_token_id;
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.submitter.create_plain_message::<RT, AttestationModule<S>>(
@@ -483,7 +483,7 @@ fn submit_attestation_routes_treasury_share_via_bank() {
             // Bank balances reflect the same.
             let bank = Bank::<S>::default();
             let treasury_bal = bank
-                .get_balance_of(&treasury_addr, lgt, state)
+                .get_balance_of(&treasury_addr, avow, state)
                 .unwrap_infallible()
                 .unwrap_or(Amount::ZERO);
             assert!(
@@ -1595,12 +1595,12 @@ fn genesis_initial_schema_persists_payload_shape_hash() {
         HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(2);
     let owner = genesis_config.additional_accounts()[0].address();
     let treasury = genesis_config.additional_accounts()[1].address();
-    let lgt_token_id = config_gas_token_id();
+    let avow_token_id = config_gas_token_id();
     let shape_hash: [u8; 32] = [0xA7u8; 32];
 
     let attestation_config = AttestationConfig::<S> {
         treasury,
-        lgt_token_id,
+        avow_token_id,
         attestation_fee: Amount::ZERO,
         schema_registration_fee: Amount::ZERO,
         attestor_set_fee: Amount::ZERO,

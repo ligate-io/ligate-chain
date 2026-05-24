@@ -1,6 +1,6 @@
 {
   "gas_token_config": {
-    "token_name": "LGT",
+    "token_name": "AVOW",
     "token_decimals": 9,
     "address_and_balances": [
       ["lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt", "899990000000000000"],

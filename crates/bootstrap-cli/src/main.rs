@@ -93,7 +93,7 @@ enum Command {
         /// `GET /v1/rollup/info`.
         #[arg(long)]
         chain_hash: Option<String>,
-        /// Per-tx max fee in nano-LGT. Default: 200_000_000 (0.2 LGT).
+        /// Per-tx max fee in nano-AVOW. Default: 200_000_000 (0.2 AVOW).
         #[arg(long)]
         max_fee_nano: Option<u128>,
     },

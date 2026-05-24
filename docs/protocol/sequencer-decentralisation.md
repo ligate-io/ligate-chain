@@ -67,7 +67,7 @@ Whatever option we pick must satisfy:
 
 ### 3.2 Federated validator set
 
-**Mechanism.** 5-10 external organisations operate sequencer/validator nodes. Each bonds `$LGT` via the staking module (#50). Leader rotation is stake-weighted. Slashing (#51) penalises equivocation, downtime, and the slashing conditions specified in the PoUA paper (§4.5).
+**Mechanism.** 5-10 external organisations operate sequencer/validator nodes. Each bonds `$AVOW` via the staking module (#50). Leader rotation is stake-weighted. Slashing (#51) penalises equivocation, downtime, and the slashing conditions specified in the PoUA paper (§4.5).
 
 **Latency.** One additional hop per slot for vote aggregation (the BFT round). At 5-10 validators in good network conditions this is sub-100ms; well within the 10s slot budget.
 
@@ -198,7 +198,7 @@ This section is **scoping only**; no implementation in this PR.
 
 The plumbing built in §5 (LeaderSchedule, failure detection, multi-instance deploy) carries over directly. What gets added on top:
 
-- **Staking module (#50).** External validators bond `$LGT`. Stake is the input to the weight function.
+- **Staking module (#50).** External validators bond `$AVOW`. Stake is the input to the weight function.
 - **Disputes module (#51).** Slashing on equivocation, downtime, A1 (invalid attestation inclusion per PoUA §4.5).
 - **Stake-weighted rotation.** `leader(slot)` changes from `validators[slot % N]` to weighted-random selection (Cosmos pattern). Determinism preserved via a chain-derived seed.
 - **Operator onboarding.** Partner-recruitment process, key ceremony, initial stake distribution. Not engineering work but the gating dependency.

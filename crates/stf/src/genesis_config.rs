@@ -6,7 +6,7 @@
 //! returns the runtime's derive-generated [`GenesisConfig`]. Before
 //! returning, it runs [`validate_config`] to catch cross-module
 //! inconsistencies that the per-module deserialisers can't see — most
-//! importantly, that the attestation module's `$LGT` token id matches
+//! importantly, that the attestation module's `$AVOW` token id matches
 //! the bank's gas token id.
 //!
 //! # JSON layout
@@ -39,8 +39,8 @@
 //! 1. `bank.gas_token_config` is `Some(...)`. A chain without a gas
 //!    token can't charge fees, can't run, and is almost certainly the
 //!    result of a config typo.
-//! 2. `attestation.lgt_token_id` equals [`sov_bank::config_gas_token_id`].
-//!    Attestation fees are denominated in `$LGT`; if the two ids
+//! 2. `attestation.avow_token_id` equals [`sov_bank::config_gas_token_id`].
+//!    Attestation fees are denominated in `$AVOW`; if the two ids
 //!    disagree, fee charges would route to a token nobody holds and
 //!    every attestation submission would revert.
 //!
@@ -133,10 +133,10 @@ pub enum GenesisError {
     /// token can't charge fees and can't run.
     #[error("bank.gas_token_config is unset; chain has no gas token")]
     MissingGasToken,
-    /// `attestation.lgt_token_id` disagrees with the bank's gas
+    /// `attestation.avow_token_id` disagrees with the bank's gas
     /// token id. Every attestation submission would revert.
-    #[error("attestation.lgt_token_id ({attestation}) must equal bank's gas token id ({bank})")]
-    LgtTokenIdMismatch {
+    #[error("attestation.avow_token_id ({attestation}) must equal bank's gas token id ({bank})")]
+    AvowTokenIdMismatch {
         /// The id stored in `AttestationConfig`.
         attestation: String,
         /// The id derived from [`sov_bank::config_gas_token_id`].
@@ -285,9 +285,9 @@ where
     }
 
     let bank_token = config_gas_token_id();
-    if cfg.attestation.lgt_token_id != bank_token {
-        return Err(GenesisError::LgtTokenIdMismatch {
-            attestation: cfg.attestation.lgt_token_id.to_string(),
+    if cfg.attestation.avow_token_id != bank_token {
+        return Err(GenesisError::AvowTokenIdMismatch {
+            attestation: cfg.attestation.avow_token_id.to_string(),
             bank: bank_token.to_string(),
         });
     }

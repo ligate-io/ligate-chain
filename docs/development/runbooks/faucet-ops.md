@@ -2,7 +2,7 @@
 
 **Status:** v0 — operational layer for the devnet faucet (`faucet.ligate.io`). Companion to [#95](https://github.com/ligate-io/ligate-chain/issues/95), the faucet service implementation. Pre-public-devnet readiness: this runbook lands ahead of the faucet binary being live so the operator has the procedure ready before the first drip.
 
-The faucet holds a hot key on a VM that signs `Transfer` txs to drip 1 $LGT to any address that asks (rate-limited). Three operational concerns flow from that:
+The faucet holds a hot key on a VM that signs `Transfer` txs to drip 1 $AVOW to any address that asks (rate-limited). Three operational concerns flow from that:
 
 1. The hot key gets compromised. PR problem; loss limited by the wallet's balance.
 2. The wallet drains via legitimate usage or abuse. Service outage; partners can't onboard.
@@ -161,26 +161,26 @@ The faucet wallet drains at a predictable rate via legitimate dripping. Without 
 
 ### Threshold guidance
 
-- **Drip amount:** 1 $LGT per request (configurable in the faucet service config)
+- **Drip amount:** 1 $AVOW per request (configurable in the faucet service config)
 - **Rate limit:** 1 drip per address per 24 hours
 - **Expected daily burn (pre-devnet):** ~50 drips/day max during onboarding waves; lower at steady state. Plan for 100 drips/day headroom.
-- **30-day burn:** ~3,000 $LGT
-- **60-day burn:** ~6,000 $LGT
+- **30-day burn:** ~3,000 $AVOW
+- **60-day burn:** ~6,000 $AVOW
 
 ### Alert thresholds
 
 | Threshold | Severity | Action |
 |---|---|---|
-| Balance < 60 days of expected burn (~6,000 $LGT) | Info | Plan a top-up within a week |
-| Balance < 30 days (~3,000 $LGT) | Warn | Schedule top-up in the next 48h |
-| Balance < 7 days (~700 $LGT) | Page | Top-up immediately; operator on-call |
+| Balance < 60 days of expected burn (~6,000 $AVOW) | Info | Plan a top-up within a week |
+| Balance < 30 days (~3,000 $AVOW) | Warn | Schedule top-up in the next 48h |
+| Balance < 7 days (~700 $AVOW) | Page | Top-up immediately; operator on-call |
 | Balance == 0 | Critical | Service is down; emergency top-up + status banner |
 
 ### Manual check
 
 ```sh
-ligate balance $FAUCET_ADDRESS --token-id $LGT_TOKEN_ID
-# e.g. lig1...: 4,512.000000000 $LGT (4512000000000 nano)
+ligate balance $FAUCET_ADDRESS --token-id $AVOW_TOKEN_ID
+# e.g. lig1...: 4,512.000000000 $AVOW (4512000000000 nano)
 ```
 
 ### Prometheus metric (open follow-up)
@@ -189,7 +189,7 @@ The faucet service should expose a `ligate_faucet_balance_nano` gauge on its `/m
 
 ```yaml
 - alert: LigateFaucetLowBalance
-  expr: ligate_faucet_balance_nano < 3_000_000_000_000  # 3000 $LGT in nano
+  expr: ligate_faucet_balance_nano < 3_000_000_000_000  # 3000 $AVOW in nano
   for: 5m
   annotations:
     runbook: docs/development/runbooks/faucet-ops.md#balance-monitoring
@@ -215,10 +215,10 @@ ligate tx transfer \
 ligate tx broadcast --tx-file topup-$(date +%Y%m%d).bin
 
 # Verify
-ligate balance $FAUCET_ADDRESS --token-id $LGT_TOKEN_ID
+ligate balance $FAUCET_ADDRESS --token-id $AVOW_TOKEN_ID
 ```
 
-**Top-up amount default:** 60 days of expected burn (~6,000 $LGT). Larger top-ups reduce operational frequency but increase exposure if the hot key is later compromised; smaller top-ups force more frequent refills. 60 days is the conservative compromise.
+**Top-up amount default:** 60 days of expected burn (~6,000 $AVOW). Larger top-ups reduce operational frequency but increase exposure if the hot key is later compromised; smaller top-ups force more frequent refills. 60 days is the conservative compromise.
 
 The treasury's own balance source is the genesis-funded bootstrap allocation. Treasury balance projection lives in `~/Desktop/ligate-docs/chain/economic-model.md` and should be updated whenever a major drip is made.
 
@@ -228,7 +228,7 @@ The treasury's own balance source is the genesis-funded bootstrap allocation. Tr
 
 The rate limit (1 drip / address / 24h) at the application layer (in [#95](https://github.com/ligate-io/ligate-chain/issues/95)'s scope) catches casual abuse. What it doesn't catch:
 
-- **Sybil farming** — adversary generates many fresh `lig1...` addresses and drips each. With 1 $LGT / address and ~1s to generate a fresh keypair, an attacker can drain ~3,000 $LGT/hour. At the 30-day burn threshold (3,000 $LGT), this is a 1-hour drain.
+- **Sybil farming** — adversary generates many fresh `lig1...` addresses and drips each. With 1 $AVOW / address and ~1s to generate a fresh keypair, an attacker can drain ~3,000 $AVOW/hour. At the 30-day burn threshold (3,000 $AVOW), this is a 1-hour drain.
 - **IP-level abuse** — same address farmed across multiple drips by exploiting the rate-limit's idempotency window.
 
 ### Escalation runbook
@@ -237,8 +237,8 @@ The rate limit (1 drip / address / 24h) at the application layer (in [#95](https
 |---|---|
 | Drip count spike >2x baseline over 1 hour | Operator notified via the same `LigateFaucetLowBalance` alert path (the abnormal drain rate trips low-balance earlier than expected). Watch the access logs (Caddy at `/var/log/caddy/access.log`). |
 | Specific IP responsible | Add to `/etc/ligate/faucet-blocklist.txt` (one IP / CIDR per line), restart faucet service. The faucet reads this on startup; reload triggers a re-read. |
-| Distributed sybil pattern | Raise rate-limit window from 24h to 48h. Reduce drip amount from 1 $LGT to 0.5. Both via `/etc/ligate/faucet.toml`, restart to apply. |
-| Sustained abuse from multiple angles | Disable public faucet endpoint, point partners at an internal-only fallback (drip-by-request via `hello@ligate.io`). Status banner: "Faucet temporarily unavailable; email us for $LGT." |
+| Distributed sybil pattern | Raise rate-limit window from 24h to 48h. Reduce drip amount from 1 $AVOW to 0.5. Both via `/etc/ligate/faucet.toml`, restart to apply. |
+| Sustained abuse from multiple angles | Disable public faucet endpoint, point partners at an internal-only fallback (drip-by-request via `hello@ligate.io`). Status banner: "Faucet temporarily unavailable; email us for $AVOW." |
 
 ### Long-term mitigations (out of scope here)
 

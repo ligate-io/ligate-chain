@@ -110,7 +110,7 @@ fn setup_with_seeded_state() -> StagedGenesis {
 
     let attestation = AttestationConfig::<S> {
         treasury,
-        lgt_token_id: config_gas_token_id(),
+        avow_token_id: config_gas_token_id(),
         attestation_fee: Amount::ZERO,
         schema_registration_fee: Amount::ZERO,
         attestor_set_fee: Amount::ZERO,

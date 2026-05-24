@@ -61,7 +61,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "LGT balance of the faucet hot wallet (lig1kfaqfu\u2026). Drained by every successful drip (web @ 100 LGT / bot @ 100-1000 LGT). Source: api.ligate.io/v1/addresses/<addr> via Infinity datasource. Top up from treasury when balance drops below ~10,000 LGT. Display shows raw nano-LGT divided by 1e9 via the panel's Calculate-field transform.",
+      "description": "AVOW balance of the faucet hot wallet (lig1kfaqfu\u2026). Drained by every successful drip (web @ 100 AVOW / bot @ 100-1000 AVOW). Source: api.ligate.io/v1/addresses/<addr> via Infinity datasource. Top up from treasury when balance drops below ~10,000 AVOW. Display shows raw nano-AVOW divided by 1e9 via the panel's Calculate-field transform.",
       "fieldConfig": {
         "defaults": {
           "decimals": 2,
@@ -124,12 +124,12 @@
           }
         }
       ],
-      "title": "Faucet wallet LGT balance",
+      "title": "Faucet wallet AVOW balance",
       "transformations": [
         {
           "id": "calculateField",
           "options": {
-            "alias": "lgt",
+            "alias": "avow",
             "binary": {
               "left": "amount_nano",
               "operator": "/",

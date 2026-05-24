@@ -65,7 +65,7 @@ fn runtime_genesis_config_round_trips_for_production_spec() {
 
     let attestation = AttestationConfig::<S> {
         treasury: attester_addr,
-        lgt_token_id: config_gas_token_id(),
+        avow_token_id: config_gas_token_id(),
         attestation_fee: Amount(0),
         schema_registration_fee: Amount(0),
         attestor_set_fee: Amount(0),
@@ -117,5 +117,5 @@ fn runtime_genesis_config_round_trips_for_production_spec() {
     let loaded = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)
         .expect("blueprint genesis_config should accept the round-tripped configs");
 
-    assert_eq!(loaded.attestation.lgt_token_id, config_gas_token_id());
+    assert_eq!(loaded.attestation.avow_token_id, config_gas_token_id());
 }

@@ -801,7 +801,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "Total LGT issued at genesis. nano / 1e9.",
+      "description": "Total AVOW issued at genesis. nano / 1e9.",
       "fieldConfig": {
         "defaults": {
           "decimals": 4,
@@ -865,12 +865,12 @@
           }
         }
       ],
-      "title": "Total LGT supply",
+      "title": "Total AVOW supply",
       "transformations": [
         {
           "id": "calculateField",
           "options": {
-            "alias": "LGT",
+            "alias": "AVOW",
             "binary": {
               "left": "nano",
               "operator": "/",
@@ -953,12 +953,12 @@
           }
         }
       ],
-      "title": "Treasury balance (LGT)",
+      "title": "Treasury balance (AVOW)",
       "transformations": [
         {
           "id": "calculateField",
           "options": {
-            "alias": "LGT",
+            "alias": "AVOW",
             "binary": {
               "left": "nano",
               "operator": "/",
@@ -1177,7 +1177,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "balance_lgt"
+              "options": "balance_avow"
             },
             "properties": [
               {
@@ -1219,8 +1219,8 @@
               "type": "string"
             },
             {
-              "selector": "balance_lgt",
-              "text": "balance_lgt",
+              "selector": "balance_avow",
+              "text": "balance_avow",
               "type": "number"
             }
           ],
@@ -1243,7 +1243,7 @@
           }
         }
       ],
-      "title": "Top 10 LGT holders",
+      "title": "Top 10 AVOW holders",
       "type": "table"
     },
     {

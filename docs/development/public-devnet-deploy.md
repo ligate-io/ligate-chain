@@ -320,7 +320,7 @@ Concretely:
 - API (`api.ligate.io/v1/drip` for faucet, `/v1/blocks*` etc. for indexer queries) lives on Railway.
 - Explorer (`explorer.ligate.io`) lives on Vercel as a Next.js app talking to `api.ligate.io`.
 
-Faucet deploy is documented in [`ligate-api` README](https://github.com/ligate-io/ligate-api). The operator transfers an initial 1M LGT from the operator key (one-shot from a workstation via `ligate transfer`) to the faucet hot-key address; the api service holds the faucet hot key as a Railway secret and uses it to sign drip txs.
+Faucet deploy is documented in [`ligate-api` README](https://github.com/ligate-io/ligate-api). The operator transfers an initial 1M AVOW from the operator key (one-shot from a workstation via `ligate transfer`) to the faucet hot-key address; the api service holds the faucet hot key as a Railway secret and uses it to sign drip txs.
 
 Operational layer (key rotation, balance monitoring, abuse mitigation, treasury top-up): [`runbooks/faucet-ops.md`](runbooks/faucet-ops.md).
 

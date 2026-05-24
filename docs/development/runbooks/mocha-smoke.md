@@ -94,7 +94,7 @@ ligate decode-hash <hash-value>
 ### Step 4 — Transfer round-trip
 
 ```sh
-# Use the localnet dev key (pre-funded with 10000 LGT at genesis, per
+# Use the localnet dev key (pre-funded with 10000 AVOW at genesis, per
 # devnet/local-dev-key.json) as the sender. Pick any address as recipient.
 RECIPIENT="lig1u8z2rxh6ymjwkqsasme64f5kfphtfm2kf4kkn0clusfpr34amezsp5j7yp"
 

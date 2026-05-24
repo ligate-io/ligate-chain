@@ -80,7 +80,7 @@ fn genesis_jsons_load_and_pass_cross_module_validation() {
     // End-to-end through the same path the binary takes:
     //   GenesisPaths -> create_genesis_config -> validate_config
     // Catches schema mismatches in any per-module JSON, plus the
-    // `attestation.lgt_token_id == config_gas_token_id()` invariant.
+    // `attestation.avow_token_id == config_gas_token_id()` invariant.
     type S = MockRollupSpec<Native>;
     let paths = GenesisPaths::from_dir(devnet_dir().join("genesis"));
     let _config = <Runtime<S> as sov_modules_api::Runtime<S>>::genesis_config(&paths)

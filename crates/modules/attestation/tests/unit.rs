@@ -201,7 +201,7 @@ fn attestor_set_json_round_trip() {
 fn attestation_config_json_round_trip() {
     let cfg = AttestationConfig::<S> {
         treasury: sample_addr(9),
-        lgt_token_id: TokenId::from([7u8; 32]),
+        avow_token_id: TokenId::from([7u8; 32]),
         attestation_fee: Amount::new(1234),
         schema_registration_fee: Amount::new(5678),
         attestor_set_fee: Amount::new(91011),

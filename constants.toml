@@ -85,7 +85,7 @@ GAS_FORCED_SEQUENCER_REGISTRATION_COST = [100000, 100000]
 
 # The native gas token's TokenId. PLACEHOLDER value mirrored from the
 # SDK demo for now; we own this and replace with the real
-# Ligate-derived `$LGT` TokenId before any external devnet tag.
+# Ligate-derived `$AVOW` TokenId before any external devnet tag.
 # Tracking: file a follow-up issue once the SDK upgrade lands.
 GAS_TOKEN_ID = { bech32 = "token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2xxx3vs0y07u7", type = "TokenId" }
 
