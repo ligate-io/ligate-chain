@@ -24,7 +24,7 @@ services:
       retries: 30
 
   ligate-1:
-    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.13}
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.14}
     user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
     security_opt:
       - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
@@ -52,7 +52,7 @@ services:
       - "12346:12346"
 
   ligate-2:
-    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.13}
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.14}
     user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
     security_opt:
       - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
@@ -80,7 +80,7 @@ services:
       - "12347:12346"
 
   ligate-3:
-    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.13}
+    image: ${LIGATE_IMAGE:-ghcr.io/ligate-io/ligate-chain:0.2.14}
     user: "0:0"  # smoke-only: run as root so the named volumes (root-owned by default) are writable
     security_opt:
       - seccomp=unconfined  # macOS Docker: required for io_uring (NOMT state tree backend)
