@@ -77,12 +77,32 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             runner: ubuntu-22.04
             archive_suffix: linux-amd64
+            use_cross: false
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-22.04-arm
             archive_suffix: linux-arm64
+            use_cross: false
           - target: aarch64-apple-darwin
             runner: macos-14
             archive_suffix: darwin-arm64
+            use_cross: false
+          # Static musl binaries (chain#479). Audience: Alpine /
+          # distroless / `scratch` Docker image operators who don't
+          # have glibc at all. Built via `cross-rs` because
+          # `librocksdb-sys` (transitive C++ dep) needs musl-g++ as
+          # well as musl-gcc, and Ubuntu's `musl-tools` apt package
+          # only ships musl-gcc. cross-rs runs the build inside a
+          # Docker image with the full musl C++ toolchain, dodging
+          # the missing-tool error that killed the first attempt at
+          # this in chain#358 / PR #478.
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-22.04
+            archive_suffix: linux-amd64-musl
+            use_cross: true
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-22.04-arm
+            archive_suffix: linux-arm64-musl
+            use_cross: true
           # Intel Mac (`x86_64-apple-darwin` on `macos-13`) was
           # removed 2026-05-15. GitHub's hosted Intel pool has 1-4h
           # queue waits during EU/US business hours, which blocked the
@@ -165,10 +185,35 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-release-
 
-      - name: Build ligate-node (release)
+      # cross-rs runs the build inside a per-target Docker image with
+      # the full toolchain (incl. musl-g++ for librocksdb-sys). Only
+      # installed for musl jobs; native gnu/darwin jobs build with
+      # plain `cargo`. `--locked` pins cross to the version recorded
+      # in its own Cargo.lock so a surprise upstream release can't
+      # break a release build.
+      - name: Install cross-rs (musl targets only)
+        if: matrix.use_cross
+        shell: bash
+        run: cargo install cross --locked
+
+      - name: Build ligate-node with cargo (native targets)
+        if: ${{ !matrix.use_cross }}
         shell: bash
         run: |
           cargo build --release --bin ligate-node --target "${{ matrix.target }}"
+
+      - name: Build ligate-node with cross (musl targets)
+        if: matrix.use_cross
+        shell: bash
+        env:
+          # cross-rs reads SKIP_GUEST_BUILD via Cross.toml's
+          # `passthrough` list (see Cross.toml at repo root). Without
+          # the passthrough the env var is dropped at the container
+          # boundary and the guest build would re-attempt inside the
+          # musl image (no risc0 toolchain there → fail).
+          SKIP_GUEST_BUILD: "1"
+        run: |
+          cross build --release --bin ligate-node --target "${{ matrix.target }}"
 
       - name: Strip + package
         id: package

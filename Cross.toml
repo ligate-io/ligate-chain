@@ -1,0 +1,18 @@
+# cross-rs configuration. Used by the release workflow's musl matrix
+# entries (chain#479). The default cross images for the musl targets
+# already ship a working musl-gcc / musl-g++ toolchain that
+# `librocksdb-sys` can drive directly; the only thing we need from
+# this file is the env-var passthrough.
+#
+# `SKIP_GUEST_BUILD=1` matches the env block in `ci.yml` / `release.yml`
+# and tells the risc0 build script to skip compiling the zk guest.
+# Without `passthrough` cross-rs strips it at the container boundary
+# (env doesn't auto-propagate; see cross-rs docs §"Environment
+# variables passthrough") and the build then tries to invoke the
+# risc0 toolchain inside the musl image, which doesn't have it.
+
+[build.env]
+passthrough = [
+    "SKIP_GUEST_BUILD",
+    "CARGO_TERM_COLOR",
+]
