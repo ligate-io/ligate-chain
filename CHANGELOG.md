@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-25
+
+Token rename + naming cleanup. The native token symbol moves from `$LGT` to bare `AVOW` (drops the leading `$` from the prose ticker per the cleaner convention), and the misnamed `devnet/` directory (actually the localnet config) becomes `localnet/`. Both are state-breaking on the wire and require a fresh devnet boot (`ligate-devnet-2`) to consume them. Mainnet is not yet live; this is the moment to do these renames cleanly. Cross-repo coordination tracked under [#457](https://github.com/ligate-io/ligate-chain/issues/457).
+
 ### Changed
 
 - **Network directory restructure**: `devnet/` → `localnet/`. The old `devnet/` directory was actually the *localnet* config (MockDa, `chain_id = "ligate-localnet"`), confusingly named because it predated the `devnet-N/` numbered ladder. Rename adopts the role-based stable-path convention every mature chain uses (Solana, Sui, Aptos, Cosmos): the path describes what it is, the `chain_id` inside the TOML carries the network identity. Future network rollovers (devnet-2, testnet-1, mainnet-1) drop into siblings with stable paths; dead networks move to `archive/`. Test source files `crates/stf/tests/devnet_addresses.rs` and `crates/rollup/tests/devnet_config.rs` renamed to `localnet_*` to match. `devnet-1/` is unchanged (real public devnet, distinct concept). Touches 47 files; operators who scripted `cargo run ... --rollup-config-path devnet/rollup.toml` now use `localnet/rollup.toml`.
