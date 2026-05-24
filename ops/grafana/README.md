@@ -1,86 +1,101 @@
-# Grafana dashboard for `ligate-node`
+# Grafana dashboards
 
-Drop-in Grafana dashboard for the Phase 1 + Phase 2 metrics shipped
-on `ligate-node:9100/metrics`. Nine rows, thirty-eight panels:
+Source of truth for the dashboards currently live on
+[`ligate.grafana.net`](https://ligate.grafana.net). Re-import from
+these JSON files to restore or replicate.
 
-- **Chain activity** — schemas registered, attestor sets registered,
-  attestation submission rate.
-- **Node health** — block height, mempool depth, state-DB size, RPC
-  request rate by endpoint.
-- **DA layer** — DA submission failures by reason, DA finalization
-  latency p50 / p95 / p99 (Mocha-aware buckets).
-- **Errors / rejections** — top-10 attestation rejection reasons over
-  the last hour, RPC p95 latency by endpoint.
-- **Process / observability** — process CPU (cores), RSS, open FDs,
-  metrics-dropped rate (broadcast lag).
-- **Cluster topology** (chain#446 follow-up) — sequencer role per VM
-  (`unknown` / `replica` / `leader` value-mapped from
-  `ligate_sequencer_role`) and rate of role transitions
-  (`ligate_sequencer_role_transitions_total`). The role panel is the
-  primary visual for the paper-leader scenario from 2026-05-21:
-  exactly one `leader` should be lit at any time. Flat-zero
-  transitions = steady state; spikes during a planned failover drill
-  are expected; rapid flapping or two simultaneous leaders = page
-  on-call.
-- **Cost & economy** (chain#446 Track 4 + chain#392) — cumulative
-  TIA burned (estimate, from
-  `ligate_da_tia_burned_nano_estimate_total`; v0.2.14 made it a
-  live-gas-price calibration instead of a fixed per-blob constant,
-  flips to authoritative when celestiaorg/lumina#974 lands), TIA
-  burn rate per hour, protocol treasury balance in LGT
-  (`ligate_protocol_treasury_balance_nano`), and a 4-up stat row
-  mirroring api `/v1/stats/totals` (txs / attestations / schemas /
-  attestor sets). Plus the **GCP cost sub-row** sourced from the
-  VM-1 BigQuery sidecar (see
-  `docs/development/runbooks/gcp-billing-export.md`):
-  - **GCP daily burn (USD, last 30d)** time series — `/cost/daily.json`
-  - **GCP spend by service (last 30d)** horizontal bar gauge — `/cost/by-service.json`
-  - **Compute Engine spend by VM (last 7d)** horizontal bar gauge — `/cost/by-vm.json`
-  - **GCP month-to-date burn (USD)** stat — `/cost/mtd.json`
-- **VM capacity headroom** (chain#449 follow-up) — four threshold
-  stat panels colored green / amber / red so you know when to
-  upsize *before* a saturation incident:
-  - **CPU usage (cores)** sized for e2-standard-2 (2 vCPU). Red
-    >1.5 cores sustained = bump to e2-standard-4.
-  - **Memory (RSS)** sized for 8 GB. Red >4 GB = bump VM tier.
-  - **State DB size** sized for the default 100 GB SSD. Red >70 GB
-    = resize SSD online (non-disruptive grow).
-  - **Open FDs** as a canary for descriptor leaks (ulimit 65536).
-- **Activity leaders** (api#67) — three table panels backed by the
-  api's leaderboard endpoints via the Infinity HTTP-JSON
-  datasource: top attesters (`/v1/stats/top-attesters`), top schema
-  owners (`/v1/stats/top-schema-owners`), top attestor sets
-  (`/v1/stats/top-attestor-sets`). Same shape across all three
-  (`rank` / `address` / `count`), 10 rows each, 30s cache on the
-  api side. The "who's using the chain most" view.
+> **2026-05-24 reorg:** four dashboards, one purpose each, no
+> duplicated panels across them. Before this reorg the `ligate-node`
+> dashboard alone was carrying engineering internals + business
+> totals + cost panels + operator alerts in one wall of 38 panels;
+> the same metrics also appeared in `ligate-operator` and
+> `ligate-investor` with overlapping queries. Now each panel lives in
+> exactly one dashboard and the framing matches the audience.
 
-Tracking issue: [#165](https://github.com/ligate-io/ligate-chain/issues/165).
+## Inventory
 
-The Infinity datasource (used by GCP daily burn + the three
-leaderboards) is preinstalled in Grafana Cloud. Self-hosted Grafana
-needs `grafana-infinity-datasource` from the plugins catalog. No
-auth — both target hosts (`api.ligate.io` + `rpc.ligate.io`) are
-public.
+| File | UID | Audience | Public URL |
+|---|---|---|---|
+| [`ligate-node.json`](ligate-node.json) | `ligate-node` | Chain engineers (DA pipeline + sequencer state machine) | [/d/ligate-node](https://ligate.grafana.net/d/ligate-node) |
+| [`ligate-operator.json`](ligate-operator.json) | `ligate-operator` | 24/7 on-call (host health + service SLA) | [/d/ligate-operator](https://ligate.grafana.net/d/ligate-operator) |
+| [`ligate-investor.json`](ligate-investor.json) | `ligate-investor` | Partners + investors (chain growth + token economy) | [/d/ligate-investor](https://ligate.grafana.net/d/ligate-investor) |
+| [`ligate-devnet-1-cost.json`](ligate-devnet-1-cost.json) | `ligate-devnet-1-cost` | Money-flow watching (TIA + LGT + GCP burn) | [/d/ligate-devnet-1-cost](https://ligate.grafana.net/d/ligate-devnet-1-cost) |
 
-## Import
+## Ownership boundaries
 
-In Grafana → **Dashboards** → **New** → **Import** → paste the
-contents of [`ligate-node.json`](ligate-node.json) (or upload the
-file directly).
+**`ligate-node` (Engineering).** What does the chain process look
+like internally? DA submission failures by reason, DA finalization
+latency distribution, blob accounting counters (bytes / gas total /
+published count), sequencer role + transitions (paper-leader visibility),
+mempool depth time series, attestation rejections by reason, attestation
+submission rate, plus the three activity-leader tables for "who's
+hitting the chain hardest" debugging. Roughly 13 panels.
 
-When prompted, select your Prometheus data source. The dashboard
-uses `${DS_PROMETHEUS}` as a templated reference, so any data source
-of `type: prometheus` will work.
+**`ligate-operator` (On-call).** Is the production deployment healthy
+right now? Liveness probes (block height, mempool, state DB, process
+uptime), block production cadence, DA finality SLA percentiles,
+ligate-node process metrics (CPU/RSS/FDs), RocksDB hot-path latency,
+RPC requests/sec + p95 latency by endpoint, telemetry health, full
+host VM surface (CPU/RAM/disk/network/load), and the **VM capacity
+headroom** stat row sized against the current e2-standard-2 shape
+(green/amber/red thresholds for "when to upsize").
 
-The dashboard refreshes every 30 seconds and defaults to a 6-hour
-window; both are configurable from the dashboard's time-picker /
-refresh controls.
+**`ligate-investor` (Public-facing).** How is the chain growing?
+Cumulative totals (txs, wallets, schemas, attestor sets, attestations),
+LGT supply and treasury balance, top-10 LGT holders, growth-over-time
+charts (new wallets/day, tx rate stacked by kind), DA finality (last
+1h), block cadence summary. No process metrics, no host noise.
+
+**`ligate-devnet-1-cost` (Money flow).** What's the chain costing? TIA
+balance + draw-down rate against the sequencer's Celestia wallet,
+faucet LGT balance + runway estimate, daily drips counter, plus the
+DA + infra spend section (TIA burned cumulative + per-hour, GCP daily
+burn time series, GCP by-service + by-VM bar gauges, GCP month-to-date
+stat). Single dashboard for everyone watching the burn.
+
+## Data sources
+
+Live dashboards use the Grafana Cloud-managed data sources:
+
+- **Prometheus** (`grafanacloud-ligate-prom`): scraped by Alloy on
+  the sequencer VM from `ligate-node:9100/metrics` + host metrics
+  via `prometheus.exporter.unix`, pushed every 15 s.
+- **Infinity HTTP-JSON** (`yesoreyeram-infinity-datasource`): for
+  panels that read from `api.ligate.io` (activity leaders, investor
+  totals) or `rpc.ligate.io/cost/*.json` (the GCP cost panels backed
+  by the VM-1 BigQuery sidecar at
+  `/opt/ligate/bin/gcp-cost-fetch.sh`, see
+  [`docs/development/runbooks/gcp-billing-export.md`](../../docs/development/runbooks/gcp-billing-export.md)).
+
+## Import procedure
+
+In Grafana → **Dashboards** → **New** → **Import** → paste contents
+of the relevant JSON. When prompted, select the matching data source
+type. The dashboards use `${DS_PROMETHEUS}` / `${DS_INFINITY}` as
+templated references, so any data source of the right type will work.
+
+Alternatively, push a file via the HTTP API (see the workflow used in
+[`docs/development/runbooks/grafana-deploy.md`](../../docs/development/runbooks/grafana-deploy.md)
+if/when written; today the canonical path is manual import).
+
+## Versioning
+
+All four files are checked in with `schemaVersion: 38` (Grafana 10.0+).
+Future schema bumps update the JSON in place; re-import to pick up.
+
+## Phase 1 + 2 metric tracking
+
+Phase 1 + 2 chain metrics (#110, #164, chain#446 Track 4, chain#452,
+chain#392) all surface in `ligate-node` or `ligate-devnet-1-cost`
+depending on whether they're internal-state or cost-of-running. Newer
+metrics: append to the most-appropriate dashboard and avoid copying
+to the other three.
 
 ## Reference Prometheus scrape config
 
 The chain ships `/metrics` on port 9100 by default, bound to
-`127.0.0.1` for security (per the public devnet runbook). Scrape
-from inside the VM / VPC:
+`127.0.0.1` for security (per the public devnet runbook). Scrape from
+inside the VM / VPC:
 
 ```yaml
 # /etc/prometheus/prometheus.yml (operator-facing)
@@ -98,62 +113,21 @@ scrape_configs:
           role: sequencer
 ```
 
-For a follower, set `role: follower` and adjust `instance:`
-accordingly. For multi-node setups (post-v0), add one `static_configs`
-entry per node with distinct labels.
+For multi-node setups (post-v0), add one `static_configs` entry per
+node with distinct labels.
 
 If you front Prometheus with a public Grafana per
 [#234](https://github.com/ligate-io/ligate-chain/issues/234), keep
 the scrape internal and only expose Grafana publicly. The chain's
-Caddy config in [`docs/development/public-devnet-deploy.md`](../../docs/development/public-devnet-deploy.md)
+Caddy config in
+[`docs/development/public-devnet-deploy.md`](../../docs/development/public-devnet-deploy.md)
 already blocks `/metrics` at the public edge.
-
-## Panel queries (PromQL reference)
-
-The dashboard JSON inlines these; documented here so an operator can
-recreate or fork them without re-importing.
-
-| Panel | Query |
-|---|---|
-| Schemas registered | `ligate_schemas_registered_total` |
-| Attestor sets registered | `ligate_attestor_sets_registered_total` |
-| Attestations submitted (rate) | `rate(ligate_attestations_submitted_total[5m])` |
-| Block height | `ligate_block_height` |
-| Mempool depth | `ligate_mempool_depth` |
-| State DB size | `ligate_state_db_size_bytes` |
-| RPC requests / sec | `sum by (endpoint) (rate(ligate_rpc_requests_total[5m]))` |
-| DA submission failures (rate, by reason) | `sum by (reason) (rate(ligate_da_submission_failures_total[5m]))` |
-| DA finalization latency p50 / p95 / p99 | `histogram_quantile(0.99, sum by (le) (rate(ligate_da_finalization_latency_seconds_bucket[5m])))` |
-| Rejections by reason (top 10) | `topk(10, sum by (reason) (rate(ligate_attestations_rejected_total[1h])))` |
-| RPC p95 latency | `histogram_quantile(0.95, sum by (le, endpoint) (rate(ligate_rpc_request_duration_seconds_bucket[5m])))` |
-| Process CPU (cores) | `rate(process_cpu_seconds_total[5m])` |
-| Process RSS | `process_resident_memory_bytes` |
-| Process open FDs | `process_open_fds` |
-| Metrics dropped (broadcast lagged) | `rate(ligate_metrics_dropped_total[5m])` |
-
-## Versioning
-
-The dashboard is checked into the repo at `ops/grafana/ligate-node.json`
-with `schemaVersion: 38` (Grafana 10.0+). Future schema bumps update
-the JSON in-place; operators re-import to pick up changes.
-
-Phase 2 metrics ([#164](https://github.com/ligate-io/ligate-chain/issues/164))
-landed in #281 (mempool, process collector, CHAIN_HASH pin) and #282
-(DA failures, DA finalization latency, broadcast-lag counter). The
-dashboard's "DA layer" and "Process / observability" rows wrap them.
-Future panels for sequencer signals not yet exposed (validator stalls,
-state-trie depth) will land via follow-up issues.
-
-## Deploying a public Grafana
-
-Hosting a public read-only Grafana at `grafana.ligate.io` is tracked
-in [#234](https://github.com/ligate-io/ligate-chain/issues/234).
-Until that lands, this dashboard is operator-internal.
 
 ## Related
 
 - [`docs/development/public-devnet-deploy.md`](../../docs/development/public-devnet-deploy.md) — operator runbook with VM provisioning, Caddy config, monitoring section
-- [`docs/development/celestia-ops.md`](../../docs/development/celestia-ops.md) — Celestia light-node operations (the DA layer's own metrics live there)
+- [`docs/development/celestia-ops.md`](../../docs/development/celestia-ops.md) — Celestia light-node operations
+- [`docs/development/runbooks/gcp-billing-export.md`](../../docs/development/runbooks/gcp-billing-export.md) — VM-1 BigQuery sidecar that backs the GCP cost panels
 - [#110](https://github.com/ligate-io/ligate-chain/issues/110) — Phase 1 metrics tracking issue
-- [#164](https://github.com/ligate-io/ligate-chain/issues/164) — Phase 2 metrics (extends this dashboard)
+- [#164](https://github.com/ligate-io/ligate-chain/issues/164) — Phase 2 metrics
 - [#234](https://github.com/ligate-io/ligate-chain/issues/234) — public Grafana hosting
