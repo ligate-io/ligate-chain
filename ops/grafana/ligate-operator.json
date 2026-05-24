@@ -2231,17 +2231,17 @@
       "type": "stat"
     },
     {
-      "type": "row",
       "collapsed": false,
-      "id": 9001,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 79
       },
+      "id": 9001,
       "panels": [],
-      "title": "VM capacity headroom (when do we need a bigger plan?)"
+      "title": "VM capacity headroom (when do we need a bigger plan?)",
+      "type": "row"
     },
     {
       "datasource": {
@@ -2301,7 +2301,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(process_cpu_seconds_total{instance=~\"$instance\"}[5m])",
+          "expr": "rate(process_cpu_seconds_total{instance=\"ligate-devnet-1-sequencer\"}[5m])",
           "legendFormat": "{{instance}} cores",
           "refId": "A"
         }
@@ -2366,7 +2366,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "process_resident_memory_bytes{instance=~\"$instance\"}",
+          "expr": "process_resident_memory_bytes{instance=\"ligate-devnet-1-sequencer\"}",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
@@ -2431,7 +2431,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "ligate_state_db_size_bytes{instance=~\"$instance\"}",
+          "expr": "ligate_state_db_size_bytes{instance=\"ligate-devnet-1-sequencer\"}",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
@@ -2495,7 +2495,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "process_open_fds{instance=~\"$instance\"}",
+          "expr": "process_open_fds{instance=\"ligate-devnet-1-sequencer\"}",
           "legendFormat": "{{instance}}",
           "refId": "A"
         }
@@ -2522,5 +2522,5 @@
   "timezone": "browser",
   "title": "Ligate Devnet \u2014 Operator view",
   "uid": "ligate-operator",
-  "version": 4
+  "version": 6
 }
