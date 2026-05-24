@@ -284,7 +284,7 @@ curl 'http://127.0.0.1:12346/v1/modules/attestation/attestations/lsc1...:lph1...
 | `GET /v1/modules/attestation/state/schema-registration-fee` | One-time fee to register a schema |
 | `GET /v1/modules/attestation/state/attestor-set-fee` | One-time fee to register an attestor set |
 | `GET /v1/modules/attestation/state/treasury` | Treasury address that receives non-routed fees |
-| `GET /v1/modules/attestation/state/lgt-token-id` | The token id used for fees |
+| `GET /v1/modules/attestation/state/avow-token-id` | The token id used for fees |
 | `GET /v1/modules/attestation/state/total-treasury-collected` | Cumulative `$AVOW` to treasury |
 | `GET /v1/modules/attestation/state/schemas` | Schemas state-map metadata |
 | `GET /v1/modules/attestation/state/schemas/items/{key}` | A schema by raw state-map key |

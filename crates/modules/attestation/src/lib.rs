@@ -745,7 +745,7 @@ pub struct AttestationModule<S: Spec> {
     /// `$AVOW` token id used for all attestation-module fee charges.
     ///
     /// Set once at genesis from
-    /// [`AttestationConfig::lgt_token_id`]. Identifies the token inside
+    /// [`AttestationConfig::avow_token_id`]. Identifies the token inside
     /// [`sov_bank::Bank`] that handlers transfer when charging
     /// `attestation_fee`, `schema_registration_fee`, and
     /// `attestor_set_fee`. Immutable after genesis; rotation requires a
@@ -756,7 +756,7 @@ pub struct AttestationModule<S: Spec> {
     /// consumer. Extract to a chain-wide config primitive when the second
     /// consumer (Iris relayer module v0.5, `tokens` module v1) lands.
     #[state]
-    pub lgt_token_id: StateValue<TokenId>,
+    pub avow_token_id: StateValue<TokenId>,
 
     /// Flat per-attestation fee in `$AVOW` nanos. Set at genesis.
     /// `Amount` is the bank module's u128 newtype around fee values.
@@ -917,7 +917,7 @@ pub struct AttestationConfig<S: Spec> {
     /// from the bank's gas-token config. The validator in
     /// `crates/stf/src/genesis_config.rs` cross-checks that this
     /// matches the bank's gas-token id.
-    pub lgt_token_id: TokenId,
+    pub avow_token_id: TokenId,
     /// Flat per-attestation fee in `$AVOW` nanos (9 decimals).
     pub attestation_fee: Amount,
     /// Flat schema-registration fee in `$AVOW` nanos.
@@ -1078,7 +1078,7 @@ pub enum AttestationError {
     #[error("schema's attestor set is missing from state")]
     MissingAttestorSet,
 
-    /// `lgt_token_address` or `treasury` was not set at genesis. Indicates
+    /// `avow_token_address` or `treasury` was not set at genesis. Indicates
     /// a misconfigured chain. Should be unreachable for a chain that ran
     /// `Module::genesis` cleanly, but surfaced as an error so handlers
     /// fail honestly instead of panicking.
@@ -1312,7 +1312,7 @@ impl<S: Spec> AttestationModule<S> {
         state: &mut impl GenesisState<S>,
     ) -> anyhow::Result<()> {
         self.treasury.set(&config.treasury, state)?;
-        self.lgt_token_id.set(&config.lgt_token_id, state)?;
+        self.avow_token_id.set(&config.avow_token_id, state)?;
         self.attestation_fee.set(&config.attestation_fee, state)?;
         self.schema_registration_fee.set(&config.schema_registration_fee, state)?;
         self.attestor_set_fee.set(&config.attestor_set_fee, state)?;
@@ -1635,13 +1635,13 @@ impl<S: Spec> AttestationModule<S> {
         if amount == Amount::ZERO {
             return Ok(());
         }
-        let lgt_token_id =
-            self.lgt_token_id.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
+        let avow_token_id =
+            self.avow_token_id.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
         let treasury = self.treasury.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
         self.bank.transfer_from(
             submitter,
             &treasury,
-            Coins { amount, token_id: lgt_token_id },
+            Coins { amount, token_id: avow_token_id },
             state,
         )?;
         self.add_to_treasury(amount, state)?;
@@ -1663,12 +1663,12 @@ impl<S: Spec> AttestationModule<S> {
         if amount == Amount::ZERO {
             return Ok(());
         }
-        let lgt_token_id =
-            self.lgt_token_id.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
+        let avow_token_id =
+            self.avow_token_id.get(state)?.ok_or(AttestationError::ChainNotConfigured)?;
         self.bank.transfer_from(
             submitter,
             builder_addr,
-            Coins { amount, token_id: lgt_token_id },
+            Coins { amount, token_id: avow_token_id },
             state,
         )?;
         self.add_to_builder(builder_addr, amount, state)?;

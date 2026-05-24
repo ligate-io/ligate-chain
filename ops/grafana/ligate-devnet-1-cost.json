@@ -129,7 +129,7 @@
         {
           "id": "calculateField",
           "options": {
-            "alias": "lgt",
+            "alias": "avow",
             "binary": {
               "left": "amount_nano",
               "operator": "/",

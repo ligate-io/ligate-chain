@@ -96,9 +96,9 @@ lands before any retail wallet UX.
   - Demo #1 (`lig1d0vqhk…`): 50,000,000 AVOW (50M).
   - Demo #2 (`lig1njjery…`): 50,000,000 AVOW (50M).
   - Local dev key (`lig132yw8ht…`): 10,000 AVOW.
-- `lgt_token_id` is the deterministic `config_gas_token_id()` from
+- `avow_token_id` is the deterministic `config_gas_token_id()` from
   `constants.toml`. The genesis loader cross-checks this against
-  `attestation.lgt_token_id` and refuses to boot on mismatch.
+  `attestation.avow_token_id` and refuses to boot on mismatch.
 
 ## Celestia namespaces
 
