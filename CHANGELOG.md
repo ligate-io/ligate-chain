@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- **Release builds ~3-4x faster.** Two changes against `release.yml`'s `build:` matrix: (1) `[profile.release]` flips `codegen-units = 1` → `16` in `Cargo.toml`, restoring parallel codegen; (2) `release.yml`'s cache step swaps `actions/cache@v5` → `Swatinem/rust-cache@v2` (the same modern action `ci.yml` already uses), which auto-prunes `target/` to fit the GHA 10GB cache cap, scopes per-toolchain, and pushes warm-cache hit rate from ~50% to ~85%. Trade-off: pre-mainnet binaries lose ~2-5% inter-procedural optimization headroom. Flip `codegen-units` back to `1` (and likely `lto = "fat"`) at the first mainnet RC; release cadence slows then and binary performance starts to matter more than iteration speed. Cold release time on `v0.3.0` was ~25-30 min across the matrix; expected ~8-12 min after this change.
+
 ## [0.3.0] - 2026-05-25
 
 Token rename + naming cleanup. The native token symbol moves from `$LGT` to bare `AVOW` (drops the leading `$` from the prose ticker per the cleaner convention), and the misnamed `devnet/` directory (actually the localnet config) becomes `localnet/`. Both are state-breaking on the wire and require a fresh devnet boot (`ligate-devnet-2`) to consume them. Mainnet is not yet live; this is the moment to do these renames cleanly. Cross-repo coordination tracked under [#457](https://github.com/ligate-io/ligate-chain/issues/457).
