@@ -65,5 +65,5 @@ Each Prometheus alert has its own runbook describing what fired, why, and the re
 - [`devnet/README.md`](../../devnet/README.md) — localnet config + dev-key documentation
 - [`devnet-1/README.md`](../../devnet-1/README.md) — public-devnet config + genesis substitution flow
 - [`ops/`](../../ops/) — Prometheus rules, Alertmanager config, Fluent Bit config, backup scripts, GCS lifecycle policies
-- [`monitoring/grafana/`](../../monitoring/grafana/) — dashboard JSONs (cost-monitoring lives here)
+- [`ops/grafana/`](../../ops/grafana/) — all four Grafana dashboard JSONs (engineering / operator / investor / cost) plus the README documenting ownership boundaries
 - [Issue #316](https://github.com/ligate-io/ligate-chain/issues/316) — ops deploy punchlist umbrella (which of these runbooks have been executed against the live chain)

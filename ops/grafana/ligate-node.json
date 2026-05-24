@@ -1,4 +1,14 @@
 {
+  "__inputs": [
+    {
+      "description": "HTTP-JSON datasource for api leaderboards + GCP daily burn (chain#453 + #454).",
+      "label": "Infinity",
+      "name": "DS_INFINITY",
+      "pluginId": "yesoreyeram-infinity-datasource",
+      "pluginName": "Infinity",
+      "type": "datasource"
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -15,11 +25,11 @@
       }
     ]
   },
-  "description": "Operator dashboard for `ligate-node` Phase 1 + Phase 2 metrics (chain #110, #164). Four rows: chain activity, node health, DA layer, process / observability. Imports against any Prometheus instance scraping `:9100/metrics` from a running ligate-node.",
+  "description": "Chain-engineer view: DA pipeline internals, sequencer role + transitions, blob accounting, mempool, attestation rejections, activity leaders. For operator-on-call signals see /d/ligate-operator. For business + growth metrics see /d/ligate-investor. For TIA + GCP cost see /d/ligate-devnet-1-cost.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
+  "id": 4216931515904000,
   "links": [
     {
       "asDropdown": false,
@@ -59,116 +69,6 @@
       "panels": [],
       "title": "Chain activity",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Cumulative count of `register_schema` transactions accepted by the chain. Counter only; resets on node restart unless Prometheus retention covers the gap.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 0,
-        "y": 1
-      },
-      "id": 1,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "ligate_schemas_registered_total{instance=~\"$instance\"}",
-          "legendFormat": "schemas",
-          "refId": "A"
-        }
-      ],
-      "title": "Schemas registered",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Cumulative count of `register_attestor_set` transactions accepted by the chain.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 6,
-        "y": 1
-      },
-      "id": 2,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "ligate_attestor_sets_registered_total{instance=~\"$instance\"}",
-          "legendFormat": "attestor sets",
-          "refId": "A"
-        }
-      ],
-      "title": "Attestor sets registered",
-      "type": "stat"
     },
     {
       "datasource": {
@@ -248,69 +148,6 @@
       "panels": [],
       "title": "Node health",
       "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Current head slot number from `LedgerStateProvider`. Climbing = chain producing blocks. Flat for >60s = sequencer halted, DA submission failing, or follower disconnected.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 0,
-        "y": 7
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "ligate_block_height{instance=~\"$instance\"}",
-          "legendFormat": "block height",
-          "refId": "A"
-        }
-      ],
-      "title": "Block height",
-      "type": "timeseries"
     },
     {
       "datasource": {
@@ -454,73 +291,6 @@
         }
       ],
       "title": "State DB size",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "RPC request rate by endpoint (5m window). Spikes mean an indexer is back-filling or a faucet is being hammered.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "reqps"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
-        "y": 7
-      },
-      "id": 6,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum by (endpoint) (rate(ligate_rpc_requests_total{instance=~\"$instance\"}[5m]))",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "title": "RPC requests / sec (by endpoint)",
       "type": "timeseries"
     },
     {
@@ -778,366 +548,6 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "p95 RPC latency by endpoint (5m window). Spikes to multi-second territory mean RocksDB iteration is slow or the chain is producing blocks faster than the indexer can keep up.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.5
-              },
-              {
-                "color": "red",
-                "value": 2
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 24
-      },
-      "id": 8,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(ligate_rpc_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])))",
-          "legendFormat": "{{endpoint}}",
-          "refId": "A"
-        }
-      ],
-      "title": "RPC latency p95 (by endpoint)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 32
-      },
-      "id": 400,
-      "panels": [],
-      "title": "Process / observability",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "CPU usage as a fraction of one core (5m rate). Linux only \u2014 non-Linux builds skip the process_collector. >0.8 sustained is a sign we're CPU-bound.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.8
-              },
-              {
-                "color": "red",
-                "value": 1.5
-              }
-            ]
-          },
-          "unit": "percentunit"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 0,
-        "y": 33
-      },
-      "id": 12,
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean",
-            "max"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "rate(process_cpu_seconds_total{instance=~\"$instance\"}[5m])",
-          "legendFormat": "cores",
-          "refId": "A"
-        }
-      ],
-      "title": "Process CPU (cores)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Resident set size (RSS) of the ligate-node process. Linux only.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "bytes"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 6,
-        "y": 33
-      },
-      "id": 13,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "process_resident_memory_bytes{instance=~\"$instance\"}",
-          "legendFormat": "RSS",
-          "refId": "A"
-        }
-      ],
-      "title": "Process RSS",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Open file descriptors. Climbing without bound means a leak (most likely a tokio task that never drops a TCP socket). Linux only.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1024
-              },
-              {
-                "color": "red",
-                "value": 4096
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 12,
-        "y": 33
-      },
-      "id": 14,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull",
-            "max"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "process_open_fds{instance=~\"$instance\"}",
-          "legendFormat": "open FDs",
-          "refId": "A"
-        }
-      ],
-      "title": "Process open FDs",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Rate of metric events dropped because a metric observer's broadcast receiver lagged. Non-zero rate means we need to widen the BlobSender broadcast channel (currently 1024) or speed up the consumer.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 30,
-            "lineWidth": 2,
-            "showPoints": "never"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 0.001
-              }
-            ]
-          },
-          "unit": "ops"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
-        "y": 33
-      },
-      "id": 15,
-      "options": {
-        "legend": {
-          "calcs": [
-            "sum"
-          ],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "rate(ligate_metrics_dropped_total{instance=~\"$instance\"}[5m])",
-          "legendFormat": "dropped/sec",
-          "refId": "A"
-        }
-      ],
-      "title": "Metrics dropped (broadcast lagged)",
-      "type": "timeseries"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1165,8 +575,8 @@
             {
               "options": {
                 "0": {
-                  "text": "unknown",
-                  "color": "red"
+                  "color": "red",
+                  "text": "unknown"
                 }
               },
               "type": "value"
@@ -1174,8 +584,8 @@
             {
               "options": {
                 "1": {
-                  "text": "replica",
-                  "color": "blue"
+                  "color": "blue",
+                  "text": "replica"
                 }
               },
               "type": "value"
@@ -1183,8 +593,8 @@
             {
               "options": {
                 "2": {
-                  "text": "leader",
-                  "color": "green"
+                  "color": "green",
+                  "text": "leader"
                 }
               },
               "type": "value"
@@ -1305,842 +715,6 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
-      },
-      "id": 600,
-      "panels": [],
-      "title": "Cost & economy",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "ESTIMATED cumulative TIA burned posting blobs to Celestia DA, in TIA (converted from nanoTIA via `/1e9`). The estimate uses a fixed per-blob constant baked into the chain binary; under-counts once blob sizes grow. See HELP on `ligate_da_tia_burned_nano_estimate_total`.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "decimals": 6,
-          "unit": "none"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 0,
-        "y": 49
-      },
-      "id": 18,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max(ligate_da_tia_burned_nano_estimate_total{instance=~\"$instance\"}) / 1e9",
-          "legendFormat": "TIA (est)",
-          "refId": "A"
-        }
-      ],
-      "title": "TIA burned (cumulative, est.)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "TIA burn rate over 5-minute windows, scaled to TIA/hour. Estimate. Steady-state value is `(blobs/hr) \u00d7 (per-blob estimate)`.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 1
-          },
-          "decimals": 6,
-          "unit": "none"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 6,
-        "y": 49
-      },
-      "id": 19,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "rate(ligate_da_tia_burned_nano_estimate_total{instance=~\"$instance\"}[5m]) * 3600 / 1e9",
-          "legendFormat": "{{instance}} (TIA/hr est.)",
-          "refId": "A"
-        }
-      ],
-      "title": "TIA burn rate (TIA/hr, est.)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Protocol treasury LGT balance, converted from nanoLGT to LGT (`/1e9`). Sourced from api `/v1/stats/totals.treasury_balance_nano`. Same value on every instance \u2014 Grafana picks `max`.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "decimals": 3,
-          "unit": "none"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 6,
-        "x": 18,
-        "y": 49
-      },
-      "id": 20,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max(ligate_protocol_treasury_balance_nano{instance=~\"$instance\"}) / 1e9",
-          "legendFormat": "Treasury (LGT)",
-          "refId": "A"
-        }
-      ],
-      "title": "Treasury balance (LGT)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Cumulative protocol totals mirrored from api `/v1/stats/totals`. Grafana picks `max` because each chain instance polls and reports the same chain-wide values.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 24,
-        "x": 0,
-        "y": 54
-      },
-      "id": 21,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name",
-        "orientation": "horizontal"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "expr": "max(ligate_protocol_txs_total{instance=~\"$instance\"})",
-          "legendFormat": "txs total",
-          "refId": "A",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        },
-        {
-          "expr": "max(ligate_protocol_attestations_total{instance=~\"$instance\"})",
-          "legendFormat": "attestations",
-          "refId": "B",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        },
-        {
-          "expr": "max(ligate_protocol_schemas_registered{instance=~\"$instance\"})",
-          "legendFormat": "schemas",
-          "refId": "C",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        },
-        {
-          "expr": "max(ligate_protocol_attestor_sets_registered{instance=~\"$instance\"})",
-          "legendFormat": "attestor sets",
-          "refId": "D",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
-        }
-      ],
-      "title": "Protocol totals (mirrored from api)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
-      },
-      "description": "Total daily GCP infrastructure spend, USD. Sourced from Cloud Billing \u2192 BigQuery export \u2192 /opt/ligate/bin/gcp-cost-fetch.sh on VM-1 (refreshed every 6h via systemd timer) \u2192 https://rpc.ligate.io/cost/daily.json. Returns [] until ~24h after Console enable, then populates rolling 30-day window.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineWidth": 2,
-            "showPoints": "auto"
-          },
-          "unit": "currencyUSD",
-          "decimals": 2
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 24,
-        "x": 0,
-        "y": 59
-      },
-      "id": 22,
-      "options": {
-        "legend": {
-          "calcs": [
-            "sum",
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://rpc.ligate.io/cost/daily.json",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "timeseries",
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "day",
-              "text": "day",
-              "type": "timestamp"
-            },
-            {
-              "selector": "cost_usd",
-              "text": "USD",
-              "type": "number"
-            }
-          ],
-          "refId": "A"
-        }
-      ],
-      "title": "GCP daily burn (USD, last 30d)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
-      },
-      "description": "GCP spend by service over the last 30 days. Sourced from the VM-1 BigQuery sidecar at /var/www/cost/by-service.json, refreshed every 6h. Compute Engine + Cloud Storage are usually the top two; if anything else creeps to the top, investigate.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "currencyUSD",
-          "decimals": 2
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 0,
-        "y": 66
-      },
-      "id": 801,
-      "options": {
-        "orientation": "horizontal",
-        "showValue": "auto",
-        "stacking": "none",
-        "displayMode": "gradient",
-        "tooltip": {
-          "mode": "single"
-        },
-        "legend": {
-          "showLegend": false,
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": []
-        }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://rpc.ligate.io/cost/by-service.json",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "table",
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "service",
-              "text": "Service",
-              "type": "string"
-            },
-            {
-              "selector": "cost_usd",
-              "text": "USD",
-              "type": "number"
-            }
-          ],
-          "refId": "A"
-        }
-      ],
-      "title": "GCP spend by service (last 30d)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
-      },
-      "description": "Compute Engine spend by VM (resource.name) over the last 7 days. Sourced from /var/www/cost/by-vm.json. Today on a single-VM setup this shows one row; useful when the cluster scales back out to multi-sequencer mode.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "unit": "currencyUSD",
-          "decimals": 2
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 66
-      },
-      "id": 802,
-      "options": {
-        "orientation": "horizontal",
-        "showValue": "auto",
-        "stacking": "none",
-        "displayMode": "gradient",
-        "tooltip": {
-          "mode": "single"
-        },
-        "legend": {
-          "showLegend": false,
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": []
-        }
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://rpc.ligate.io/cost/by-vm.json",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "table",
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "vm",
-              "text": "VM",
-              "type": "string"
-            },
-            {
-              "selector": "cost_usd",
-              "text": "USD",
-              "type": "number"
-            }
-          ],
-          "refId": "A"
-        }
-      ],
-      "title": "Compute Engine spend by VM (last 7d)",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "yesoreyeram-infinity-datasource",
-        "uid": "${DS_INFINITY}"
-      },
-      "description": "GCP total spend month-to-date (since the 1st of the current calendar month). Sourced from /var/www/cost/mtd.json. Snaps back to zero on the 1st of each month, then climbs.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 200
-              },
-              {
-                "color": "orange",
-                "value": 400
-              },
-              {
-                "color": "red",
-                "value": 800
-              }
-            ]
-          },
-          "unit": "currencyUSD",
-          "decimals": 2
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 16,
-        "y": 66
-      },
-      "id": 803,
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "/^cost_usd$/"
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://rpc.ligate.io/cost/mtd.json",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "table",
-          "root_selector": "",
-          "columns": [
-            {
-              "selector": "cost_usd",
-              "text": "USD",
-              "type": "number"
-            }
-          ],
-          "refId": "A"
-        }
-      ],
-      "title": "GCP month-to-date burn (USD)",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 74
-      },
-      "id": 700,
-      "panels": [],
-      "title": "VM capacity headroom (when do we need a bigger plan?)",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Sustained CPU usage in cores. Thresholds sized for the current e2-standard-2 (2 vCPU). Green = comfortable. Amber = warming up (>40% of 2 cores). Red = saturating (>75%), bump to e2-standard-4 or e2-standard-8. Calculated over a 5-minute window so spikes don't trigger false alarms.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.8
-              },
-              {
-                "color": "red",
-                "value": 1.5
-              }
-            ]
-          },
-          "decimals": 2,
-          "unit": "short",
-          "max": 2
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 0,
-        "y": 75
-      },
-      "id": 23,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name",
-        "orientation": "horizontal"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "rate(process_cpu_seconds_total{instance=~\"$instance\"}[5m])",
-          "legendFormat": "{{instance}} cores",
-          "refId": "A"
-        }
-      ],
-      "title": "CPU usage (cores / 2)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "ligate-node process resident memory (RSS). Thresholds sized for the current e2-standard-2 (8 GB total). Green <2 GB = comfortable. Amber 2-4 GB = OS + Caddy + chain crowding the box, plan a bump. Red >4 GB = swap risk on this machine type, bump to e2-standard-4 (16 GB) within a day.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 2147483648
-              },
-              {
-                "color": "red",
-                "value": 4294967296
-              }
-            ]
-          },
-          "unit": "bytes",
-          "decimals": 1
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 6,
-        "y": 75
-      },
-      "id": 24,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name",
-        "orientation": "horizontal"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "process_resident_memory_bytes{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Memory used (RSS / 8 GB)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Rollup state DB on-disk size (RocksDB + ledger). Thresholds sized for the default 100 GB SSD. Green <30 GB = years of runway at devnet growth. Amber 30-70 GB = plan a 200 GB resize for next quarter. Red >70 GB = resize within the week or risk filling the disk during a compaction spike. SSD resizes are non-disruptive (growable online).",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 32212254720
-              },
-              {
-                "color": "red",
-                "value": 75161927680
-              }
-            ]
-          },
-          "unit": "bytes",
-          "decimals": 1
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 12,
-        "y": 75
-      },
-      "id": 25,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name",
-        "orientation": "horizontal"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "ligate_state_db_size_bytes{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}}",
-          "refId": "A"
-        }
-      ],
-      "title": "State DB size (/ 100 GB SSD)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Open file descriptors on the chain process. Default ulimit is 65536. Green <2k = normal RocksDB SST + jsonrpsee connection mix. Amber 2-10k = unusual but not breaking. Red >10k = file-descriptor leak; investigate (the chain process or Caddy is holding refs it shouldn't). Not a VM-sizing signal, but a canary for the cluster needing a restart cycle before it hits the ulimit cliff.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 2000
-              },
-              {
-                "color": "red",
-                "value": 10000
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 7,
-        "w": 6,
-        "x": 18,
-        "y": 75
-      },
-      "id": 26,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "area",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "textMode": "value_and_name",
-        "orientation": "horizontal"
-      },
-      "pluginVersion": "10.0.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "process_open_fds{instance=~\"$instance\"}",
-          "legendFormat": "{{instance}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Open FDs (canary, ulimit 65536)",
-      "type": "stat"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
         "y": 82
       },
       "id": 800,
@@ -2159,6 +733,10 @@
           "color": {
             "mode": "thresholds"
           },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2168,11 +746,7 @@
               }
             ]
           },
-          "unit": "short",
-          "custom": {
-            "align": "auto",
-            "displayMode": "auto"
-          }
+          "unit": "short"
         },
         "overrides": [
           {
@@ -2209,27 +783,15 @@
       },
       "id": 27,
       "options": {
-        "showHeader": true,
+        "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "cellHeight": "sm"
+        "showHeader": true
       },
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://api.ligate.io/v1/stats/top-attesters?n=10",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "table",
-          "root_selector": "rows",
           "columns": [
             {
               "selector": "rank",
@@ -2247,7 +809,19 @@
               "type": "number"
             }
           ],
-          "refId": "A"
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "rows",
+          "source": "url",
+          "type": "json",
+          "url": "https://api.ligate.io/v1/stats/top-attesters?n=10",
+          "url_options": {
+            "method": "GET"
+          }
         }
       ],
       "title": "Top attesters",
@@ -2264,6 +838,10 @@
           "color": {
             "mode": "thresholds"
           },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2273,11 +851,7 @@
               }
             ]
           },
-          "unit": "short",
-          "custom": {
-            "align": "auto",
-            "displayMode": "auto"
-          }
+          "unit": "short"
         },
         "overrides": [
           {
@@ -2314,27 +888,15 @@
       },
       "id": 28,
       "options": {
-        "showHeader": true,
+        "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "cellHeight": "sm"
+        "showHeader": true
       },
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://api.ligate.io/v1/stats/top-schema-owners?n=10",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "table",
-          "root_selector": "rows",
           "columns": [
             {
               "selector": "rank",
@@ -2352,7 +914,19 @@
               "type": "number"
             }
           ],
-          "refId": "A"
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "rows",
+          "source": "url",
+          "type": "json",
+          "url": "https://api.ligate.io/v1/stats/top-schema-owners?n=10",
+          "url_options": {
+            "method": "GET"
+          }
         }
       ],
       "title": "Top schema owners",
@@ -2369,6 +943,10 @@
           "color": {
             "mode": "thresholds"
           },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -2378,11 +956,7 @@
               }
             ]
           },
-          "unit": "short",
-          "custom": {
-            "align": "auto",
-            "displayMode": "auto"
-          }
+          "unit": "short"
         },
         "overrides": [
           {
@@ -2419,27 +993,15 @@
       },
       "id": 29,
       "options": {
-        "showHeader": true,
+        "cellHeight": "sm",
         "footer": {
           "show": false
         },
-        "cellHeight": "sm"
+        "showHeader": true
       },
       "pluginVersion": "10.0.0",
       "targets": [
         {
-          "datasource": {
-            "type": "yesoreyeram-infinity-datasource",
-            "uid": "${DS_INFINITY}"
-          },
-          "type": "json",
-          "source": "url",
-          "url": "https://api.ligate.io/v1/stats/top-attestor-sets?n=10",
-          "url_options": {
-            "method": "GET"
-          },
-          "format": "table",
-          "root_selector": "rows",
           "columns": [
             {
               "selector": "rank",
@@ -2457,7 +1019,19 @@
               "type": "number"
             }
           ],
-          "refId": "A"
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "rows",
+          "source": "url",
+          "type": "json",
+          "url": "https://api.ligate.io/v1/stats/top-attestor-sets?n=10",
+          "url_options": {
+            "method": "GET"
+          }
         }
       ],
       "title": "Top attestor sets (by bound schemas)",
@@ -2492,19 +1066,6 @@
         "type": "datasource"
       },
       {
-        "name": "instance",
-        "label": "Sequencer instance",
-        "type": "query",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
-        },
-        "query": "label_values(ligate_block_height, instance)",
-        "regex": "ligate-devnet-1-sequencer.*",
-        "refresh": 2,
-        "sort": 1,
-        "multi": true,
-        "includeAll": true,
         "allValue": ".+",
         "current": {
           "selected": true,
@@ -2514,7 +1075,20 @@
           "value": [
             "$__all"
           ]
-        }
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "includeAll": true,
+        "label": "Sequencer instance",
+        "multi": true,
+        "name": "instance",
+        "query": "label_values(ligate_block_height, instance)",
+        "refresh": 2,
+        "regex": "ligate-devnet-1-sequencer.*",
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
@@ -2524,18 +1098,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Ligate Chain \u2014 ligate-node",
+  "title": "Ligate Chain \u2014 Engineering",
   "uid": "ligate-node",
-  "version": 2,
-  "weekStart": "",
-  "__inputs": [
-    {
-      "name": "DS_INFINITY",
-      "label": "Infinity",
-      "description": "HTTP-JSON datasource for api leaderboards + GCP daily burn (chain#453 + #454).",
-      "type": "datasource",
-      "pluginId": "yesoreyeram-infinity-datasource",
-      "pluginName": "Infinity"
-    }
-  ]
+  "version": 3,
+  "weekStart": ""
 }

@@ -9,7 +9,7 @@ Two cost surfaces:
 | Mocha TIA | DA signer wallet pays per-blob to Celestia | Celestia light node's `/metrics` endpoint (`celestia_node_da_signer_balance_utia`) |
 | GCP infra | VM-hours, GCS storage, network egress | GCP billing export → BigQuery |
 
-The dashboard at [`monitoring/grafana/ligate-devnet-1-cost.json`](../../monitoring/grafana/ligate-devnet-1-cost.json) puts both on one page so the operator can correlate cost spikes against chain activity.
+The dashboard at [`ops/grafana/ligate-devnet-1-cost.json`](../../ops/grafana/ligate-devnet-1-cost.json) puts both on one page so the operator can correlate cost spikes against chain activity.
 
 ---
 
@@ -120,7 +120,7 @@ Same dashboard, different priorities. The Grafana panels make this explicit by g
 ## Cross-references
 
 - [Issue #277](https://github.com/ligate-io/ligate-chain/issues/277) — this work closes it
-- [`monitoring/grafana/ligate-devnet-1-cost.json`](../../monitoring/grafana/ligate-devnet-1-cost.json) — the dashboard
+- [`ops/grafana/ligate-devnet-1-cost.json`](../../ops/grafana/ligate-devnet-1-cost.json) — the dashboard
 - [`ops/prometheus/alerts.yaml`](../../ops/prometheus/alerts.yaml) `ligate-node.cost` group — the alert rules
 - [`runbooks/da-signer-rotation.md`](runbooks/da-signer-rotation.md) — TIA wallet management procedure
 - [`runbooks/alerts/`](runbooks/alerts/) — alert runbooks (Tia* alerts inherit those patterns)

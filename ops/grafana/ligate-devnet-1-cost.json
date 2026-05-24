@@ -1,5 +1,6 @@
 {
   "description": "DA signer wallet (TIA) balance, burn rate, and runway. Powered by celestia-tia-exporter sidecar (ops/exporters/celestia-tia/). GCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) are tracked separately in chain follow-up issue #392.",
+  "id": 2514337932513280,
   "panels": [
     {
       "datasource": {
@@ -31,10 +32,10 @@
         }
       },
       "gridPos": {
-        "x": 0,
-        "y": 0,
+        "h": 6,
         "w": 6,
-        "h": 6
+        "x": 0,
+        "y": 0
       },
       "id": 1,
       "options": {
@@ -85,10 +86,10 @@
         }
       },
       "gridPos": {
-        "x": 6,
-        "y": 0,
+        "h": 6,
         "w": 6,
-        "h": 6
+        "x": 6,
+        "y": 0
       },
       "id": 5,
       "options": {
@@ -124,7 +125,6 @@
         }
       ],
       "title": "Faucet wallet LGT balance",
-      "type": "stat",
       "transformations": [
         {
           "id": "calculateField",
@@ -142,7 +142,8 @@
             "replaceFields": true
           }
         }
-      ]
+      ],
+      "type": "stat"
     },
     {
       "datasource": {
@@ -174,20 +175,20 @@
         }
       },
       "gridPos": {
-        "x": 12,
-        "y": 0,
+        "h": 6,
         "w": 6,
-        "h": 6
+        "x": 12,
+        "y": 0
       },
       "id": 4,
       "options": {
         "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
-        },
-        "graphMode": "area"
+        }
       },
       "targets": [
         {
@@ -211,10 +212,10 @@
         }
       },
       "gridPos": {
-        "x": 18,
-        "y": 0,
+        "h": 6,
         "w": 6,
-        "h": 6
+        "x": 18,
+        "y": 0
       },
       "id": 6,
       "options": {
@@ -265,20 +266,20 @@
         }
       },
       "gridPos": {
-        "x": 0,
-        "y": 6,
+        "h": 4,
         "w": 24,
-        "h": 4
+        "x": 0,
+        "y": 6
       },
       "id": 3,
       "options": {
         "colorMode": "value",
+        "graphMode": "area",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
           ]
-        },
-        "graphMode": "area"
+        }
       },
       "targets": [
         {
@@ -305,10 +306,10 @@
         }
       },
       "gridPos": {
-        "x": 0,
-        "y": 10,
+        "h": 11,
         "w": 12,
-        "h": 11
+        "x": 0,
+        "y": 10
       },
       "id": 2,
       "targets": [
@@ -333,8 +334,8 @@
             "fillOpacity": 80,
             "lineWidth": 1,
             "stacking": {
-              "mode": "normal",
-              "group": "A"
+              "group": "A",
+              "mode": "normal"
             }
           },
           "unit": "short"
@@ -349,8 +350,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#A7D28C"
+                  "fixedColor": "#A7D28C",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -364,8 +365,8 @@
               {
                 "id": "color",
                 "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#C49963"
+                  "fixedColor": "#C49963",
+                  "mode": "fixed"
                 }
               }
             ]
@@ -373,10 +374,10 @@
         ]
       },
       "gridPos": {
-        "x": 12,
-        "y": 10,
+        "h": 11,
         "w": 12,
-        "h": 11
+        "x": 12,
+        "y": 10
       },
       "id": 7,
       "targets": [
@@ -385,8 +386,8 @@
             {
               "selector": "date",
               "text": "date",
-              "type": "timestamp",
-              "timestampFormat": "YYYY-MM-DD"
+              "timestampFormat": "YYYY-MM-DD",
+              "type": "timestamp"
             },
             {
               "selector": "web",
@@ -415,6 +416,430 @@
       ],
       "title": "Drips per day (web vs bot)",
       "type": "timeseries"
+    },
+    {
+      "type": "row",
+      "collapsed": false,
+      "id": 9000,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": [],
+      "title": "DA + infra spend (moved from engineering dashboard)"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "ESTIMATED cumulative TIA burned posting blobs to Celestia DA, in TIA (converted from nanoTIA via `/1e9`). The estimate uses a fixed per-blob constant baked into the chain binary; under-counts once blob sizes grow. See HELP on `ligate_da_tia_burned_nano_estimate_total`.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 6,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 22
+      },
+      "id": 18,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max(ligate_da_tia_burned_nano_estimate_total{instance=~\"$instance\"}) / 1e9",
+          "legendFormat": "TIA (est)",
+          "refId": "A"
+        }
+      ],
+      "title": "TIA burned (cumulative, est.)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "TIA burn rate over 5-minute windows, scaled to TIA/hour. Estimate. Steady-state value is `(blobs/hr) \u00d7 (per-blob estimate)`.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 1
+          },
+          "decimals": 6,
+          "unit": "none"
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "rate(ligate_da_tia_burned_nano_estimate_total{instance=~\"$instance\"}[5m]) * 3600 / 1e9",
+          "legendFormat": "{{instance}} (TIA/hr est.)",
+          "refId": "A"
+        }
+      ],
+      "title": "TIA burn rate (TIA/hr, est.)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Total daily GCP infrastructure spend, USD. Sourced from Cloud Billing \u2192 BigQuery export \u2192 /opt/ligate/bin/gcp-cost-fetch.sh on VM-1 (refreshed every 6h via systemd timer) \u2192 https://rpc.ligate.io/cost/daily.json. Returns [] until ~24h after Console enable, then populates rolling 30-day window.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "showPoints": "auto"
+          },
+          "decimals": 2,
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 22,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "day",
+              "text": "day",
+              "type": "timestamp"
+            },
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "timeseries",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "https://rpc.ligate.io/cost/daily.json",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "GCP daily burn (USD, last 30d)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "GCP spend by service over the last 30 days. Sourced from the VM-1 BigQuery sidecar at /var/www/cost/by-service.json, refreshed every 6h. Compute Engine + Cloud Storage are usually the top two; if anything else creeps to the top, investigate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 2,
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 37
+      },
+      "id": 801,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "service",
+              "text": "Service",
+              "type": "string"
+            },
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "https://rpc.ligate.io/cost/by-service.json",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "GCP spend by service (last 30d)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "Compute Engine spend by VM (resource.name) over the last 7 days. Sourced from /var/www/cost/by-vm.json. Today on a single-VM setup this shows one row; useful when the cluster scales back out to multi-sequencer mode.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "decimals": 2,
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 37
+      },
+      "id": 802,
+      "options": {
+        "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "vm",
+              "text": "VM",
+              "type": "string"
+            },
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "https://rpc.ligate.io/cost/by-vm.json",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Compute Engine spend by VM (last 7d)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "${DS_INFINITY}"
+      },
+      "description": "GCP total spend month-to-date (since the 1st of the current calendar month). Sourced from /var/www/cost/mtd.json. Snaps back to zero on the 1st of each month, then climbs.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 200
+              },
+              {
+                "color": "orange",
+                "value": 400
+              },
+              {
+                "color": "red",
+                "value": 800
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 37
+      },
+      "id": 803,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "/^cost_usd$/",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "cost_usd",
+              "text": "USD",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "${DS_INFINITY}"
+          },
+          "format": "table",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "json",
+          "url": "https://rpc.ligate.io/cost/mtd.json",
+          "url_options": {
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "GCP month-to-date burn (USD)",
+      "type": "stat"
     }
   ],
   "refresh": "1m",
@@ -464,6 +889,7 @@
     "to": "now"
   },
   "timezone": "utc",
-  "title": "Ligate devnet-1 \u2014 cost monitoring",
-  "uid": "ligate-devnet-1-cost"
+  "title": "Ligate Devnet \u2014 Cost monitoring",
+  "uid": "ligate-devnet-1-cost",
+  "version": 11
 }
