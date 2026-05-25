@@ -16,14 +16,14 @@ on:
   pull_request:
     paths:
       - 'crates/genesis-tool/**'
-      - 'devnet-1/genesis/**'
+      - 'devnet/genesis/**'
       - 'ops/genesis-determinism/**'
       - '.github/workflows/genesis-determinism.yml'
   push:
     branches: [main]
     paths:
       - 'crates/genesis-tool/**'
-      - 'devnet-1/genesis/**'
+      - 'devnet/genesis/**'
       - 'ops/genesis-determinism/**'
       - '.github/workflows/genesis-determinism.yml'
   workflow_dispatch:
@@ -71,14 +71,14 @@ jobs:
       - name: Build ligate-genesis-tool
         run: cargo build --release -p ligate-genesis-tool
 
-      - name: Generate from devnet-1 template
+      - name: Generate from devnet template
         run: |
           mkdir -p genesis-out
-          # `--da celestia` because devnet-1/ ships a Celestia-shaped
+          # `--da celestia` because devnet/ ships a Celestia-shaped
           # `seq_da_address` placeholder. Celestia is the default, the
           # flag is explicit here so the intent is obvious in the CI log.
           ./target/release/ligate-genesis-tool generate \
-            --template devnet-1/genesis \
+            --template devnet/genesis \
             --substitutions ops/genesis-determinism/substitutions.toml \
             --output genesis-out \
             --da celestia

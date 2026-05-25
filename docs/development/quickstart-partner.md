@@ -39,7 +39,7 @@ Verify the binary speaks to the public devnet:
 
 ```bash
 $ ligate --rpc https://rpc.ligate.io info
-chain_id:   ligate-devnet-1
+chain_id:   ligate-devnet-2
 chain_hash: lsch1amq80arndh6zehd4gu3kg6x66vh3l45z924dr6pzeevkxp649heqe5c70v
 version:    0.1.3
 ```

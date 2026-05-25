@@ -1,0 +1,193 @@
+# Ligate `ligate-devnet-2` rollup config (Celestia DA, public).
+#
+# Boots a single-sequencer node against Celestia Mocha testnet for the
+# canonical public devnet rung of the chain-id ladder. Mock zkVM still
+# at this rung; real proving lands in Phase A.4.
+#
+# Run with (from the repo root):
+#
+#   cargo run --bin ligate-node -- \
+#     --da-layer celestia \
+#     --rollup-config-path devnet/celestia.toml \
+#     --genesis-config-dir devnet/genesis
+#
+# Production deploys override sensitive values via env vars, never by
+# editing the committed file:
+#
+#   SOV_CELESTIA_RPC_URL  → [da].rpc_url
+#   SOV_CELESTIA_GRPC_URL → [da].grpc_url
+#   SOV_CELESTIA_RPC_AUTH_TOKEN → [da].rpc_auth_token (if your provider needs one)
+#   SOV_CELESTIA_SIGNER_KEY → [da].signer_private_key
+#
+# Bind addresses default to `127.0.0.1` because the deploy pattern is
+# Caddy on the same VM reverse-proxying TLS to localhost. Public
+# operators flipping to a public bind without a reverse proxy in front
+# expose the node to the internet uncomfortably; do not do that.
+#
+# Differences from `devnet/celestia.toml`:
+#
+#   - chain_id is `ligate-devnet-2` (locked ladder rung; #181)
+#   - storage.path differs so a single host can run both localnet and
+#     devnet side by side
+#   - comments emphasise public-devnet hygiene (env-var overrides,
+#     reverse-proxy expectation, per-operator Celestia light node)
+#
+# See `devnet/README.md` for the full operator narrative and
+# `docs/development/public-devnet-deploy.md` for the deploy runbook.
+
+# Chain identity. `ligate-devnet-2` is the public-devnet rung of the
+# locked ladder per `docs/protocol/attestation-v0.md` `Chain id`. The
+# binary refuses to boot with any value outside the ladder; the
+# validator lives in `crates/rollup/src/chain_config.rs` (#181).
+[chain]
+chain_id = "ligate-devnet-2"
+
+[da]
+# Celestia RPC endpoint for reading blobs + headers.
+#
+# **Default (recommended)**: `ws://127.0.0.1:26658` against a
+# co-located Celestia light node on the same VM. Localhost talk
+# avoids public-RPC rate limits and TLS overhead.
+#
+# **Alternative**: a public Mocha endpoint (less reliable):
+# `wss://rpc-mocha.pops.one` or any provider's URL.
+#
+# Operators set this via `SOV_CELESTIA_RPC_URL` so the secret never
+# lives in the repo if the endpoint requires an auth token.
+rpc_url = "ws://127.0.0.1:26658"
+
+# Optional. JWT for the RPC endpoint (Mocha provider tokens come on
+# a per-account basis). Prefer `SOV_CELESTIA_RPC_AUTH_TOKEN`.
+#rpc_auth_token = "MY.SECRET.TOKEN"
+
+# gRPC endpoint for submitting blobs (sequencer-only path; followers
+# don't strictly need this).
+#
+# Deliberately NOT set here, same mechanism as `signer_private_key`
+# below: `grpc_url` is `Option<String>` with a serde default that
+# reads `SOV_CELESTIA_GRPC_URL` from the environment -- and serde only
+# invokes that default when the field is ABSENT. A hardcoded value
+# shadows the env var. The deploy patterns disagree on what this
+# should point at -- a co-located `celestia-appd` for a self-hosted
+# operator, a remote Mocha consensus endpoint for public devnet or the
+# CI smoke (which has no local celestia-appd) -- so the field is
+# omitted and operators inject the right value:
+#
+#   co-located celestia-appd: SOV_CELESTIA_GRPC_URL=http://127.0.0.1:9090
+#   remote Mocha consensus:   SOV_CELESTIA_GRPC_URL=http://full.consensus.mocha-4.celestia-mocha.com:9090
+
+# Celestia signer private key (hex). The wallet must hold enough
+# Mocha TIA to cover blob inclusion. The Mocha faucet drips for free;
+# top up monthly.
+#
+# Deliberately NOT set here. `signer_private_key` is `Option<String>`
+# with a serde default that reads `SOV_CELESTIA_SIGNER_KEY` from the
+# environment -- but serde only invokes that default when the field
+# is ABSENT. A placeholder value (even all-zeros) shadows the env var
+# and the chain boots with the placeholder, which `k256` rejects as
+# an invalid key ("Failed to build celestia-client: Invalid private
+# key"). So the field is omitted: operators inject the real key via
+# `SOV_CELESTIA_SIGNER_KEY` and the env-var default picks it up.
+# Parse tests (`crates/rollup/tests/localnet_config.rs`) are unaffected
+# -- the field is optional, so an absent value parses fine.
+
+# Conservative retry tuning. Public-devnet leans towards faster
+# failure than indefinite retry so misconfigurations surface in
+# minutes rather than hours.
+backoff_min_delay_ms = 200
+backoff_max_delay_ms = 6_000
+backoff_max_times    = 10
+
+[da.block_producing.periodic]
+# `block_producing` is unused by the Celestia adapter (Celestia
+# produces blocks itself). The TOML schema still requires the
+# section, so a placeholder is left here.
+block_time_ms = 1000
+
+[storage]
+# State + ledger DB lives here. DA blobs are not stored locally;
+# they live on Celestia. Path is repo-root-relative for `cargo run`
+# convenience; production deploys typically point at
+# `/var/lib/ligate/devnet` or similar via env-var override.
+path = "devnet/data-celestia"
+state_cache_size = 4294967296
+user_commit_concurrency = 4
+# Same hashtable sizing as `devnet/celestia.toml`; Celestia block
+# times (~12s) make rollup state grow slowly enough that a 1M-bucket
+# table stays performant for the duration of a devnet.
+user_hashtable_buckets = 1_000_000
+user_preallocate_ht = false
+kernel_commit_concurrency = 2
+pruner_block_interval = 100
+pruner_versions_to_keep = 20
+
+[runner]
+# Celestia produces ~12s blocks; polling 6× per block keeps inclusion
+# latency low without spamming the local light node.
+da_polling_interval_ms = 2_000
+
+[runner.http_config]
+# Localhost only by intent. Caddy (or your reverse proxy of choice)
+# fronts the node and serves the public TLS endpoint. Binding the
+# node directly to a public interface is only safe behind a firewall
+# rule restricting to your reverse proxy's source.
+#
+# Multi-sequencer (DbElected) operators must flip this to "0.0.0.0"
+# so the gateway VM's Caddy can reach the replicas' REST surface over
+# the VPC. The GCP firewall already restricts 12346 to VPC peers. See
+# `docs/development/runbooks/multi-sequencer-failover.md` for the
+# bind-flip procedure and `ops/caddy/Caddyfile` for the fan-out config.
+bind_host = "127.0.0.1"
+bind_port = 12346
+
+[monitoring]
+telegraf_address = "udp://127.0.0.1:8094"
+tokio_runtime_metrics_interval_millis = 500
+
+[proof_manager]
+aggregated_proof_block_jump = 10
+prover_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
+max_number_of_transitions_in_db = 100
+max_number_of_transitions_in_memory = 30
+# Added by SDK rev `f6cd64749` (Sovereign-Labs/sovereign-sdk#2832): bound
+# in-memory aggregated-proof retention. 5 mirrors the SDK demo.
+max_number_of_aggregated_proofs_in_memory = 5
+
+[sequencer]
+# Celestia block times mean blob inclusion can take ~minutes if the
+# network is busy. 600s gives the sequencer headroom before it
+# times out on a submitted batch.
+blob_processing_timeout_secs = 600
+max_batch_size_bytes = 1048576
+# Renamed from `max_concurrent_blobs` per SDK rev `f6cd64749`
+# (Sovereign-Labs/sovereign-sdk#2805): only batch blobs count against
+# this cap; proof blobs go through `max_concurrent_proof_blobs`.
+max_concurrent_batch_blobs = 128
+# Added by SDK rev `f6cd64749` (Sovereign-Labs/sovereign-sdk#2808): cap
+# proof blobs in flight on the DA layer; rollup shuts down on saturation.
+max_concurrent_proof_blobs = 1024
+max_allowed_node_distance_behind = 10
+rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
+
+[sequencer.preferred]
+# Conscious choice (per #293, option A). We run preferred sequencer
+# because that's the Sovereign SDK's intended production architecture
+# (soft confirmations from a single sequencer, the universal L2
+# norm). The `disable_state_root_consistency_checks` flag below
+# silences `StateRootTask`'s internal audit (tentative vs
+# post-DA-canonical state-root cross-check) as a workaround for a
+# private upstream bug (`Sovereign-Labs/sovereign-sdk-wip#2814`).
+# At v0 single-sequencer scale that audit is defensive: the
+# sequencer is the only state-root producer, so there is nothing
+# for tentative roots to diverge from. Carrying the flag is fine
+# for devnet. The proper fix is upstreaming the bug and dropping
+# the flag; tracked at #337.
+disable_state_root_consistency_checks = true
+recovery_strategy = "TryToSave"
+batch_execution_time_limit_millis = 12000
+num_cache_warmup_workers = 0
+
+[sequencer.extension]
+# Required by the SDK schema even though we don't override
+# `sequencer_additional_apis`. Match the upstream demo's value.
+max_log_limit = 20000

@@ -94,10 +94,10 @@ What it provisions:
 The cloud-init does the chassis. The operator still has to:
 
 - Place the `ligate-node` binary at `/opt/ligate/bin/ligate-node`. From a tag onward, the canonical artifact is a GitHub Release tarball (`ligate-node-${VERSION}-linux-amd64.tar.gz` or `linux-arm64.tar.gz` for the Linux server case; `darwin-arm64` and `darwin-amd64` are also published for developer tooling). The release workflow at `.github/workflows/release.yml` produces all four targets on every `v*` tag. Pre-tag operators build from source via `cargo build --release --bin ligate-node`.
-- Clone the chain repo's `devnet-1/` directory to `/opt/ligate/devnet-1/`.
+- Clone the chain repo's `devnet-1/` directory to `/opt/ligate/devnet/`.
 - **Symlink the chain's storage path to the persistent disk** before first boot. The rollup config (`devnet-1/celestia.toml`) sets `[storage] path = "devnet-1/data-celestia"` relative to ligate-node's working directory (`/opt/ligate`). The cloud-init above pre-created `/var/lib/ligate/rocksdb` on the persistent disk; pointing the chain path at it is one command:
   ```bash
-  sudo -u ligate ln -s /var/lib/ligate/rocksdb /opt/ligate/devnet-1/data-celestia
+  sudo -u ligate ln -s /var/lib/ligate/rocksdb /opt/ligate/devnet/data-celestia
   ```
   Without this, the chain writes state to the 20 GB boot disk and a VM image rebuild loses chain history. Backups (per `docs/development/runbooks/backup-restore.md`) reduce the blast radius to ~15 minutes' RPO, but the persistent disk is the right home regardless. (Done after the fact on `ligate-devnet-1-sequencer` on 2026-05-16, runbook documents the in-place migration.)
 - **Pin `genesis_da_height` before first boot.** `devnet-1/genesis/chain_state.json` ships `genesis_da_height: 0` — a placeholder. Celestia rejects a request for DA block 0, so the chain cannot initialize against Mocha while it's `0` (this is exactly what the Mocha smoke gate surfaced; see [#331](https://github.com/ligate-io/ligate-chain/issues/331)). Set it to a recent **finalized** Mocha height:
@@ -105,8 +105,8 @@ The cloud-init does the chassis. The operator still has to:
   # Latest Mocha consensus height, minus a finality margin.
   MOCHA_HEIGHT=$(curl -s https://rpc-mocha.pops.one/status | jq -r .result.sync_info.latest_block_height)
   PIN=$((MOCHA_HEIGHT - 20))
-  jq ".genesis_da_height = $PIN" /opt/ligate/devnet-1/genesis/chain_state.json \
-      > /tmp/chain_state.json && mv /tmp/chain_state.json /opt/ligate/devnet-1/genesis/chain_state.json
+  jq ".genesis_da_height = $PIN" /opt/ligate/devnet/genesis/chain_state.json \
+      > /tmp/chain_state.json && mv /tmp/chain_state.json /opt/ligate/devnet/genesis/chain_state.json
   ```
   The chain starts reading DA from this height, so it must be recent — a stale value forces the node to sync months of Mocha history before producing its first slot. This is a launch-time value: re-pin it on every re-genesis, including `devnet-N` rotation after a Mocha reset (see the re-genesis playbook below).
 - Write `/etc/ligate/env` with the secrets (sequencer only):
@@ -121,8 +121,8 @@ The cloud-init does the chassis. The operator still has to:
   ```
   ExecStart=/opt/ligate/bin/ligate-node \
       --da-layer celestia \
-      --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
-      --genesis-config-dir /opt/ligate/devnet-1/genesis
+      --rollup-config-path /opt/ligate/devnet/celestia.toml \
+      --genesis-config-dir /opt/ligate/devnet/genesis
   ```
   At runtime the SDK's DbElected machinery elects one leader via the Postgres lock; the others heartbeat and serve reads. Non-leader nodes return 503 on `POST /v1/sequencer/txs` automatically (no chain-side middleware needed).
 - If you'll run cold backups (weekly tier stops ligate-node briefly for a consistent rsync — see `docs/development/runbooks/backup-restore.md`), install the sudoers drop-in:
@@ -274,7 +274,7 @@ curl https://rpc.ligate.io/ready
 
 # Chain identity (the network operators are talking to).
 curl https://rpc.ligate.io/v1/rollup/info
-# {"chain_id":"ligate-devnet-1","chain_hash":"<64 hex>","version":"X.Y.Z"}
+# {"chain_id":"ligate-devnet-2","chain_hash":"<64 hex>","version":"X.Y.Z"}
 
 # Followers cross-check chain_hash against the canonical Ligate-Labs node:
 diff <(curl -s https://rpc.ligate.io/v1/rollup/info | jq -r .chain_hash) \
@@ -373,8 +373,8 @@ The `ligate-node` systemd unit reads from `/etc/ligate/env`, which on first boot
 
 | Symptom | Likely cause | First check | Fix |
 |---|---|---|---|
-| `ligate-node` won't start, "missing [chain] section" | Wrong config file passed | `journalctl -u ligate-node` | Check `--rollup-config-path` points at `/opt/ligate/devnet-1/celestia.toml`, not the localnet one |
-| `ligate-node` won't start, "chain_id 'X' does not match the locked ladder" | Operator typo in `[chain]` | `cat /opt/ligate/devnet-1/celestia.toml \| grep chain_id` | Fix to `ligate-devnet-1`, restart |
+| `ligate-node` won't start, "missing [chain] section" | Wrong config file passed | `journalctl -u ligate-node` | Check `--rollup-config-path` points at `/opt/ligate/devnet/celestia.toml`, not the localnet one |
+| `ligate-node` won't start, "chain_id 'X' does not match the locked ladder" | Operator typo in `[chain]` | `cat /opt/ligate/devnet/celestia.toml \| grep chain_id` | Fix to `ligate-devnet-1`, restart |
 | Sequencer cannot reach Celestia | Light node down or wrong endpoint | `systemctl status celestia-light`, `curl ws://127.0.0.1:26658` | Restart `celestia-light`; if persistent, check Mocha bridge availability |
 | `/ready` returns 503 with high target_da_height | Node is catching up | Look at `synced_da_height` over 5 min | Wait; sync rate ~1 block/s on healthy network |
 | `/ready` returns 503 indefinitely | Sequencer can't keep up with DA | Check `block_height` metric and DA polling rate | Increase `da_polling_interval_ms` upward, or check for state-corruption indicators |
@@ -438,8 +438,8 @@ docker run -d \
     -e RUST_LOG=info,sov=info \
     ghcr.io/ligate-io/ligate-chain:v0.3.0 \
     --da-layer celestia \
-    --rollup-config-path /opt/ligate/devnet-1/celestia.toml \
-    --genesis-config-dir /opt/ligate/devnet-1/genesis \
+    --rollup-config-path /opt/ligate/devnet/celestia.toml \
+    --genesis-config-dir /opt/ligate/devnet/genesis \
     --metrics-bind 0.0.0.0:9100
 ```
 

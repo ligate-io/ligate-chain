@@ -1,0 +1,14 @@
+# Filled-in operator key substitution map. Tracked as `keys.toml.example`
+# in repo; the filled-in `keys.toml` stays local to the operator
+# performing the genesis-substitution ceremony (#231).
+keys.toml
+
+# Filled-in canonical-schemas substitution. Tracked as
+# `canonical-schemas.toml.example` in repo; the operator copies it to
+# `canonical-schemas.toml` and substitutes the real federated-quorum
+# pubkeys before running `ligate-bootstrap register-canonical-schemas`.
+# The pubkeys are public information (they go on-chain anyway), but
+# the .example -> filled split keeps the canonical placeholder
+# obvious in repo and the in-flight ceremony state local to the
+# operator host.
+canonical-schemas.toml

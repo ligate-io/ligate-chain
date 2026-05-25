@@ -1,0 +1,10 @@
+{
+  "attestation_fee": "100000",
+  "attestor_set_fee": "50000000",
+  "initial_attestor_sets": [],
+  "initial_schemas": [],
+  "avow_token_id": "token_1nyl0e0yweragfsatygt24zmd8jrr2vqtvdfptzjhxkguz2xxx3vs0y07u7",
+  "max_builder_bps": 5000,
+  "schema_registration_fee": "100000000",
+  "treasury": "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac"
+}
