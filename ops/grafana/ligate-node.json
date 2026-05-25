@@ -114,7 +114,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "ligate_block_height{instance=\"ligate-devnet-2-sequencer\"}",
+          "expr": "ligate_block_height{instance=\"ligate-sequencer\"}",
           "legendFormat": "head slot",
           "refId": "A"
         }
@@ -563,7 +563,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "rate(ligate_da_blob_bytes_total{instance=\"ligate-devnet-2-sequencer\"}[5m])",
+          "expr": "rate(ligate_da_blob_bytes_total{instance=\"ligate-sequencer\"}[5m])",
           "legendFormat": "bytes/sec",
           "refId": "A"
         }
@@ -615,7 +615,7 @@
             "type": "prometheus",
             "uid": "grafanacloud-prom"
           },
-          "expr": "rate(ligate_da_blobs_published_total{instance=\"ligate-devnet-2-sequencer\"}[5m]) * 60",
+          "expr": "rate(ligate_da_blobs_published_total{instance=\"ligate-sequencer\"}[5m]) * 60",
           "legendFormat": "blobs/min",
           "refId": "A"
         }
@@ -1242,7 +1242,7 @@
         "name": "instance",
         "query": "label_values(ligate_block_height, instance)",
         "refresh": 2,
-        "regex": "ligate-devnet-2-sequencer.*",
+        "regex": "ligate-sequencer.*",
         "sort": 1,
         "type": "query"
       }

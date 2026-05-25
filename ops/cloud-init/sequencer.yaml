@@ -2,7 +2,7 @@
 # Cloud-init for a Ligate Chain sequencer VM (Ubuntu 24.04, GCP-tested).
 #
 # Use:
-#   gcloud compute instances create ligate-devnet-1-sequencer \
+#   gcloud compute instances create ligate-sequencer \
 #       --machine-type=e2-standard-4 \
 #       --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
 #       --boot-disk-size=20GB \
@@ -176,11 +176,11 @@ runcmd:
   # place devnet config, write /etc/ligate/env, and start the
   # service. Per-instance metadata is set at create time:
   #
-  #   gcloud compute instances create ligate-devnet-1-sequencer-2 \
+  #   gcloud compute instances create ligate-sequencer-2 \
   #       ... \
   #       --metadata=ligate-node-id=ligate-devnet-1-sequencer-2,ligate-mode=follower
   #
-  # Defaults: node-id = `ligate-devnet-1-sequencer` (matches the
+  # Defaults: node-id = `ligate-sequencer` (matches the
   # original single-instance VM-1) and mode = `sequencer`. So
   # re-running this cloud-init on VM-1 (or rebuilding it from this
   # template) keeps its identity stable and continues as the active
@@ -196,7 +196,7 @@ runcmd:
   - |
     LIGATE_NODE_ID=$(curl -fsSL -H "Metadata-Flavor: Google" \
       http://metadata.google.internal/computeMetadata/v1/instance/attributes/ligate-node-id 2>/dev/null \
-      || echo "ligate-devnet-1-sequencer")
+      || echo "ligate-sequencer")
     LIGATE_MODE=$(curl -fsSL -H "Metadata-Flavor: Google" \
       http://metadata.google.internal/computeMetadata/v1/instance/attributes/ligate-mode 2>/dev/null \
       || echo "sequencer")
