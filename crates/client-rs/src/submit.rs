@@ -38,7 +38,7 @@
 //!    a [`sov_modules_api::transaction::Transaction`]. The signature
 //!    is domain-separated to the chain's `CHAIN_HASH` constant
 //!    (build-time hash of the runtime composition + spec). A
-//!    transaction for `ligate-devnet-1` does not verify on
+//!    transaction for `ligate-devnet-2` does not verify on
 //!    `ligate-devnet-2` even if the signing key is identical.
 //!
 //! 4. **Encode.** Borsh-serialize the signed transaction into raw

@@ -19,11 +19,11 @@ The threat surface evolves with the chain-id ladder defined in [`attestation-v0.
 | Environment | Chain id | Trust posture | What is federated |
 |---|---|---|---|
 | Local single-node dev | `ligate-localnet` | Operator trusts their own machine | Everything |
-| Public devnet | `ligate-devnet-1` | Permissioned sequencer + federated attestor sets, no economic finality | Sequencer (Ligate Labs), attestor sets per schema |
+| Public devnet | `ligate-devnet-2` | Permissioned sequencer + federated attestor sets, no economic finality | Sequencer (Ligate Labs), attestor sets per schema |
 | Public testnet | `ligate-testnet-1` | Permissioned sequencer + federated attestor sets + slashing | Sequencer + attestor staking module |
 | Mainnet | `ligate-1` | Full PoUA + disputes + multi-sequencer | None at the protocol layer |
 
-This document describes the **v0** posture (`ligate-localnet`, `ligate-devnet-1`). Each subsequent ladder rung tightens specific gaps named below. v3 (`ligate-1`) closes the consensus-weighting gap via [PoUA](https://github.com/ligate-io/ligate-chain/issues/126).
+This document describes the **v0** posture (`ligate-localnet`, `ligate-devnet-2`). Each subsequent ladder rung tightens specific gaps named below. v3 (`ligate-1`) closes the consensus-weighting gap via [PoUA](https://github.com/ligate-io/ligate-chain/issues/126).
 
 ## How to read this
 
@@ -43,7 +43,7 @@ These attack the protocol primitive itself: schemas, attestor sets, attestations
 
 **Where:** invariant 5 in [`attestation-v0.md` §Invariants](attestation-v0.md#invariants); enforced in `crates/modules/attestation/src/lib.rs` on the `SubmitAttestation` handler.
 
-**Cross-chain replay:** every signed tx is domain-separated by `CHAIN_ID = 4242` (per `constants.toml`) plus the `CHAIN_HASH` derived from the runtime composition. Signatures from `ligate-devnet-1` do not verify on `ligate-devnet-2`.
+**Cross-chain replay:** every signed tx is domain-separated by `CHAIN_ID = 4242` (per `constants.toml`) plus the `CHAIN_HASH` derived from the runtime composition. Signatures from `ligate-devnet-2` do not verify on `ligate-devnet-2`.
 
 ### 1.2 Schema squatter
 

@@ -62,7 +62,7 @@ pub struct RegisterParams<'a> {
     /// Operator signing key (32-byte ed25519 seed).
     pub signer_key: SovPrivateKey,
     /// Chain id (`/v1/rollup/info -> chain_id`'s numeric form, NOT the
-    /// `ligate-devnet-1` string).
+    /// `ligate-devnet-2` string).
     pub chain_id: u64,
     /// 32-byte build-time `CHAIN_HASH`, from `/v1/rollup/info`.
     pub chain_hash: [u8; 32],

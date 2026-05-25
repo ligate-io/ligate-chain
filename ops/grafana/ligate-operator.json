@@ -13,7 +13,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Ligate Devnet \u2014 Operator view\n\nPrometheus metrics from `ligate-node:9100/metrics` (scraped by Alloy on `ligate-devnet-2-sequencer`, pushed to `grafanacloud-ligate-prom` every 15s). Chain ID: **`ligate-devnet-1`** \u00b7 Chain hash: `lsch1amq80arn\u2026` \u00b7 For business metrics see [`Ligate Devnet \u2014 Investor metrics`](/d/ligate-investor).\n\n**VM-level host metrics (CPU/disk/network)** are NOT here yet \u2014 Alloy needs a `prometheus.exporter.unix` block per [chain#363](https://github.com/ligate-io/ligate-chain/issues/363).",
+        "content": "# Ligate Devnet \u2014 Operator view\n\nPrometheus metrics from `ligate-node:9100/metrics` (scraped by Alloy on `ligate-devnet-2-sequencer`, pushed to `grafanacloud-ligate-prom` every 15s). Chain ID: **`ligate-devnet-2`** \u00b7 Chain hash: `lsch1amq80arn\u2026` \u00b7 For business metrics see [`Ligate Devnet \u2014 Investor metrics`](/d/ligate-investor).\n\n**VM-level host metrics (CPU/disk/network)** are NOT here yet \u2014 Alloy needs a `prometheus.exporter.unix` block per [chain#363](https://github.com/ligate-io/ligate-chain/issues/363).",
         "mode": "markdown"
       },
       "title": "",

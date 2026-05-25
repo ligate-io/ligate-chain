@@ -159,7 +159,7 @@ PGPASSWORD="$PG_PASS" psql -h 10.123.0.2 -U ligate_sequencer -d ligate_sequencer
   -c "SELECT node_id, EXTRACT(EPOCH FROM (NOW() - last_updated)) AS age_s FROM nodes;"
 
 # Replicas' head heights match Leader's (within a few blocks)
-for vm in ligate-devnet-1-sequencer ligate-devnet-1-sequencer-2 ligate-devnet-1-sequencer-3; do
+for vm in ligate-devnet-2-sequencer ligate-devnet-2-sequencer-2 ligate-devnet-2-sequencer-3; do
   echo "=== $vm ==="
   gcloud compute ssh "$vm" --zone=us-central1-a --command='curl -s http://127.0.0.1:9100/metrics | grep ^ligate_block_height'
 done
@@ -260,7 +260,7 @@ Used when:
 1. **Identify the most-synced Replica.** Pick the one whose
    `ligate_block_height` is highest:
    ```sh
-   for vm in ligate-devnet-1-sequencer ligate-devnet-1-sequencer-2 ligate-devnet-1-sequencer-3; do
+   for vm in ligate-devnet-2-sequencer ligate-devnet-2-sequencer-2 ligate-devnet-2-sequencer-3; do
      echo -n "$vm: "
      gcloud compute ssh "$vm" --zone=us-central1-a --command='curl -s http://127.0.0.1:9100/metrics | grep ^ligate_block_height' 2>/dev/null
    done

@@ -28,7 +28,7 @@ The sequencer pubkey lives in `crates/sequencer-registry` / `genesis/sequencer_r
 
 The Sovereign SDK does **not** ship a hot-rotation primitive in v0. Until [#42 lands](https://github.com/ligate-io/ligate-chain/issues/42) + a sequencer-side rotation call lands on top, rotation is either:
 
-- **Re-genesis** (chain id ladder bumps, e.g. `ligate-devnet-1` → `ligate-devnet-2`), OR
+- **Re-genesis** (chain id ladder bumps, e.g. `ligate-devnet-2` → `ligate-devnet-2`), OR
 - **Coordinated restart with operator-side state surgery**, which we don't endorse for any state we want to keep.
 
 ---

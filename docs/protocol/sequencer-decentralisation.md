@@ -19,7 +19,7 @@
 
 ## 1. Context
 
-`ligate-devnet-1` runs a single sequencer operated by Ligate Labs. The chain's **safety** doesn't depend on this: every full node re-derives the state root by replaying the canonical batch stream off Celestia. A misbehaving sequencer can stall blocks but cannot fabricate state.
+`ligate-devnet-2` runs a single sequencer operated by Ligate Labs. The chain's **safety** doesn't depend on this: every full node re-derives the state root by replaying the canonical batch stream off Celestia. A misbehaving sequencer can stall blocks but cannot fabricate state.
 
 What the single-sequencer model **does** depend on for:
 

@@ -2,7 +2,7 @@
 
 How Ligate Labs registers `themisra.proof-of-prompt/v1` (and future first-party schemas) on the chain after genesis.
 
-This is **post-genesis** work — runs once on a freshly-booted `ligate-devnet-1` (or any future devnet / mainnet boot), uses the same on-chain `RegisterAttestorSet` + `RegisterSchema` calls any third party would use, costs the registration fees the chain charges (`attestor_set_fee` 0.05 AVOW + `schema_registration_fee` 0.1 AVOW = ~0.15 AVOW total per ceremony in v0). Fees in the genesis JSON are expressed in nano-AVOW (9 decimals).
+This is **post-genesis** work — runs once on a freshly-booted `ligate-devnet-2` (or any future devnet / mainnet boot), uses the same on-chain `RegisterAttestorSet` + `RegisterSchema` calls any third party would use, costs the registration fees the chain charges (`attestor_set_fee` 0.05 AVOW + `schema_registration_fee` 0.1 AVOW = ~0.15 AVOW total per ceremony in v0). Fees in the genesis JSON are expressed in nano-AVOW (9 decimals).
 
 Tracking issue: [#231](https://github.com/ligate-io/ligate-chain/issues/231).
 
@@ -60,12 +60,12 @@ Don't commit the filled-in file. `devnet-1/.gitignore` already excludes it.
     --chain-id 4242
 ```
 
-`--chain-id` is the numeric `CHAIN_ID` defined in `constants.toml` (NOT the human-readable `ligate-devnet-1` string). `--chain-hash` is fetched from `GET /v1/rollup/info` automatically; pass `--chain-hash <64-char-hex>` to override (the flag expects hex, optionally with a `0x` prefix; not the bech32m `lsch1…` form).
+`--chain-id` is the numeric `CHAIN_ID` defined in `constants.toml` (NOT the human-readable `ligate-devnet-2` string). `--chain-hash` is fetched from `GET /v1/rollup/info` automatically; pass `--chain-hash <64-char-hex>` to override (the flag expects hex, optionally with a `0x` prefix; not the bech32m `lsch1…` form).
 
 Expected output (success path):
 
 ```
-connected to ligate-devnet-1 (ligate-node 0.1.0-devnet)
+connected to ligate-devnet-2 (ligate-node 0.1.0-devnet)
 
 Canonical schema registration: 1 schema(s)
 

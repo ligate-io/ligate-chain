@@ -1,6 +1,6 @@
 # Runbook — Centralized log shipping (GCP Cloud Logging)
 
-**Status:** v0 — ships the Fluent Bit agent config + the operator-side install for `ligate-devnet-1`. Decision recorded below; alternatives considered + rejected.
+**Status:** v0 — ships the Fluent Bit agent config + the operator-side install for `ligate-devnet-2`. Decision recorded below; alternatives considered + rejected.
 
 The devnet VM (per [`public-devnet-deploy.md`](../public-devnet-deploy.md)) runs `ligate-node`, the Celestia light node, the faucet, plus oneshot backup/snapshot jobs. Without centralized logging, debugging a stall means SSHing into the VM, running `journalctl` across N units, and grepping for the panic. With centralized logging, the operator runs one Cloud Logging query and sees everything.
 

@@ -541,7 +541,7 @@ Status codes:
 
 The REST surface is **not versioned in the URL** today. Two reasons:
 
-1. Pre-mainnet, breaking changes are coordinated reset events tied to chain-id bumps (`ligate-devnet-1` to `ligate-devnet-2`). The chain id implicitly versions the API.
+1. Pre-mainnet, breaking changes are coordinated reset events tied to chain-id bumps (`ligate-devnet-2` to `ligate-devnet-2`). The chain id implicitly versions the API.
 2. Post-mainnet, append-only changes (new endpoints, new optional fields) ship via soft fork without URL versioning. Breaking changes (renames, removals) require coordinated client upgrade and would be announced through the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42)).
 
 See [`upgrades.md`](upgrades.md) for the full soft-fork vs hard-fork policy.

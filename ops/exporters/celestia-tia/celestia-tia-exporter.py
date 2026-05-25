@@ -31,7 +31,7 @@ Config via env:
     LIGHT_NODE_NETWORK      mocha
     DA_SIGNER_ADDRESS       celestia1mphanjz38a5fvftsdr20ct388gtnxhlq52wr33
     DA_SIGNER_ACCOUNT       da-signer   (friendly label; defaults to "da-signer")
-    LIGATE_INSTANCE         ligate-devnet-1-sequencer
+    LIGATE_INSTANCE         ligate-devnet-2-sequencer
     LIGATE_READY_URL        http://127.0.0.1:12346/ready
     LIGATE_READY_TIMEOUT    3   (seconds)
     POLL_INTERVAL_SEC       60
@@ -70,7 +70,7 @@ DA_SIGNER_ADDRESS = os.environ["DA_SIGNER_ADDRESS"]  # required; no default
 # hot/cold split, etc.) so dashboards group by account name instead of by
 # a 45-char bech32. Currently always "da-signer".
 DA_SIGNER_ACCOUNT = os.environ.get("DA_SIGNER_ACCOUNT", "da-signer")
-INSTANCE = os.environ.get("LIGATE_INSTANCE", "ligate-devnet-1-sequencer")
+INSTANCE = os.environ.get("LIGATE_INSTANCE", "ligate-devnet-2-sequencer")
 LIGATE_READY_URL = os.environ.get("LIGATE_READY_URL", "http://127.0.0.1:12346/ready")
 LIGATE_READY_TIMEOUT = float(os.environ.get("LIGATE_READY_TIMEOUT", "3"))
 POLL_INTERVAL_SEC = int(os.environ.get("POLL_INTERVAL_SEC", "60"))

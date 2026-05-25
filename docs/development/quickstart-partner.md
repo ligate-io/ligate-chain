@@ -1,6 +1,6 @@
-# Partner Quickstart — Zero to First Attestation on `ligate-devnet-1`
+# Partner Quickstart — Zero to First Attestation on `ligate-devnet-2`
 
-**Status:** Pre-devnet. The flow below is what `ligate-devnet-1` will support on Day 1 (target Q2 2026). Sections marked with **⚠ Preview** are wired in code but the public infrastructure they depend on (faucet, hosted RPC, canonical schemas, explorer) is still spinning up.
+**Status:** Pre-devnet. The flow below is what `ligate-devnet-2` will support on Day 1 (target Q2 2026). Sections marked with **⚠ Preview** are wired in code but the public infrastructure they depend on (faucet, hosted RPC, canonical schemas, explorer) is still spinning up.
 
 This page takes a partner from "I just heard about Ligate" to "my first attestation landed on the public chain" in one continuous flow. No tribal knowledge, no jumping between three doc sites.
 
@@ -146,7 +146,7 @@ submitted attestation:
   outcome:      committed
 ```
 
-The `--chain-hash` and `--chain-id 4242` bind the signature to the chain so it can't be replayed against testnet or another devnet revision. Pull `chain-hash` from `ligate info --json`; the numeric `chain-id` is fixed (`4242` for ligate-devnet-1; the Cosmos-style string id `ligate-devnet-1` is separate).
+The `--chain-hash` and `--chain-id 4242` bind the signature to the chain so it can't be replayed against testnet or another devnet revision. Pull `chain-hash` from `ligate info --json`; the numeric `chain-id` is fixed (`4242` for ligate-devnet-2; the Cosmos-style string id `ligate-devnet-2` is separate).
 
 ---
 
