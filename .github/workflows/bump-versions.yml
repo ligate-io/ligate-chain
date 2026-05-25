@@ -35,6 +35,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # actions/checkout@v6 persists its own `Authorization` header in
+          # the local git config. When `peter-evans/create-pull-request@v6`
+          # later pushes the auto-PR branch, it adds its own header too,
+          # producing `Duplicate header: "Authorization"` and a git HTTP
+          # 400. Disable persistence; the create-pull-request action
+          # supplies its own credential via the `token:` input below.
+          # See https://github.com/peter-evans/create-pull-request/blob/main/docs/concepts-guidelines.md
+          persist-credentials: false
 
       - name: Install yq
         run: |
