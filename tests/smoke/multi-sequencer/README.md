@@ -120,7 +120,7 @@ render script produces.
 
 ## Image selection
 
-By default uses `ghcr.io/ligate-io/ligate-chain:0.3.0` (current
+By default uses `ghcr.io/ligate-io/ligate-chain:0.3.1` (current
 devnet-1 release as of 2026-05-23). The DbElected machinery has
 been stable since v0.2.3 (`4b4a313b7`); any v0.2.x image works
 for this verification.
