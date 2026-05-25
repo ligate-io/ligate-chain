@@ -74,7 +74,7 @@ Existing state? Existing client APIs?
 
 If the LIP requires a chain-id bump per
 [`upgrades.md`](../upgrades.md#what-counts-as-a-hard-fork), state it
-explicitly with the proposed transition (e.g. `ligate-devnet-1` →
+explicitly with the proposed transition (e.g. `ligate-devnet-2` →
 `ligate-devnet-2`).
 
 If the LIP is backwards-compatible, explain why (e.g. "appended

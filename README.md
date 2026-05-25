@@ -58,7 +58,7 @@ Defaults pick up `localnet/rollup.toml` (or `localnet/celestia.toml`) and the `l
 
 The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`localnet/local-dev-key.json`](localnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `AVOW`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
 
-Operators deploying `ligate-devnet-1` MUST remove this address from `localnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
+Operators deploying `ligate-devnet-2` MUST remove this address from `localnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
 
 To use the dev key with [`ligate-cli`](https://github.com/ligate-io/ligate-cli):
 
@@ -303,7 +303,7 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 
 ## Development status
 
-**Devnet.** `ligate-devnet-1` is live on Celestia Mocha-testnet. As of Phase A:
+**Devnet.** `ligate-devnet-2` is live on Celestia Mocha-testnet. As of Phase A:
 
 - Attestation module: data types, state layout, call handlers, ed25519 signature validation, replay protection, fee routing.
 - Runtime: `ligate-stf` composes the curated module set on the upgraded Sovereign SDK.
@@ -312,7 +312,7 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 - Fees: real `AVOW` transfers through `sov-bank`, with up to 50% of attestation fees routable to the schema owner.
 - Genesis: checked-in devnet config (bank, attestation, attester incentives, prover incentives, sequencer registry, operator incentives).
 - Addresses: `lig1` accounts, `lpk1` pubkeys, `lsc1` schema IDs, `las1` attestor set IDs, `lph1` payload hashes (Bech32m).
-- Chain id ladder (Cosmos-style strings): `ligate-localnet` (single-node local dev), `ligate-devnet-1` (public devnet), `ligate-testnet-1` (later), `ligate-1` (mainnet). Trailing number bumps only on state-breaking restarts. Spec section [`Chain id`](docs/protocol/attestation-v0.md#chain-id).
+- Chain id ladder (Cosmos-style strings): `ligate-localnet` (single-node local dev), `ligate-devnet-2` (public devnet), `ligate-testnet-1` (later), `ligate-1` (mainnet). Trailing number bumps only on state-breaking restarts. Spec section [`Chain id`](docs/protocol/attestation-v0.md#chain-id).
 
 Open work items toward public devnet: hosted RPC endpoint, EVM authenticator ([#72](https://github.com/ligate-io/ligate-chain/issues/72)), and the v1 staking and disputes modules. Current tracked work lives in the [GitHub issues](https://github.com/ligate-io/ligate-chain/issues).
 

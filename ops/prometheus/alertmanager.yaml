@@ -1,4 +1,4 @@
-# Alertmanager config for ligate-devnet-1.
+# Alertmanager config for ligate-devnet-2.
 #
 # NOTE: this file is the SELF-HOSTED FALLBACK path. The canonical wiring
 # for the public devnet operator is Grafana Cloud Alerting + the native

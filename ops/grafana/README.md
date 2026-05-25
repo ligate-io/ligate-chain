@@ -102,7 +102,7 @@ inside the VM / VPC:
 global:
   scrape_interval: 15s
   external_labels:
-    chain: ligate-devnet-1
+    chain: ligate-devnet-2
 
 scrape_configs:
   - job_name: ligate-node

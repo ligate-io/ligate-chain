@@ -134,7 +134,7 @@ Celestia testnets restart periodically (mocha → mocha-2 → ...). When that ha
 
 1. Operator regenerates the Celestia light-node state (`rm -rf ~/.celestia-light-mocha && celestia light init ...`).
 2. Operator regenerates the rollup state dir (the chain's blob namespace from the old testnet is gone).
-3. Coordinated chain-id bump per [`docs/protocol/upgrades.md`](../protocol/upgrades.md): `ligate-devnet-1` → `ligate-devnet-2`.
+3. Coordinated chain-id bump per [`docs/protocol/upgrades.md`](../protocol/upgrades.md): `ligate-devnet-2` → `ligate-devnet-2`.
 4. Re-run the [genesis ceremony](devnet.md#4-genesis-ceremony).
 
 This is operationally a hard fork, exactly as documented in the upgrades policy. The operator network coordinates via the `#ligate-devnet` channel (or wherever the next public release moves it).

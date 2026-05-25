@@ -1,6 +1,6 @@
 # Bootstrap a node from a public snapshot
 
-**Status:** v1. Covers the public-snapshot import flow for a fresh `ligate-devnet-1` node (read-only sync node or partner-run sequencer; the procedure is role-agnostic). Snapshot artefacts are published daily by the canonical sequencer; the partner node downloads + imports + boots, skipping DA replay from height 0.
+**Status:** v1. Covers the public-snapshot import flow for a fresh `ligate-devnet-2` node (read-only sync node or partner-run sequencer; the procedure is role-agnostic). Snapshot artefacts are published daily by the canonical sequencer; the partner node downloads + imports + boots, skipping DA replay from height 0.
 
 > Renamed from `follower-bootstrap.md` after v0.2.9 dropped the `--mode follower` flag and the "follower" role label (chain#446, chain#462). The procedure itself is unchanged.
 
@@ -46,7 +46,7 @@ sudo install -m 0755 scripts/import-snapshot.sh /opt/ligate/scripts/
 
 # 3. Run the import:
 sudo /opt/ligate/scripts/import-snapshot.sh \
-    --chain-id ligate-devnet-1 \
+    --chain-id ligate-devnet-2 \
     --tier daily
 
 # The script will:
@@ -87,9 +87,9 @@ The pointer's body:
 
 ```jsonc
 {
-  "snapshot_url": "https://.../ligate-snapshot-ligate-devnet-1-12345-daily.tar.gz",
-  "manifest_url": "https://.../ligate-snapshot-ligate-devnet-1-12345-daily.manifest.json",
-  "chain_id": "ligate-devnet-1",
+  "snapshot_url": "https://.../ligate-snapshot-ligate-devnet-2-12345-daily.tar.gz",
+  "manifest_url": "https://.../ligate-snapshot-ligate-devnet-2-12345-daily.manifest.json",
+  "chain_id": "ligate-devnet-2",
   "block_height": 12345,
   "tier": "daily",
   "updated_at_utc": "2026-05-13T04:35:12Z"
@@ -198,11 +198,11 @@ Before relying on snapshots in production, run the drill:
 sudo systemctl start ligate-snapshot-publish.service
 
 # 2. Verify it landed in the public bucket
-gcloud storage ls gs://ligate-snapshots-public/snapshots/ligate-devnet-1/
+gcloud storage ls gs://ligate-snapshots-public/snapshots/ligate-devnet-2/
 
 # 3. On a fresh non-prod VM (or a wiped local docker container)
 #    that has ligate-node + configs but no state:
-sudo /opt/ligate/scripts/import-snapshot.sh --chain-id ligate-devnet-1
+sudo /opt/ligate/scripts/import-snapshot.sh --chain-id ligate-devnet-2
 
 # 4. Confirm the fresh node catches up to the canonical sequencer's
 #    head within a few minutes:
@@ -219,7 +219,7 @@ Schedule the drill quarterly (the chain repo's calendar reminder system pings th
 ## Out of scope
 
 - **Trustless verification.** Would need a light-client construction. Mainnet work.
-- **Cross-chain import.** Partner can't import a `ligate-devnet-1` snapshot into a `ligate-devnet-2` node. Chain id is enforced at import time.
+- **Cross-chain import.** Partner can't import a `ligate-devnet-2` snapshot into a `ligate-devnet-2` node. Chain id is enforced at import time.
 - **Differential snapshots.** Each snapshot is a full RocksDB. Incremental snapshots would shrink download size; out of scope until devnet shows operational pain.
 - **Operator-controlled (selective) state.** Partners who only care about specific schemas / addresses don't get a custom slice. Mainnet may revisit.
 

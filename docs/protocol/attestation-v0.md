@@ -364,7 +364,7 @@ Cosmos-style string identifiers, locked to a single canonical ladder so every co
 | Environment                | Chain id           |
 | -------------------------- | ------------------ |
 | Local single-node dev      | `ligate-localnet`  |
-| Public devnet              | `ligate-devnet-1`  |
+| Public devnet              | `ligate-devnet-2`  |
 | Public testnet (later)     | `ligate-testnet-1` |
 | Mainnet (later)            | `ligate-1`         |
 

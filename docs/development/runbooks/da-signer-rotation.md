@@ -32,7 +32,7 @@ The first three are operational outages. The fourth is a planning exercise.
 2. **Fund the new address.**
    - Mocha testnet (devnet target): hit the Mocha faucet (`https://faucet.celestia-mocha.com` or community channels).
    - Internal transfer from the old address: `celestia-appd tx bank send <old> <new> <amount>utia`.
-   - **Target balance:** at least 30 days of expected blob-fee burn. For `ligate-devnet-1` with one blob per slot at ~1000ms block time, that's roughly `2.6M slots/month × avg_blob_fee_utia`. Pull the current avg from `[monitoring].telegraf_address` metrics or `celestia-appd query txs` on a sample.
+   - **Target balance:** at least 30 days of expected blob-fee burn. For `ligate-devnet-2` with one blob per slot at ~1000ms block time, that's roughly `2.6M slots/month × avg_blob_fee_utia`. Pull the current avg from `[monitoring].telegraf_address` metrics or `celestia-appd query txs` on a sample.
 
 3. **Stop the sequencer.** Required to swap keys cleanly — partial-state rotation isn't supported by the DA adapter.
    ```sh

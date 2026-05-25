@@ -8,7 +8,7 @@
     "not the attestation genesis. Use the locked ladder per #54 and the spec",
     "section `Chain id` in `docs/protocol/attestation-v0.md`:",
     "  ligate-localnet   single-node local dev",
-    "  ligate-devnet-1   public devnet",
+    "  ligate-devnet-2   public devnet",
     "  ligate-testnet-1  public testnet (later)",
     "  ligate-1          mainnet (later)",
     "Trailing number bumps only on a state-breaking restart. Never use 0x.",

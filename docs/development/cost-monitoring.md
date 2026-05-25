@@ -1,6 +1,6 @@
 # Cost monitoring — Mocha TIA spend + GCP infra spend
 
-**Status:** v0 — Grafana dashboard + Alertmanager rules for cost visibility on `ligate-devnet-1`. Companion to [`da-signer-rotation.md`](runbooks/da-signer-rotation.md) (TIA wallet management), [`alerts/`](runbooks/alerts/) (alert runbooks), and [`public-devnet-deploy.md`](public-devnet-deploy.md) (the deploy this monitors).
+**Status:** v0 — Grafana dashboard + Alertmanager rules for cost visibility on `ligate-devnet-2`. Companion to [`da-signer-rotation.md`](runbooks/da-signer-rotation.md) (TIA wallet management), [`alerts/`](runbooks/alerts/) (alert runbooks), and [`public-devnet-deploy.md`](public-devnet-deploy.md) (the deploy this monitors).
 
 Two cost surfaces:
 
@@ -9,7 +9,7 @@ Two cost surfaces:
 | Mocha TIA | DA signer wallet pays per-blob to Celestia | Celestia light node's `/metrics` endpoint (`celestia_node_da_signer_balance_utia`) |
 | GCP infra | VM-hours, GCS storage, network egress | GCP billing export → BigQuery |
 
-The dashboard at [`ops/grafana/ligate-devnet-1-cost.json`](../../ops/grafana/ligate-devnet-1-cost.json) puts both on one page so the operator can correlate cost spikes against chain activity.
+The dashboard at [`ops/grafana/ligate-devnet-2-cost.json`](../../ops/grafana/ligate-devnet-2-cost.json) puts both on one page so the operator can correlate cost spikes against chain activity.
 
 ---
 
@@ -49,7 +49,7 @@ Top-up procedure: [`da-signer-rotation.md` "TIA balance monitoring"](runbooks/da
 
 ### Steady-state expectation
 
-`ligate-devnet-1`'s baseline:
+`ligate-devnet-2`'s baseline:
 
 | Resource | Quantity | $/mo |
 |---|---|---|
@@ -120,7 +120,7 @@ Same dashboard, different priorities. The Grafana panels make this explicit by g
 ## Cross-references
 
 - [Issue #277](https://github.com/ligate-io/ligate-chain/issues/277) — this work closes it
-- [`ops/grafana/ligate-devnet-1-cost.json`](../../ops/grafana/ligate-devnet-1-cost.json) — the dashboard
+- [`ops/grafana/ligate-devnet-2-cost.json`](../../ops/grafana/ligate-devnet-2-cost.json) — the dashboard
 - [`ops/prometheus/alerts.yaml`](../../ops/prometheus/alerts.yaml) `ligate-node.cost` group — the alert rules
 - [`runbooks/da-signer-rotation.md`](runbooks/da-signer-rotation.md) — TIA wallet management procedure
 - [`runbooks/alerts/`](runbooks/alerts/) — alert runbooks (Tia* alerts inherit those patterns)

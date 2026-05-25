@@ -43,7 +43,7 @@ Anything that changes how an existing on-chain value is **encoded, addressed, or
 - **Changing the address format or the chain id integer** (`CHAIN_ID = 4242` in [`constants.toml`](../../constants.toml)). Both are inputs to transaction signature verification.
 - **Changing the runtime composition** — adding a module, removing a module, switching a module's `Config` shape, or substituting a different DA / ZkVM spec into the canonical chain hash. Detected automatically by the `CHAIN_HASH` guard (next section).
 
-Hard forks bump the chain-id trailing number per the locked ladder: `ligate-localnet` → unaffected (it's local-only), `ligate-devnet-1` → `ligate-devnet-2`, `ligate-testnet-1` → `ligate-testnet-2`, `ligate-1` → `ligate-2`. Genesis is regenerated. Every node operator restarts against the new genesis. Any in-flight transactions on the old chain are dropped — their signatures are domain-separated to the previous chain's hash and won't verify on the new one.
+Hard forks bump the chain-id trailing number per the locked ladder: `ligate-localnet` → unaffected (it's local-only), `ligate-devnet-2` → `ligate-devnet-2`, `ligate-testnet-1` → `ligate-testnet-2`, `ligate-1` → `ligate-2`. Genesis is regenerated. Every node operator restarts against the new genesis. Any in-flight transactions on the old chain are dropped — their signatures are domain-separated to the previous chain's hash and won't verify on the new one.
 
 ---
 
@@ -57,7 +57,7 @@ Practical effect: every transaction's signature includes `CHAIN_HASH` in its dom
 
 This is the reason the chain doesn't need a separate "is this binary the right binary" check: the hash is the check. It's also the reason a hard fork is a real reset rather than a continuous upgrade — you can't roll a runtime change forward through `cargo update` and pretend nothing happened.
 
-The hash is reproducible across machines because the `Schema` is derived from canonical Rust types via a deterministic hasher, with the spec parameters pinned to `MockDaSpec + MockZkvm + MultiAddressEvm` for hash purposes regardless of the binary's actual DA / ZkVM / address spec at runtime. Two operators on `ligate-devnet-1` get byte-identical `CHAIN_HASH` outputs, even if one runs against MockDa locally and the other against Celestia mocha.
+The hash is reproducible across machines because the `Schema` is derived from canonical Rust types via a deterministic hasher, with the spec parameters pinned to `MockDaSpec + MockZkvm + MultiAddressEvm` for hash purposes regardless of the binary's actual DA / ZkVM / address spec at runtime. Two operators on `ligate-devnet-2` get byte-identical `CHAIN_HASH` outputs, even if one runs against MockDa locally and the other against Celestia mocha.
 
 ---
 
@@ -76,12 +76,12 @@ There is no on-chain "upgrade ceremony" for soft forks. The release is the upgra
 ### Hard-fork release flow (rare, deliberate)
 
 1. Decide the hard fork is necessary. Document why in an issue and link from the PR.
-2. Coordinate the new genesis with attestor org reps. Bump the chain id (e.g. `ligate-devnet-1` → `ligate-devnet-2`).
+2. Coordinate the new genesis with attestor org reps. Bump the chain id (e.g. `ligate-devnet-2` → `ligate-devnet-2`).
 3. Snapshot any state that should carry over (often: nothing; a hard fork is usually paired with a decision to drop all existing state). If state is migrating, write a one-off migration script and check it in as a tagged release artifact.
 4. Set a coordinated cutover time. Every operator restarts their node against the new chain id, the new binary, and (if applicable) the new genesis at the agreed cutover.
 5. The old chain stops producing blocks (sequencer is halted at the cutover); the new chain starts at height 0 with the new genesis.
 
-The operational runbook covering the T-7d through T+24h sequence is [`docs/development/runbooks/chain-id-bump.md`](../development/runbooks/chain-id-bump.md). The first `ligate-devnet-1 → ligate-devnet-2` cutover executes that runbook.
+The operational runbook covering the T-7d through T+24h sequence is [`docs/development/runbooks/chain-id-bump.md`](../development/runbooks/chain-id-bump.md). The first `ligate-devnet-2 → ligate-devnet-2` cutover executes that runbook.
 
 This is informal because it has to be. Pre-mainnet, there are no real funds at stake, no economic finality assumptions, and the operator pool is small enough to coordinate on a chat channel. Post-mainnet, this informality stops scaling and the upgrade module takes over (next section).
 
@@ -137,7 +137,7 @@ The strategic implication: **bake every known primitive into mainnet from day 1.
 | Paper | Lands in | Mechanism | Chain-id transition |
 |---|---|---|---|
 | **PoUA** (consensus weighting) | v3 mainnet from genesis | Module + warmup-then-activation soft fork | `ligate-testnet-1` → `ligate-1` |
-| **Native delegation** (Iris foundation) | v0.5 module | Chain-id bump | `ligate-devnet-1` → `ligate-devnet-2` |
+| **Native delegation** (Iris foundation) | v0.5 module | Chain-id bump | `ligate-devnet-2` → `ligate-devnet-2` |
 | **Per-schema fee markets** | v1 module | Chain-id bump | `ligate-devnet-2` → `ligate-testnet-1` |
 | **Cross-schema composition** | Post-mainnet, demand-driven | Upgrade module ceremony | Within `ligate-1` |
 | **Time-locked / commit-reveal attestations** | Post-mainnet, demand-driven | Upgrade module ceremony | Within `ligate-1` |

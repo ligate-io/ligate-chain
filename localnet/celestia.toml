@@ -16,7 +16,7 @@
 
 # Chain identity. This file targets the local Celestia smoke flow,
 # which is also the localnet rung of the ladder. Public Celestia
-# devnet bumps this to `ligate-devnet-1`. See #181 and the spec
+# devnet bumps this to `ligate-devnet-2`. See #181 and the spec
 # section `Chain id` in `docs/protocol/attestation-v0.md`.
 [chain]
 chain_id = "ligate-localnet"

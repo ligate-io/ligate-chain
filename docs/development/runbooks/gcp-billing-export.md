@@ -1,6 +1,6 @@
 # GCP infra cost into Grafana
 
-> One-time setup for `ligate-devnet-1` ops. Routes GCP Cloud Billing
+> One-time setup for `ligate-devnet-2` ops. Routes GCP Cloud Billing
 > data into a BigQuery dataset, then exposes that dataset to Grafana
 > as a second datasource alongside the existing Prometheus one. After
 > setup, the chain Grafana dashboard can show a "Monthly burn rate"
@@ -62,7 +62,7 @@ PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectN
 # the export itself.
 bq --location=us-central1 mk \
   --dataset \
-  --description "GCP billing export for ligate-devnet-1 cost telemetry" \
+  --description "GCP billing export for ligate-devnet-2 cost telemetry" \
   "${PROJECT_ID}:ligate_billing"
 ```
 
@@ -109,7 +109,7 @@ The actual pattern we ship: **VM-1 runs a 6-hourly bq query, writes the result J
 
 ```bash
 PROJECT_ID=utopian-spring-494915-q1
-VM1_SA=$(gcloud compute instances describe ligate-devnet-1-sequencer \
+VM1_SA=$(gcloud compute instances describe ligate-devnet-2-sequencer \
   --zone=us-central1-a --format="value(serviceAccounts[0].email)")
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:$VM1_SA" --role="roles/bigquery.dataViewer" --condition=None
@@ -122,18 +122,18 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 Default compute VMs have a restricted scope set that does **not** include BigQuery. Even with the IAM roles above, `bq query` from the VM will return `Insufficient Permission` until you broaden the scopes. This requires a stop / scopes-change / start cycle (~6 min of public RPC downtime; same as a machine-type resize).
 
 ```bash
-gcloud compute instances stop ligate-devnet-1-sequencer --zone=us-central1-a
-gcloud compute instances set-service-account ligate-devnet-1-sequencer \
+gcloud compute instances stop ligate-devnet-2-sequencer --zone=us-central1-a
+gcloud compute instances set-service-account ligate-devnet-2-sequencer \
   --zone=us-central1-a \
   --service-account="<vm1-sa-from-4a>" \
   --scopes="https://www.googleapis.com/auth/cloud-platform"
-gcloud compute instances start ligate-devnet-1-sequencer --zone=us-central1-a
+gcloud compute instances start ligate-devnet-2-sequencer --zone=us-central1-a
 ```
 
 Verify after restart:
 
 ```bash
-gcloud compute ssh ligate-devnet-1-sequencer --zone=us-central1-a \
+gcloud compute ssh ligate-devnet-2-sequencer --zone=us-central1-a \
   --command='bq query --use_legacy_sql=false --format=json "SELECT 1 AS ok"'
 # expected: [{"ok":"1"}]
 ```
@@ -216,10 +216,10 @@ To deploy the updated script on VM-1:
 
 ```bash
 gcloud compute scp ops/billing/gcp-cost-fetch.sh \
-    ligate-devnet-1-sequencer:/tmp/gcp-cost-fetch.sh \
+    ligate-devnet-2-sequencer:/tmp/gcp-cost-fetch.sh \
     --zone=us-central1-a
 
-gcloud compute ssh ligate-devnet-1-sequencer --zone=us-central1-a --command='
+gcloud compute ssh ligate-devnet-2-sequencer --zone=us-central1-a --command='
     sudo install -m 0755 -o ligate -g ligate \
         /tmp/gcp-cost-fetch.sh /opt/ligate/bin/gcp-cost-fetch.sh
 

@@ -13,7 +13,7 @@
       },
       "id": 1,
       "options": {
-        "content": "# Ligate Devnet \u2014 Investor metrics\n\n**Chain:** `ligate-devnet-1` \u00b7 **DA:** celestia-mocha \u00b7 **API:** [api.ligate.io](https://api.ligate.io) \u00b7 **RPC:** [rpc.ligate.io](https://rpc.ligate.io) \u00b7 **Explorer:** [explorer.ligate.io](https://explorer.ligate.io)\n\nPublic-facing metrics sourced from `api.ligate.io` (`/v1/stats/*` + `/v1/info`). For chain-internal Prometheus metrics see [`Ligate Devnet \u2014 Operator view`](/d/ligate-operator).",
+        "content": "# Ligate Devnet \u2014 Investor metrics\n\n**Chain:** `ligate-devnet-2` \u00b7 **DA:** celestia-mocha \u00b7 **API:** [api.ligate.io](https://api.ligate.io) \u00b7 **RPC:** [rpc.ligate.io](https://rpc.ligate.io) \u00b7 **Explorer:** [explorer.ligate.io](https://explorer.ligate.io)\n\nPublic-facing metrics sourced from `api.ligate.io` (`/v1/stats/*` + `/v1/info`). For chain-internal Prometheus metrics see [`Ligate Devnet \u2014 Operator view`](/d/ligate-operator).",
         "mode": "markdown"
       },
       "title": "",

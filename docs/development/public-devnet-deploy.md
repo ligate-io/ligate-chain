@@ -1,6 +1,6 @@
 # Public devnet deploy runbook
 
-How to bring up a `ligate-devnet-1` node on GCP, in either operator role:
+How to bring up a `ligate-devnet-2` node on GCP, in either operator role:
 
 - **Sequencer** (the canonical Ligate-Labs node, single-instance in v0).
 - **Follower** (any third-party operator running their own copy of the chain state).
@@ -45,14 +45,14 @@ Sequencer sizing covers `ligate-node` + co-located Celestia light node + the loc
 
 Faucet and indexer **do not run on this VM**; they live in [`ligate-io/ligate-api`](https://github.com/ligate-io/ligate-api), deployed to Railway alongside a Railway-managed Postgres. The Next.js explorer at `explorer.ligate.io` is yet another deploy on Vercel, talking to `api.ligate.io`. Follower sizing is smaller because followers don't keep the local backup stage (they restore from GCS or replay from DA if state is lost).
 
-Persistent data disk can be **live-resized without downtime** via `gcloud compute disks resize` + `resize2fs /dev/sdb`; ext4 supports online growth. Done on `ligate-devnet-1-sequencer` on 2026-05-16 (50GB → 150GB) when local snapshot accumulation projected to fill the original 50GB within ~24h.
+Persistent data disk can be **live-resized without downtime** via `gcloud compute disks resize` + `resize2fs /dev/sdb`; ext4 supports online growth. Done on `ligate-devnet-2-sequencer` on 2026-05-16 (50GB → 150GB) when local snapshot accumulation projected to fill the original 50GB within ~24h.
 
 **OS choice.** As of chain#345 the released `ligate-node` Linux binary is built on Ubuntu 22.04 (GLIBC 2.35), so it runs cleanly on every common server distro: Ubuntu 22.04+, Debian 12+, RHEL 9, Amazon Linux 2023. Older distros (GLIBC <2.35) still need a from-source build. Ubuntu 24.04 stays the canonical operator choice for the rest of the runbook because cloud-init + GCP image families are stable on it, but Debian 12 works fine too if you prefer.
 
 ## Step 1: Provision the VM
 
 ```bash
-gcloud compute instances create ligate-devnet-1-sequencer \
+gcloud compute instances create ligate-devnet-2-sequencer \
     --project=$YOUR_GCP_PROJECT \
     --zone=us-central1-a \
     --machine-type=e2-standard-4 \
@@ -69,10 +69,10 @@ For a follower, swap `--machine-type=e2-medium`, `--create-disk=...,size=100GB`,
 Reserve a static external IP and bind it:
 
 ```bash
-gcloud compute addresses create ligate-devnet-1-rpc \
+gcloud compute addresses create ligate-devnet-2-rpc \
     --project=$YOUR_GCP_PROJECT --region=us-central1
-gcloud compute instances add-access-config ligate-devnet-1-sequencer \
-    --address=$(gcloud compute addresses describe ligate-devnet-1-rpc \
+gcloud compute instances add-access-config ligate-devnet-2-sequencer \
+    --address=$(gcloud compute addresses describe ligate-devnet-2-rpc \
         --project=$YOUR_GCP_PROJECT --region=us-central1 --format='value(address)')
 ```
 
@@ -99,7 +99,7 @@ The cloud-init does the chassis. The operator still has to:
   ```bash
   sudo -u ligate ln -s /var/lib/ligate/rocksdb /opt/ligate/devnet/data-celestia
   ```
-  Without this, the chain writes state to the 20 GB boot disk and a VM image rebuild loses chain history. Backups (per `docs/development/runbooks/backup-restore.md`) reduce the blast radius to ~15 minutes' RPO, but the persistent disk is the right home regardless. (Done after the fact on `ligate-devnet-1-sequencer` on 2026-05-16, runbook documents the in-place migration.)
+  Without this, the chain writes state to the 20 GB boot disk and a VM image rebuild loses chain history. Backups (per `docs/development/runbooks/backup-restore.md`) reduce the blast radius to ~15 minutes' RPO, but the persistent disk is the right home regardless. (Done after the fact on `ligate-devnet-2-sequencer` on 2026-05-16, runbook documents the in-place migration.)
 - **Pin `genesis_da_height` before first boot.** `devnet-1/genesis/chain_state.json` ships `genesis_da_height: 0` — a placeholder. Celestia rejects a request for DA block 0, so the chain cannot initialize against Mocha while it's `0` (this is exactly what the Mocha smoke gate surfaced; see [#331](https://github.com/ligate-io/ligate-chain/issues/331)). Set it to a recent **finalized** Mocha height:
   ```bash
   # Latest Mocha consensus height, minus a finality margin.
@@ -247,7 +247,7 @@ rpc.ligate.io {
 }
 ```
 
-Production also wraps the above with a `(cloudflare_only)` macro that 403s any request whose source IP isn't in Cloudflare's published edge ranges. See `/etc/caddy/Caddyfile` on `ligate-devnet-1-sequencer` (or the CF-IP list at <https://www.cloudflare.com/ips-v4/>) for the macro. Skip for non-Cloudflare deploys.
+Production also wraps the above with a `(cloudflare_only)` macro that 403s any request whose source IP isn't in Cloudflare's published edge ranges. See `/etc/caddy/Caddyfile` on `ligate-devnet-2-sequencer` (or the CF-IP list at <https://www.cloudflare.com/ips-v4/>) for the macro. Skip for non-Cloudflare deploys.
 
 Install + enable:
 
@@ -295,7 +295,7 @@ $EDITOR devnet-1/canonical-schemas.toml  # fill in real attestor pubkeys
 
 # 2. Run the ceremony binary. Auto-fetches chain_hash from /v1/rollup/info.
 #    --chain-id is the numeric u64 CHAIN_ID from constants.toml (NOT
-#    the "ligate-devnet-1" human-readable string).
+#    the "ligate-devnet-2" human-readable string).
 cargo run --release -p ligate-bootstrap-cli -- register-canonical-schemas \
     --config devnet-1/canonical-schemas.toml \
     --signer-key ~/.ligate-keys/devnet-1/operator.key \
@@ -361,9 +361,9 @@ Cron-driven rsync of state to a Cloud Storage bucket every 6 hours:
 Secrets go to Secret Manager, not GCS:
 
 ```bash
-gcloud secrets create ligate-devnet-1-sequencer-signer \
+gcloud secrets create ligate-devnet-2-sequencer-signer \
     --replication-policy=user-managed --locations=us-central1
-gcloud secrets versions add ligate-devnet-1-sequencer-signer --data-file=-
+gcloud secrets versions add ligate-devnet-2-sequencer-signer --data-file=-
 # (paste the private key, then EOF)
 ```
 
@@ -374,7 +374,7 @@ The `ligate-node` systemd unit reads from `/etc/ligate/env`, which on first boot
 | Symptom | Likely cause | First check | Fix |
 |---|---|---|---|
 | `ligate-node` won't start, "missing [chain] section" | Wrong config file passed | `journalctl -u ligate-node` | Check `--rollup-config-path` points at `/opt/ligate/devnet/celestia.toml`, not the localnet one |
-| `ligate-node` won't start, "chain_id 'X' does not match the locked ladder" | Operator typo in `[chain]` | `cat /opt/ligate/devnet/celestia.toml \| grep chain_id` | Fix to `ligate-devnet-1`, restart |
+| `ligate-node` won't start, "chain_id 'X' does not match the locked ladder" | Operator typo in `[chain]` | `cat /opt/ligate/devnet/celestia.toml \| grep chain_id` | Fix to `ligate-devnet-2`, restart |
 | Sequencer cannot reach Celestia | Light node down or wrong endpoint | `systemctl status celestia-light`, `curl ws://127.0.0.1:26658` | Restart `celestia-light`; if persistent, check Mocha bridge availability |
 | `/ready` returns 503 with high target_da_height | Node is catching up | Look at `synced_da_height` over 5 min | Wait; sync rate ~1 block/s on healthy network |
 | `/ready` returns 503 indefinitely | Sequencer can't keep up with DA | Check `block_height` metric and DA polling rate | Increase `da_polling_interval_ms` upward, or check for state-corruption indicators |
@@ -434,7 +434,7 @@ docker run -d \
     -p 12346:12346 -p 9100:9100 \
     -e SOV_CELESTIA_RPC_URL=ws://host.docker.internal:26658 \
     -e SOV_CELESTIA_GRPC_URL=http://host.docker.internal:9090 \
-    -e SOV_CELESTIA_SIGNER_KEY="$(gcloud secrets versions access latest --secret=ligate-devnet-1-sequencer-signer)" \
+    -e SOV_CELESTIA_SIGNER_KEY="$(gcloud secrets versions access latest --secret=ligate-devnet-2-sequencer-signer)" \
     -e RUST_LOG=info,sov=info \
     ghcr.io/ligate-io/ligate-chain:v0.3.0 \
     --da-layer celestia \

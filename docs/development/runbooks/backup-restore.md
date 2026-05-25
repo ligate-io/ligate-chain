@@ -67,7 +67,7 @@ Two layers of pruning, each handles a different scope:
 ```sh
 # Regional bucket close to the chain VM, standard storage class,
 # uniform IAM, public-access-prevention on.
-gcloud storage buckets create gs://ligate-devnet-1-backups \
+gcloud storage buckets create gs://ligate-devnet-2-backups \
     --project=$YOUR_GCP_PROJECT \
     --location=us-central1 \
     --default-storage-class=STANDARD \
@@ -75,7 +75,7 @@ gcloud storage buckets create gs://ligate-devnet-1-backups \
     --public-access-prevention
 
 # Apply the rotation policy (hourly: 7d, weekly: 365d)
-gcloud storage buckets update gs://ligate-devnet-1-backups \
+gcloud storage buckets update gs://ligate-devnet-2-backups \
     --lifecycle-file=ops/backup/gcs-lifecycle.json
 
 # Grant the VM's default Compute Engine service account write access
@@ -83,9 +83,9 @@ gcloud storage buckets update gs://ligate-devnet-1-backups \
 # project; org policy `constraints/iam.disableServiceAccountKeyCreation`
 # is enforced. Using the existing VM SA + a bucket-scoped IAM grant
 # avoids needing a key.)
-VM_SA=$(gcloud compute instances describe ligate-devnet-1-sequencer \
+VM_SA=$(gcloud compute instances describe ligate-devnet-2-sequencer \
         --zone us-central1-a --format='value(serviceAccounts[0].email)')
-gcloud storage buckets add-iam-policy-binding gs://ligate-devnet-1-backups \
+gcloud storage buckets add-iam-policy-binding gs://ligate-devnet-2-backups \
     --member="serviceAccount:$VM_SA" \
     --role="roles/storage.objectAdmin"
 ```
@@ -93,9 +93,9 @@ gcloud storage buckets add-iam-policy-binding gs://ligate-devnet-1-backups \
 The VM's default service account ships with `devstorage.read_only` scope only. Add `devstorage.read_write` (cycle of stop → set-service-account → start; ~2 min of chain downtime):
 
 ```sh
-gcloud compute instances stop ligate-devnet-1-sequencer --zone us-central1-a
+gcloud compute instances stop ligate-devnet-2-sequencer --zone us-central1-a
 
-gcloud compute instances set-service-account ligate-devnet-1-sequencer \
+gcloud compute instances set-service-account ligate-devnet-2-sequencer \
     --zone us-central1-a \
     --service-account "$VM_SA" \
     --scopes "https://www.googleapis.com/auth/devstorage.read_write,\
@@ -106,12 +106,12 @@ https://www.googleapis.com/auth/service.management.readonly,\
 https://www.googleapis.com/auth/servicecontrol,\
 https://www.googleapis.com/auth/trace.append"
 
-gcloud compute instances start ligate-devnet-1-sequencer --zone us-central1-a
+gcloud compute instances start ligate-devnet-2-sequencer --zone us-central1-a
 
 # After start: re-enable + start ligate-node (it's not enabled by default
 # because the cloud-init only installs the unit; first-boot left it
 # disabled. Subsequent boots auto-start once enabled.)
-gcloud compute ssh ligate-devnet-1-sequencer --zone us-central1-a --command '
+gcloud compute ssh ligate-devnet-2-sequencer --zone us-central1-a --command '
     sudo systemctl enable --now ligate-node.service
 '
 ```
@@ -171,13 +171,13 @@ sudo systemctl start ligate-backup@weekly.service
 sudo journalctl -u 'ligate-backup@*.service' --since "5 minutes ago" --no-pager
 
 # Inspect what landed in GCS:
-gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/
+gcloud storage ls gs://ligate-devnet-2-backups/ligate-devnet-2-sequencer/
 
 # Check the per-snapshot manifest carries height + storage path:
-TS=$(gcloud storage ls gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/ \
+TS=$(gcloud storage ls gs://ligate-devnet-2-backups/ligate-devnet-2-sequencer/hourly/ \
        | tail -1 | awk -F/ '{print $(NF-1)}')
 gcloud storage cat \
-    "gs://ligate-devnet-1-backups/ligate-devnet-1-sequencer/hourly/$TS/$TS/.snapshot-manifest.json"
+    "gs://ligate-devnet-2-backups/ligate-devnet-2-sequencer/hourly/$TS/$TS/.snapshot-manifest.json"
 ```
 
 ---
@@ -209,7 +209,7 @@ Three triggers for a restore:
 
 ```sh
 # 1. Identify the snapshot to restore from
-gcloud storage ls gs://ligate-devnet-1-backups/$(hostname -s)/hourly/
+gcloud storage ls gs://ligate-devnet-2-backups/$(hostname -s)/hourly/
 
 # 2. Run the restore script. With no args, picks the most recent hourly.
 sudo /opt/ligate/scripts/restore-rocksdb.sh
@@ -264,7 +264,7 @@ Exit codes encode the failure stage (1 = backup, 2 = restore, 3 = post-restore v
 
 ## Migrating an existing host to the persistent disk
 
-If you're operating a host where chain state landed on `/dev/root` instead of the persistent disk (cloud-init didn't pre-create the symlink), here's the in-place migration. Done on `ligate-devnet-1-sequencer` on 2026-05-16 with ~3 min of chain downtime.
+If you're operating a host where chain state landed on `/dev/root` instead of the persistent disk (cloud-init didn't pre-create the symlink), here's the in-place migration. Done on `ligate-devnet-2-sequencer` on 2026-05-16 with ~3 min of chain downtime.
 
 ```sh
 # 1. Stop the chain cleanly. TimeoutStopSec=300 gives RocksDB room
@@ -314,13 +314,13 @@ GCE persistent disks grow live, and ext4 resizes online; no chain stop needed.
 gcloud compute disks resize ligate-data-v2 --zone us-central1-a --size 150GB
 
 # 2. Inside the VM, grow the ext4 filesystem to fill the new size.
-gcloud compute ssh ligate-devnet-1-sequencer --zone us-central1-a --command '
+gcloud compute ssh ligate-devnet-2-sequencer --zone us-central1-a --command '
   sudo resize2fs /dev/sdb
   df -h /var/lib/ligate
 '
 ```
 
-Done on `ligate-devnet-1-sequencer` 2026-05-16 (50GB → 150GB) when projected local snapshot accumulation (24 hourly × ~5GB) was on track to fill the original disk within ~24h. With the `--sparse` rsync fix (see followups) each snapshot drops from ~5GB to ~1.2GB and the 50GB disk would have been fine; 150GB is comfortable headroom either way.
+Done on `ligate-devnet-2-sequencer` 2026-05-16 (50GB → 150GB) when projected local snapshot accumulation (24 hourly × ~5GB) was on track to fill the original disk within ~24h. With the `--sparse` rsync fix (see followups) each snapshot drops from ~5GB to ~1.2GB and the 50GB disk would have been fine; 150GB is comfortable headroom either way.
 
 You can't shrink a GCE persistent disk, so size up cautiously. ext4 supports shrinking but only offline; not a path we'd take on this host.
 

@@ -38,7 +38,7 @@ curl -s http://127.0.0.1:9101/metrics | grep celestia_node_da_signer_balance_uti
 #     targets = [{
 #       __address__ = "127.0.0.1:9101",
 #       job         = "celestia-tia",
-#       instance    = "ligate-devnet-1-sequencer",
+#       instance    = "ligate-devnet-2-sequencer",
 #     }]
 #     scrape_interval = "60s"
 #     forward_to = [prometheus.remote_write.grafana_cloud.receiver]
