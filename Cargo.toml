@@ -106,8 +106,16 @@ risc0-zkvm-platform = "2.2"
 risc0-build         = "3.0"
 
 [profile.release]
+# `codegen-units = 16` (default) trades ~2-5% runtime binary
+# performance for ~4x faster release builds vs. `codegen-units = 1`.
+# Pre-mainnet that's the right side of the trade: release builds run
+# on every tag (no automated coverage gate against build time), and
+# the absolute runtime gap matters less than iteration speed for a
+# devnet workload. Flip back to `codegen-units = 1` (+ likely
+# `lto = "fat"`) at the first mainnet RC, when binary performance
+# starts mattering and release cadence slows to once-per-month-ish.
 lto = "thin"
-codegen-units = 1
+codegen-units = 16
 
 # Drop debug info on the dev profile.
 #
