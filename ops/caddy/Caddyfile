@@ -70,7 +70,7 @@
 # `reverse_proxy { ... }` block (bare IPs would have to appear on the
 # `reverse_proxy` line itself and can't be carried by an `import`).
 (sequencer_pool) {
-    to 10.128.0.3:12346
+    to 127.0.0.1:12346
     # VM-2 (10.128.0.6) + VM-3 (10.128.0.11) stopped on 2026-05-22 when
     # we went single-VM mode. Their probes would 5xx every 2s and spam
     # the Caddy log. Re-add when the multi-sequencer cluster comes back
