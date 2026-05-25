@@ -78,7 +78,7 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # election; rather than expose it, we open a tiny 2-connection pool
 # here for the read-only topology query. Same `sqlx` version as the
 # SDK fork's sov-sequencer (0.8) to avoid duplicate compilation.
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "time"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "time"] }
 sov-full-node-configs = { workspace = true }
 
 [dev-dependencies]
