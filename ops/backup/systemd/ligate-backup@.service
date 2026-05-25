@@ -17,7 +17,7 @@ EnvironmentFile=/etc/ligate/backup.env
 #   ligate-backup@weekly.service   →   TIER=weekly  (gs:// .../weekly/<YYYY-Www>/)
 #
 # `backup.env` provides at minimum:
-#   GCS_BUCKET=ligate-devnet-1-backups
+#   GCS_BUCKET=ligate-backups
 #   LIGATE_STORAGE_DIR=...   (override; default is /var/lib/ligate/rollup)
 # It does NOT set TIER any more (that comes from %i below) and would
 # be silently overwritten if also in the envfile.

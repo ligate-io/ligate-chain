@@ -25,7 +25,7 @@
       }
     ]
   },
-  "description": "Chain-engineer view: DA pipeline internals, sequencer role + transitions, blob accounting, mempool, attestation rejections, activity leaders. For operator-on-call signals see /d/ligate-operator. For business + growth metrics see /d/ligate-investor. For TIA + GCP cost see /d/ligate-devnet-1-cost.",
+  "description": "Chain-engineer view: DA pipeline internals, sequencer role + transitions, blob accounting, mempool, attestation rejections, activity leaders. For operator-on-call signals see /d/ligate-operator. For business + growth metrics see /d/ligate-investor. For TIA + GCP cost see /d/ligate-cost.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
