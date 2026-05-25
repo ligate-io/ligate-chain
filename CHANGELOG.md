@@ -10,6 +10,11 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ### Changed
 
+- **Tx latency: drop p50 from ~12s to ~7s via two config tweaks** (`devnet/celestia.toml` + `localnet/celestia.toml`). `batch_execution_time_limit_millis` 12000 → 2000 (sequencer submits a blob to Celestia as soon as 2s have passed since first tx in batch, instead of waiting up to 12s for more batchable txs). `da_polling_interval_ms` 2000 → 500 (chain polls Celestia 4× more frequently for new blobs, cutting follower-side inclusion latency). Trade-off: smaller blobs = slightly more $TIA spent per blob at low load; negligible at devnet volume. The hard floor at ~6s per Celestia block remains; further wins need [#TBD soft confirmations] or [#260 native DA migration]. Tracking next-tier latency in the issue tree.
+
+
+### Changed
+
 - **Stable-path naming for deployed infrastructure** (devnet-2 cutover follow-up). Drops the devnet-version suffix from chain-agnostic resources so future devnet-N → devnet-N+1 rollovers stop accumulating renames. Grafana dashboard UID `ligate-devnet-1-cost` → `ligate-cost` (live Grafana renamed via API; repo file `ligate-devnet-1-cost.json` → `ligate-cost.json`). GCS backup bucket `ligate-devnet-1-backups` → `ligate-backups` (new bucket in `us-central1`; `backup.env.example` + `backup-rocksdb.sh` + `ligate-backup@.service` updated; old bucket retained as archive). GCP Secret Manager: `ligate-devnet-1-{celestia-signer-key,grafana-cloud-token}` → `ligate-{celestia-signer-key,grafana-cloud-token}` (chain-agnostic; new secrets created with identical values, VM service account granted accessor; cloud-init flipped). Operator-key backups (`ligate-devnet-1-{operator,attestor,faucet}-key`) intentionally keep the devnet suffix (tied to a specific genesis bank state). GCE VM instance `ligate-devnet-1-sequencer` NOT touched here (requires snapshot + recreate + downtime; deferred to a maintenance window).
 
 

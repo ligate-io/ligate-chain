@@ -92,7 +92,7 @@ pruner_versions_to_keep = 20
 [runner]
 # Celestia produces ~12s blocks; polling 6× per block keeps inclusion
 # latency low without spamming the RPC.
-da_polling_interval_ms = 2_000
+da_polling_interval_ms = 500
 
 [runner.http_config]
 bind_host = "127.0.0.1"
@@ -137,7 +137,7 @@ rollup_address = "lig1h72nh5c7jfjkcygku4thsh2t53dyh33kkpktpy84w06qwr4agvt"
 disable_state_root_consistency_checks = true
 recovery_strategy = "TryToSave"
 # 12s — one Celestia block of in-batch work.
-batch_execution_time_limit_millis = 12000
+batch_execution_time_limit_millis = 2000
 num_cache_warmup_workers = 0
 
 [sequencer.extension]
