@@ -19,7 +19,7 @@ these JSON files to restore or replicate.
 | [`ligate-node.json`](ligate-node.json) | `ligate-node` | Chain engineers (DA pipeline + sequencer state machine) | [/d/ligate-node](https://ligate.grafana.net/d/ligate-node) |
 | [`ligate-operator.json`](ligate-operator.json) | `ligate-operator` | 24/7 on-call (host health + service SLA) | [/d/ligate-operator](https://ligate.grafana.net/d/ligate-operator) |
 | [`ligate-investor.json`](ligate-investor.json) | `ligate-investor` | Partners + investors (chain growth + token economy) | [/d/ligate-investor](https://ligate.grafana.net/d/ligate-investor) |
-| [`ligate-devnet-1-cost.json`](ligate-devnet-1-cost.json) | `ligate-devnet-1-cost` | Money-flow watching (TIA + AVOW + GCP burn) | [/d/ligate-devnet-1-cost](https://ligate.grafana.net/d/ligate-devnet-1-cost) |
+| [`ligate-cost.json`](ligate-cost.json) | `ligate-cost` | Money-flow watching (TIA + AVOW + GCP burn) | [/d/ligate-cost](https://ligate.grafana.net/d/ligate-cost) |
 
 ## Ownership boundaries
 
@@ -46,7 +46,7 @@ AVOW supply and treasury balance, top-10 AVOW holders, growth-over-time
 charts (new wallets/day, tx rate stacked by kind), DA finality (last
 1h), block cadence summary. No process metrics, no host noise.
 
-**`ligate-devnet-1-cost` (Money flow).** What's the chain costing? TIA
+**`ligate-cost` (Money flow).** What's the chain costing? TIA
 balance + draw-down rate against the sequencer's Celestia wallet,
 faucet AVOW balance + runway estimate, daily drips counter, plus the
 DA + infra spend section (TIA burned cumulative + per-hour, GCP daily
@@ -86,7 +86,7 @@ Future schema bumps update the JSON in place; re-import to pick up.
 ## Phase 1 + 2 metric tracking
 
 Phase 1 + 2 chain metrics (#110, #164, chain#446 Track 4, chain#452,
-chain#392) all surface in `ligate-node` or `ligate-devnet-1-cost`
+chain#392) all surface in `ligate-node` or `ligate-cost`
 depending on whether they're internal-state or cost-of-running. Newer
 metrics: append to the most-appropriate dashboard and avoid copying
 to the other three.

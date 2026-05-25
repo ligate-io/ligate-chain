@@ -279,7 +279,7 @@ runcmd:
   - |
     mkdir -p /etc/ligate/env.d
     SIGNER_HEX=$(gcloud secrets versions access latest \
-      --secret=ligate-devnet-1-celestia-signer-key \
+      --secret=ligate-celestia-signer-key \
       --project=utopian-spring-494915-q1 2>/dev/null | tr -d '\r\n')
     if [ -n "$SIGNER_HEX" ]; then
       echo "SOV_CELESTIA_SIGNER_KEY=$SIGNER_HEX" > /etc/ligate/env.d/celestia-signer
@@ -314,7 +314,7 @@ runcmd:
     mkdir -p /etc/alloy
 
     gcloud secrets versions access latest \
-      --secret=ligate-devnet-1-grafana-cloud-token \
+      --secret=ligate-grafana-cloud-token \
       --project=utopian-spring-494915-q1 > /etc/alloy/grafana_cloud_token
     chown alloy:alloy /etc/alloy/grafana_cloud_token
     chmod 600 /etc/alloy/grafana_cloud_token

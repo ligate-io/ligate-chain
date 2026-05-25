@@ -26,7 +26,7 @@ set -euo pipefail
 # ----- Config (env-overridable) ------------------------------------
 : "${LIGATE_STORAGE_DIR:=/var/lib/ligate/rollup}"
 : "${LIGATE_SNAPSHOT_DIR:=/var/lib/ligate/snapshots}"
-: "${GCS_BUCKET:?GCS_BUCKET must be set (e.g. ligate-devnet-1-backups)}"
+: "${GCS_BUCKET:?GCS_BUCKET must be set (e.g. ligate-backups)}"
 : "${HOSTNAME:=$(hostname -s)}"
 
 # Snapshot tag: hour for routine runs, day for the daily-keep tier,
