@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Added
+
+- **Auto-upgrade VMs on chain_hash-stable releases.** Closes the manual-upgrade gap surfaced when v0.3.0 → v0.3.1 shipped with unchanged `chain_hash` but the live VM stayed on v0.3.0 until a human ran `upgrade-chain.sh`. Two pieces. (1) `release.yml` emits a `chain-hash-unchanged.flag` release asset when the matching `CHANGELOG` section asserts that `chain_hash` is unchanged from the prior release (regex matches the canonical prose we already write by hand). (2) `ops/systemd/ligate-auto-upgrade.{service,timer}` polls the GitHub Releases API hourly: if a new tag is published AND the flag is present AND the bump isn't major-version AND the operator hasn't set `/etc/ligate/auto-upgrade.disabled` as a kill-switch sentinel, the timer invokes `upgrade-chain.sh <tag>` to do the binary swap. Anything that fails any gate is a no-op log line in journald — nothing destructive happens implicitly. Cloud-init installs the timer + service + script automatically on fresh VMs; existing VMs pick it up via `install -m 0755 scripts/auto-upgrade.sh /opt/ligate/scripts/auto-upgrade.sh` + `install -m 0644 ops/systemd/ligate-auto-upgrade.* /etc/systemd/system/` + `systemctl enable --now ligate-auto-upgrade.timer`. Closes [#503](https://github.com/ligate-io/ligate-chain/issues/503).
+
 ## [0.3.1] - 2026-05-25
 
 Ops execution release after v0.3.0's wire-format break: ships the devnet-2 cutover, adopts stable-path naming for deployed infrastructure so future devnet rollovers stop accumulating renames, drops tx latency p50 from ~12s to ~7s via two `celestia.toml` tweaks, and pulls `release.yml` build wall-clock from ~25-30 min down to ~8-12 min. `chain_hash` unchanged from v0.3.0 (`eec077f4736df42cddb547236468dad32f1fd6822aaad1e822ce596307552df2`); v0.3.0 and v0.3.1 binaries are byte-compatible against `ligate-devnet-2` state.

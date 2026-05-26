@@ -370,6 +370,28 @@ runcmd:
     chmod 644 /etc/alloy/config.alloy
     systemctl enable --now alloy
 
+  # Install the in-place upgrade tooling. `upgrade-chain.sh` is the
+  # canonical binary-swap script (operator-invoked: `sudo
+  # upgrade-chain.sh 0.X.Y`); `auto-upgrade.sh` is the hourly poller
+  # that calls it automatically when a chain_hash-stable release
+  # ships. Both come from the same cloned repo as the genesis
+  # bundle, so they track the pinned LIGATE_TAG above. Operators on
+  # an older VM can still pick up new versions of these scripts via
+  # `curl + install` per the runbook. (chain#503)
+  - |
+    mkdir -p /opt/ligate/scripts
+    install -m 0755 /tmp/ligate-chain/scripts/upgrade-chain.sh /opt/ligate/scripts/upgrade-chain.sh
+    install -m 0755 /tmp/ligate-chain/scripts/auto-upgrade.sh   /opt/ligate/scripts/auto-upgrade.sh
+
+  # Drop the auto-upgrade systemd units in place. The timer ticks
+  # hourly (`OnUnitActiveSec=1h`, +`RandomizedDelaySec=10min` jitter),
+  # the service wraps `auto-upgrade.sh` as a oneshot. Both are
+  # idempotent on re-runs of cloud-init: `install -C` skips when
+  # contents match. (chain#503)
+  - |
+    install -m 0644 /tmp/ligate-chain/ops/systemd/ligate-auto-upgrade.service /etc/systemd/system/
+    install -m 0644 /tmp/ligate-chain/ops/systemd/ligate-auto-upgrade.timer   /etc/systemd/system/
+
   # Start ligate-node. Cloud-init has placed the binary, devnet-1
   # config, /etc/ligate/env (managed), and /etc/ligate/env.d/celestia-signer
   # (secret drop-in) above. Alloy is also up and scraping. Follower-mode
@@ -378,3 +400,10 @@ runcmd:
   # happens at the operator's discretion (chain#422).
   - systemctl daemon-reload
   - systemctl enable --now ligate-node.service
+  # Enable the auto-upgrade timer. It defers the first check 10 min
+  # post-boot (`OnBootSec=10min`), so this `enable --now` only arms
+  # the timer; the actual poll runs after ligate-node has had time
+  # to come up and serve `/v1/rollup/info`. Disable on this VM with
+  # `touch /etc/ligate/auto-upgrade.disabled` (kill-switch sentinel)
+  # without disabling the timer itself.
+  - systemctl enable --now ligate-auto-upgrade.timer

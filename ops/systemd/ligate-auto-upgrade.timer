@@ -1,0 +1,21 @@
+[Unit]
+Description=Hourly ligate auto-upgrade check
+Requires=ligate-auto-upgrade.service
+
+[Timer]
+# Hourly is the right cadence: chain releases ship a few times per
+# week at devnet pace, and the binary swap itself is the long-pole
+# (~30s of downtime), so any sub-hour interval would be a no-op
+# most of the time. `OnBootSec=10min` gives the node a chance to
+# settle before the first check fires on a fresh VM.
+OnBootSec=10min
+OnUnitActiveSec=1h
+# Random jitter so a fleet of VMs doesn't synchronously hit the
+# GitHub API at exactly :00. Doesn't matter at fleet=1 but cheap
+# insurance for the day we run multiple nodes.
+RandomizedDelaySec=10min
+Persistent=true
+Unit=ligate-auto-upgrade.service
+
+[Install]
+WantedBy=timers.target
