@@ -1,0 +1,275 @@
+name: Local celestia E2E
+
+# Per-PR fast E2E against `evstack/local-celestia-devnet` — a single
+# Docker container that runs both `celestia-app` (validator) and
+# `celestia-node` (bridge), purpose-built "for CI and local
+# development." This is the deterministic, no-external-deps
+# counterpart to the nightly real-Mocha smoke (`mocha-smoke.yml`):
+#
+#   - mocha-smoke (#285): real Mocha, catches integration bugs vs the
+#     public network (consensus gRPC, JWT auth, pops.one health,
+#     `genesis_da_height` math vs live tip). Runs nightly + dispatch.
+#     ~25 min. External flakiness baked in.
+#
+#   - local-celestia-e2e (this, #332): in-job Docker container, no
+#     network, fully reproducible. Catches DA-adapter regressions
+#     (`sov_celestia_adapter`, bech32m round-trips, blob serialization)
+#     at PR time instead of overnight. ~10 min.
+#
+# Both should be green at all times. The local devnet covers the
+# common-path regressions cheaply; Mocha covers the integration tail.
+#
+# Tracking issue: ligate-io/ligate-chain#332.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      # DA-adapter touchpoints. Keep this list narrow: the workflow
+      # is ~10 min, so we want it skipping the bulk of non-DA PRs
+      # (docs, ops, marketing-prose tweaks). When in doubt, add the
+      # path here rather than skipping it — a missed regression
+      # surfaces in the nightly Mocha smoke either way, but it's
+      # nicer to catch it at review time.
+      - 'crates/**'
+      - 'devnet/**'
+      - 'localnet/**'
+      - 'constants.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/local-celestia-e2e.yml'
+
+concurrency:
+  # One run per ref. New pushes to the same PR/branch cancel the
+  # in-flight previous run rather than queueing.
+  group: local-celestia-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  SKIP_GUEST_BUILD: "1"
+  CONSTANTS_MANIFEST_PATH: ${{ github.workspace }}/constants.toml
+  # Same release-profile overrides as mocha-smoke: parallel codegen,
+  # no LTO. The smoke needs a binary that runs correctly, not a
+  # maximally optimised one.
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "256"
+  CARGO_PROFILE_RELEASE_LTO: "false"
+
+jobs:
+  e2e:
+    name: ligate-node + local celestia E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Run the celestia local devnet as a sidecar service. Docker
+    # pulls + starts the container before any step runs. Pinned tag
+    # rather than `latest`: upstream tags are infrequent (4 releases
+    # in 2024), and a `latest` pull mid-workflow would break
+    # determinism. Bump explicitly when chain#XXX decides to.
+    services:
+      celestia:
+        image: ghcr.io/rollkit/local-celestia-devnet:v0.13.1
+        ports:
+          - 26658:26658  # celestia-node RPC (blob read + header)
+          - 9090:9090    # celestia-app gRPC (blob submit)
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libclang (bindgen dep)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libclang-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # Build only the binaries we need. ligate-cli is intentionally
+      # NOT built here: the per-PR fast path skips the cli-mediated tx
+      # submit (covered by nightly mocha-smoke #333). When the local
+      # devnet gains a known funded signer we can fold tx submit in.
+      - name: Build chain binaries
+        run: |
+          cargo build --release --bin ligate-node --bin ligate-genesis-tool
+
+      # Wait for the celestia bridge node to come up. The container
+      # boots the celestia-app validator + the celestia-node bridge
+      # in sequence; RPC is the bridge's port 26658 and answers once
+      # both are alive and producing blocks.
+      - name: Wait for celestia RPC
+        run: |
+          set -euo pipefail
+          echo "Waiting for celestia bridge RPC..."
+          for i in {1..60}; do
+              HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
+                  -H 'Content-Type: application/json' \
+                  -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}' \
+                  | jq -r '.result.header.height // .result.height // 0' 2>/dev/null) || HEAD=0
+              if [ "${HEAD:-0}" -gt 0 ] 2>/dev/null; then
+                  echo "celestia bridge synced to height ${HEAD}."
+                  break
+              fi
+              sleep 2
+          done
+          # Final check: hard-fail if we still don't have a head.
+          if [ "${HEAD:-0}" -le 0 ]; then
+              echo "FAIL: celestia bridge never produced a header within 2 min" >&2
+              exit 1
+          fi
+          # Persist across steps. $GITHUB_ENV exports become available
+          # to later steps' run blocks as plain env vars.
+          echo "CELESTIA_HEAD=${HEAD}" >> "$GITHUB_ENV"
+
+      # Generate ephemeral genesis pointing at the local devnet's
+      # current tip. Same shape as mocha-smoke (#322) except we don't
+      # need the NetworkHead catch-up wait — the local devnet starts
+      # empty, so LocalHead IS NetworkHead.
+      - name: Generate ephemeral genesis
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/keys
+          ./target/release/ligate-genesis-tool keys generate \
+              --roles operator,demo1,demo2 \
+              --output /tmp/keys
+
+          OPERATOR=$(cat /tmp/keys/operator.address)
+          DEMO1=$(cat /tmp/keys/demo1.address)
+          DEMO2=$(cat /tmp/keys/demo2.address)
+
+          # Local celestia devnet's validator address — `local-celestia-devnet`
+          # initialises a fixed bech32 address for the validator
+          # account (the container is deterministic). We don't sign
+          # blobs in this fast smoke, so the value here is a placeholder
+          # that the substitution map satisfies; a follow-up that
+          # exercises the submit path will need to swap this for the
+          # real validator bech32.
+          DA_ADDR="celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as"
+
+          cat > /tmp/keys.toml <<EOF
+          [addresses]
+          "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac" = "$OPERATOR"
+          "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "$DEMO1"
+          "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "$DEMO2"
+          "celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as" = "$DA_ADDR"
+          EOF
+
+          ./target/release/ligate-genesis-tool generate \
+              --template devnet/genesis \
+              --substitutions /tmp/keys.toml \
+              --output /tmp/genesis \
+              --da celestia
+
+          # Anchor genesis_da_height at current celestia tip - 5 (small
+          # buffer to make sure the chain doesn't fall off the bridge's
+          # store while booting). $CELESTIA_HEAD comes from the
+          # `Wait for celestia RPC` step via $GITHUB_ENV.
+          DA_HEIGHT=$((CELESTIA_HEAD - 5))
+          if [ "$DA_HEIGHT" -lt 1 ]; then
+              DA_HEIGHT=1
+          fi
+          jq --argjson h "$DA_HEIGHT" '.genesis_da_height = $h' \
+              /tmp/genesis/chain_state.json > /tmp/chain_state.patched.json
+          mv /tmp/chain_state.patched.json /tmp/genesis/chain_state.json
+          echo "anchored genesis at DA height ${DA_HEIGHT}"
+
+      # Run the smoke. Same structure as `mocha-smoke.yml`'s "Run
+      # smoke" step minus the transfer + DA-finalization wait (no
+      # signer wired today; the local devnet's blob signer is
+      # deferred to a follow-up issue).
+      - name: Run smoke
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+
+          echo "anchor (from earlier step): $CELESTIA_HEAD"
+
+          # Generate an ephemeral celestia signer key. The chain needs
+          # a key to sign blobs heading to celestia even when blob
+          # submissions are expected to fail (this smoke doesn't
+          # validate the submit→finalize path; that's the nightly
+          # mocha-smoke's job, which uses a funded Mocha TIA wallet).
+          # A random 32-byte ed25519 key is enough to boot ligate-node
+          # cleanly; celestia rejects the unfunded blobs server-side,
+          # but the chain itself runs normally and produces local slots.
+          # A future iteration of this smoke can swap in
+          # local-celestia-devnet's known validator key to exercise the
+          # full happy path.
+          export SOV_CELESTIA_SIGNER_KEY=$(openssl rand -hex 32)
+
+          # Point ligate-node at the local sidecar. devnet/celestia.toml's
+          # rpc_url/grpc_url get overridden via env (`SOV_CELESTIA_*`
+          # vars take precedence over the file).
+          export SOV_CELESTIA_RPC_URL="http://127.0.0.1:26658"
+          export SOV_CELESTIA_GRPC_URL="http://127.0.0.1:9090"
+
+          nohup ./target/release/ligate-node \
+              --da-layer celestia \
+              --rollup-config-path devnet/celestia.toml \
+              --genesis-config-dir /tmp/genesis \
+              --metrics-bind 127.0.0.1:9100 \
+              > /tmp/ligate-node.log 2>&1 &
+          NODE_PID=$!
+          trap "kill $NODE_PID 2>/dev/null || true; sleep 1; cat /tmp/ligate-node.log | tail -50" EXIT
+
+          # Wait for the REST API.
+          for i in {1..60}; do
+              if curl -sf http://127.0.0.1:12346/v1/rollup/info >/dev/null 2>&1; then
+                  break
+              fi
+              sleep 2
+          done
+
+          # === chain identity ===
+          echo "=== chain identity ==="
+          INFO=$(curl -sf http://127.0.0.1:12346/v1/rollup/info)
+          echo "$INFO" | jq
+          CHAIN_HASH=$(echo "$INFO" | jq -r .chain_hash)
+          if [[ "$CHAIN_HASH" != lsch1* ]]; then
+              echo "FAIL: chain_hash is not bech32m: $CHAIN_HASH" >&2
+              exit 1
+          fi
+          SCHEMA_HASH=$(curl -sf http://127.0.0.1:12346/v1/rollup/schema | jq -r .chain_hash)
+          if [[ "$SCHEMA_HASH" != "$CHAIN_HASH" ]]; then
+              echo "FAIL: schema chain_hash diverges: $SCHEMA_HASH vs $CHAIN_HASH" >&2
+              exit 1
+          fi
+          echo "OK: chain_hash round-trips as $CHAIN_HASH"
+
+          # === slot encoding ===
+          echo "=== slot encoding ==="
+          for i in {1..60}; do
+              LATEST=$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/latest | jq -r .number)
+              if [ "$LATEST" -ge 3 ]; then break; fi
+              sleep 2
+          done
+          SLOT=$(curl -sf http://127.0.0.1:12346/v1/ledger/slots/3)
+          SLOT_HASH=$(echo "$SLOT" | jq -r .hash)
+          STATE_ROOT=$(echo "$SLOT" | jq -r .state_root)
+          [[ "$SLOT_HASH" == lblk1* ]] || { echo "FAIL: slot.hash not bech32m: $SLOT_HASH" >&2; exit 1; }
+          [[ "$STATE_ROOT" == lsr1* ]]  || { echo "FAIL: state_root not bech32m: $STATE_ROOT" >&2; exit 1; }
+          echo "OK: slot bech32m encoding correct"
+
+          # === metrics endpoint up ===
+          echo "=== metrics endpoint ==="
+          METRICS_FILE=/tmp/metrics.txt
+          curl -sf http://127.0.0.1:9100/metrics -o "$METRICS_FILE" || {
+              echo "FAIL: /metrics endpoint unreachable" >&2
+              exit 1
+          }
+          LIGATE_METRIC_LINES=$(grep -c '^ligate_' "$METRICS_FILE" || true)
+          echo "OK: /metrics endpoint up (${LIGATE_METRIC_LINES} ligate_* metric lines)"
+
+          echo "=== LOCAL CELESTIA E2E PASSED ==="
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: local-celestia-e2e-logs
+          path: |
+            /tmp/ligate-node.log
+          retention-days: 14
