@@ -516,26 +516,42 @@ The one near-exception is `/v1/ledger/events`, which accepts a `?limit=N` query 
 
 ## Error envelope
 
-All endpoints use a consistent error envelope:
+Error responses from every endpoint under `/v1/ledger`, `/v1/sequencer`, `/v1/rollup`, and `/v1/modules` use a single shape, rendered by the SDK's `sov_modules_api::rest::utils::errors` helpers (`bad_request_400`, `not_found_404`, `internal_server_error_500`). JSON:API-inspired but compact:
 
 ```json
 {
-  "errors": [
-    {
-      "title": "Schema not found",
-      "details": "lsc1..."
-    }
-  ]
+  "status": 404,
+  "message": "Schema 'lsc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as' not found",
+  "details": {
+    "id": "lsc1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as"
+  }
 }
 ```
 
-Status codes:
+Field semantics:
 
-- **200 OK**: success, body matches the documented type
-- **400 Bad Request**: input parsing failed (malformed Bech32m id, malformed JSON body, unknown query param)
-- **404 Not Found**: input parsed cleanly but no record exists at the given key
-- **503 Service Unavailable**: returned by `/v1/sequencer/ready` when the sequencer has not finished accepting state. Body details what is pending.
-- **500 Internal Server Error**: storage error or internal panic. File a bug.
+- **`status`**: numeric HTTP status code. Mirrors the response header — clients SHOULD use the header as the source of truth and treat the body field as redundant.
+- **`message`**: human-readable error string. Stable enough for log scraping but not API contract; future SDK upgrades can change the prose without a wire-format bump.
+- **`details`**: free-shaped JSON object. Keys depend on the helper that built the response:
+  - `not_found_404` → `{"id": "<looked-up id>"}`
+  - `bad_request_400` → `{"error": "<underlying parse error>"}`
+  - `internal_server_error_500` → `{"error": "<sanitized error>"}` (full error logged server-side, not returned to client)
+
+Request correlation rides on a response header, not in the body:
+
+- **`X-Request-Id`**: opaque ulid set by the SDK's `tower_request_id::RequestIdLayer` for every response (200s and error 4xx/5xx alike). Propagated via `PropagateHeaderLayer::new("x-request-id")`. Operators correlate client-side complaints with server logs by grepping `journalctl -u ligate-node` for this id.
+
+Status codes used today:
+
+- **200 OK**: success, body matches the documented type.
+- **400 Bad Request**: input parsing failed (malformed bech32m id, malformed JSON body, unknown query param). `details.error` carries the parse-error string.
+- **404 Not Found**: input parsed cleanly but no record exists at the given key. `details.id` echoes the lookup id.
+- **500 Internal Server Error**: storage error or internal panic. Full error logged server-side; `details.error` is the sanitized client-facing message. File a bug with the `X-Request-Id`.
+- **503 Service Unavailable**: emitted by two specific endpoints with custom shapes that intentionally differ from the standard envelope above:
+  - `GET /ready` (readiness probe, separate from the error path) returns `{"status":"syncing","synced_da_height":N,"target_da_height":M}` while catching up to DA head. K8s `readinessProbe` convention.
+  - `POST /v1/sequencer/txs` returns `{"status":503,"message":"...","details":{"Syncing":{"synced_da_height":N,"target_da_height":M}}}` when the sequencer is behind DA. Uses the standard envelope with a `details.Syncing` discriminant; sync state is the actionable info.
+
+An end-to-end regression test pinning this shape against a spawned chain binary is tracked as a follow-up under [ligate-chain#201](https://github.com/ligate-io/ligate-chain/issues/201) (audit + this doc landed first; the test itself wants careful sequencing against the existing `binary_spawn_smoke.rs` parallelism + a valid 32-byte bech32m lookup-key constructor).
 
 ## Versioning
 
