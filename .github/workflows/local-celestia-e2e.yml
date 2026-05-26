@@ -63,13 +63,18 @@ jobs:
     timeout-minutes: 20
 
     # Run the celestia local devnet as a sidecar service. Docker
-    # pulls + starts the container before any step runs. Pinned tag
-    # rather than `latest`: upstream tags are infrequent (4 releases
-    # in 2024), and a `latest` pull mid-workflow would break
-    # determinism. Bump explicitly when chain#XXX decides to.
+    # pulls + starts the container before any step runs.
+    #
+    # `evstack/local-celestia-devnet` is the new home of the image
+    # the README still calls `rollkit/local-celestia-devnet` (the org
+    # renamed from `rollkit` to `evstack`; the legacy registry path
+    # 403s now). `v0.10.4` is the latest non-RC semver Docker tag as
+    # of 2026-05; v0.11.0 is still in RC. Pinned (not `latest`) so a
+    # silent upstream re-tag can't break PR CI mid-merge. Bump
+    # explicitly here when a newer tag is verified.
     services:
       celestia:
-        image: ghcr.io/rollkit/local-celestia-devnet:v0.13.1
+        image: ghcr.io/evstack/local-celestia-devnet:v0.10.4
         ports:
           - 26658:26658  # celestia-node RPC (blob read + header)
           - 9090:9090    # celestia-app gRPC (blob submit)
