@@ -317,6 +317,27 @@ jobs:
           echo "Release notes preview (${VERSION}):"
           head -40 release-notes.md
 
+      # Emit a `chain-hash-unchanged.flag` release asset when the
+      # matching CHANGELOG section asserts that `chain_hash` is
+      # unchanged from the prior release. This is the green-light
+      # signal for `ops/systemd/ligate-auto-upgrade.timer` (#503): VM
+      # auto-upgrades only fire when this flag is present, because
+      # changing `chain_hash` requires state quarantine + replay (no
+      # safe binary swap path). Anchor matches the canonical prose
+      # we already write by hand (e.g. "`chain_hash` is unchanged",
+      # or "chain_hash unchanged"); add new variants here if the
+      # CHANGELOG style drifts.
+      - name: Emit chain-hash-unchanged.flag (when CHANGELOG marks it)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -qiE '\bchain[_ ]?hash\b[^\n]*\bunchanged\b|\bunchanged\b[^\n]*\bchain[_ ]?hash\b' release-notes.md; then
+            echo "Found chain_hash-unchanged anchor in release-notes.md; emitting flag asset."
+            touch release/chain-hash-unchanged.flag
+          else
+            echo "No chain_hash-unchanged anchor in release-notes.md; flag NOT emitted (auto-upgrade poller will treat this as chain_hash-changing and skip)."
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:

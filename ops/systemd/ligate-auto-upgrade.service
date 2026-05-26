@@ -1,0 +1,23 @@
+[Unit]
+Description=Ligate Chain auto-upgrade poller
+# Wait for the chain to be up before polling — `auto-upgrade.sh`
+# reads the running version off `/v1/rollup/info`, so racing the
+# main service's startup just produces a "deferring" log line and
+# wastes a timer tick.
+After=ligate-node.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+# Runs as root because the work it delegates to (`upgrade-chain.sh`)
+# needs to `systemctl stop/start ligate-node` and `install -o ligate`
+# the new binary. The script itself does no destructive thing without
+# all four gates passing (kill-switch, major-bump check,
+# chain-hash-unchanged.flag, version comparison vs running).
+ExecStart=/opt/ligate/scripts/auto-upgrade.sh
+StandardOutput=journal
+StandardError=journal
+# `upgrade-chain.sh` polls service health for up to 90s, plus its
+# own download/install steps; 5 min is comfortable headroom.
+TimeoutStartSec=5min
