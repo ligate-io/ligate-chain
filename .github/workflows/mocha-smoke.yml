@@ -165,24 +165,53 @@ jobs:
               --rpc.port 26658 \
               --rpc.skip-auth \
               > /tmp/celestia.log 2>&1 &
-          # Wait for the light node to sync a header. Query its
-          # JSON-RPC endpoint directly with curl rather than the
-          # `celestia rpc` CLI: that CLI's stdout is not clean JSON
-          # (jq chokes on it with "Invalid numeric literal"), which
-          # silently no-op'd this check on every prior run. `--rpc.skip-auth`
-          # is set above, so no token is needed.
-          echo "Waiting for light node to sync..."
-          for i in {1..60}; do
+          # Wait for the light node to catch up to the Mocha network
+          # head (LocalHead within 10 blocks of NetworkHead), NOT just
+          # to "have some header." Why: a freshly-started light node
+          # reports LocalHead = trusted-state anchor (often thousands
+          # of blocks behind the live network head) and ramps up over
+          # ~30-90s as DAS pulls and verifies recent headers. If we
+          # anchor `genesis_da_height` at this initial LocalHead - 50,
+          # the chain boots way behind the live network head — boot
+          # succeeds, slot encoding passes — but the sequencer's
+          # `accept_tx` precondition (`synced_da_height` near
+          # `target_da_height`) refuses tx submission with a 503
+          # `Syncing` error for the hours it would take chain to walk
+          # forward to live head. This was an invisible bug in the
+          # tx-less smoke; #333 surfaced it. JSON-RPC docs:
+          # https://node-rpc-docs.celestia.org/?version=v0.30.x
+          #
+          # `--rpc.skip-auth` is set above, so no token is needed.
+          echo "Waiting for light node to catch up to NetworkHead..."
+          HEAD=0
+          NETWORK_HEAD=0
+          for i in {1..120}; do
               HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
                   -H 'Content-Type: application/json' \
                   -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}' \
                   | jq -r '.result.header.height // .result.height // 0' 2>/dev/null) || HEAD=0
-              if [ "${HEAD:-0}" -gt 0 ] 2>/dev/null; then
-                  echo "Light node synced to height ${HEAD}."
-                  break
+              NETWORK_HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
+                  -H 'Content-Type: application/json' \
+                  -d '{"jsonrpc":"2.0","id":1,"method":"header.NetworkHead","params":[]}' \
+                  | jq -r '.result.header.height // .result.height // 0' 2>/dev/null) || NETWORK_HEAD=0
+              if [ "${HEAD:-0}" -gt 0 ] && [ "${NETWORK_HEAD:-0}" -gt 0 ]; then
+                  GAP=$((NETWORK_HEAD - HEAD))
+                  if [ "$GAP" -le 10 ]; then
+                      echo "Light node caught up: LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD} (gap=${GAP})."
+                      break
+                  fi
+                  echo "  iter $i: LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD}, gap=${GAP}"
               fi
               sleep 5
           done
+          # Hard-fail if the light node never caught up; without this
+          # the workflow would proceed with a bad anchor and trip the
+          # exact 503 Syncing trap that motivated this wait.
+          GAP=$((NETWORK_HEAD - HEAD))
+          if [ "${HEAD:-0}" -le 0 ] || [ "${NETWORK_HEAD:-0}" -le 0 ] || [ "$GAP" -gt 10 ]; then
+              echo "FAIL: light node didn't catch up within 10 min (LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD}, gap=${GAP})." >&2
+              exit 1
+          fi
 
       # Generate ephemeral keys + run `ligate-genesis-tool` to produce
       # a valid genesis bundle. The checked-in `devnet/genesis/`
@@ -346,6 +375,34 @@ jobs:
           # `token_1...` value is deterministic across substitutions —
           # it's derived from the gas-token name+symbol, not from the
           # `lig1` addresses we substituted).
+          # Wait for chain to be in sync with the DA tip before
+          # submitting. The sequencer's `accept_tx` refuses tx with a
+          # 503 `Syncing` while `synced_da_height < target_da_height -
+          # margin`; that error caused the first #333 smoke iteration
+          # to fail even with the catch-up'd light node (chain processes
+          # DA blocks slower than the light node syncs them, so there's
+          # a brief lag between boot and full sync). `/ready` returns
+          # 200 once chain reports `{"status":"synced", ...}`, 503 with
+          # `{"status":"syncing", synced_da_height, target_da_height}`
+          # while catching up. ~3 min budget; catchup-from-anchor at
+          # NetworkHead-50 finishes in well under that.
+          echo "=== waiting for chain DA sync ==="
+          for i in {1..90}; do
+              if curl -sf http://127.0.0.1:12346/ready >/dev/null 2>&1; then
+                  echo "OK: chain reports synced ($(curl -sf http://127.0.0.1:12346/ready))"
+                  break
+              fi
+              if [ $((i % 6)) -eq 0 ]; then
+                  echo "  iter $i: $(curl -s http://127.0.0.1:12346/ready)"
+              fi
+              sleep 2
+          done
+          if ! curl -sf http://127.0.0.1:12346/ready >/dev/null 2>&1; then
+              echo "FAIL: chain never reached /ready=200 (still syncing after 3 min)" >&2
+              curl -s http://127.0.0.1:12346/ready >&2 || true
+              exit 1
+          fi
+
           echo "=== submit transfer + verify DA finalization ==="
           DEMO2_ADDR=$(cat /tmp/keys/demo2.address)
           AVOW_TOKEN_ID=$(jq -r .avow_token_id /tmp/genesis/attestation.json)
