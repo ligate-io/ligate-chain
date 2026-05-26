@@ -107,13 +107,33 @@ jobs:
         with:
           cache-on-failure: true
 
-      # Build ligate-node + ligate-cli + ligate-genesis-tool. The
-      # genesis-tool is what generates the ephemeral genesis below.
-      # Cold-cache build is ~50 min; cached re-runs ~2 min.
+      # Build ligate-node + ligate-genesis-tool. The genesis-tool
+      # generates the ephemeral genesis below. Cold-cache build is
+      # ~50 min; cached re-runs ~2 min. `ligate-cli` is no longer in
+      # this workspace (extracted to `ligate-io/ligate-cli`); the next
+      # step downloads its released binary.
       - name: Build chain binaries
         run: |
           cargo build --release --bin ligate-node --bin ligate-genesis-tool
-          cargo build --release --bin ligate-cli || true
+
+      # Download the released `ligate` user-facing CLI binary. Pinned
+      # to a known-good version so the smoke isn't at the mercy of
+      # the latest cli release (a wire-format-breaking cli release
+      # would otherwise silently break the smoke). Bump this pin in
+      # the same PR as any cli release that breaks back-compat with
+      # the chain.
+      - name: Download ligate-cli release
+        run: |
+          set -euo pipefail
+          LIGATE_CLI_TAG=v0.2.2
+          BASE="https://github.com/ligate-io/ligate-cli/releases/download/${LIGATE_CLI_TAG}"
+          ARCHIVE="ligate-cli-${LIGATE_CLI_TAG}-linux-amd64.tar.gz"
+          curl -fsSL -o "/tmp/${ARCHIVE}" "${BASE}/${ARCHIVE}"
+          curl -fsSL -o "/tmp/${ARCHIVE}.sha256" "${BASE}/${ARCHIVE}.sha256"
+          (cd /tmp && sha256sum -c "${ARCHIVE}.sha256")
+          tar -xzf "/tmp/${ARCHIVE}" -C /tmp/
+          sudo install -m 0755 "/tmp/ligate-cli-${LIGATE_CLI_TAG}-linux-amd64/ligate" /usr/local/bin/ligate
+          ligate --version
 
       # Install + initialize the Celestia light node. Pin to a known
       # version; bump as upstream releases land. Asset name is the
@@ -245,7 +265,13 @@ jobs:
       # mocha light node, waits for slot 3, asserts bech32m encodings
       # on every hash type, asserts DA metrics increment.
       - name: Run smoke
-        timeout-minutes: 15
+        # 25-min budget: ~5 min boot + chain identity + slot encoding,
+        # then up to ~10 min waiting on Celestia finalization (which
+        # is the long pole — Mocha block time ~6s, plus the rollup's
+        # `da_polling_interval_ms` 500ms, then the rollup's own batch
+        # commitment loop). Comfortable margin above the ~12 min
+        # observed worst case.
+        timeout-minutes: 25
         run: |
           set -euo pipefail
 
@@ -300,38 +326,99 @@ jobs:
           [[ "$STATE_ROOT" == lsr1* ]]  || { echo "FAIL: state_root not bech32m: $STATE_ROOT" >&2; exit 1; }
           echo "OK: slot bech32m encoding correct"
 
-          # === Step 7: DA metrics ===
+          # === Step 4: real transfer + DA submit -> finalize round-trip ===
           #
-          # Hard requirement: the metrics endpoint is up and serving a
-          # non-empty Prometheus body. The DA-finalization histogram is
-          # NOT hard-required: `ligate_da_finalization_latency_seconds_count`
-          # is lazily registered and only appears once a blob has been
-          # submitted AND finalized on Celestia. This smoke submits no
-          # transactions, so the sequencer never produces a batch to
-          # submit and the metric is legitimately absent. An actual
-          # submit -> finalize round-trip needs a tx-submitting smoke,
-          # tracked in ligate-chain#333.
+          # Submit a 1-AVOW `demo1 -> demo2` transfer via the released
+          # `ligate` cli, wait for sequencer-side inclusion, then wait
+          # for the blob to land on Celestia (`ligate_da_finalization_latency_seconds_count`
+          # is the metric the chain emits when the batch is finalized
+          # on the DA layer). Hard-asserts both. This is the path that
+          # was tracked as a follow-up in ligate-chain#333; the
+          # tx-less smoke could only WARN on the DA metric because no
+          # transaction ever forced the sequencer to produce a batch.
           #
-          # Metrics go to a file and are grepped from disk (no
-          # `echo "$VAR" | cmd` pipes) so an early-exiting consumer
-          # can't SIGPIPE the producer and trip `set -o pipefail`.
-          echo "=== DA metrics ==="
-          METRICS_FILE=/tmp/smoke-metrics.txt
-          curl -sf http://127.0.0.1:9100/metrics -o "$METRICS_FILE" || {
-              echo "FAIL: /metrics endpoint unreachable at http://127.0.0.1:9100/metrics" >&2
+          # `--chain-id` is the *numeric* form (u64) from
+          # `constants.toml`'s `CHAIN_ID = 4242`, not the string
+          # `chain_id = "ligate-devnet-2"` from `celestia.toml`.
+          # `--chain-hash` is pulled live so the smoke survives any
+          # future chain_hash bump without a manual workflow edit.
+          # `--token-id` comes from the generated genesis (the bech32m
+          # `token_1...` value is deterministic across substitutions —
+          # it's derived from the gas-token name+symbol, not from the
+          # `lig1` addresses we substituted).
+          echo "=== submit transfer + verify DA finalization ==="
+          DEMO2_ADDR=$(cat /tmp/keys/demo2.address)
+          AVOW_TOKEN_ID=$(jq -r .avow_token_id /tmp/genesis/attestation.json)
+          CHAIN_ID=4242
+          echo "  chain_id=${CHAIN_ID} chain_hash=${CHAIN_HASH} token_id=${AVOW_TOKEN_ID}"
+          echo "  recipient=${DEMO2_ADDR}"
+
+          TX_OUT=$(ligate \
+              --rpc http://127.0.0.1:12346 \
+              transfer \
+              --to "$DEMO2_ADDR" \
+              --amount 1 \
+              --signer demo1 \
+              --keystore /tmp/keys \
+              --chain-id "$CHAIN_ID" \
+              --chain-hash "$CHAIN_HASH" \
+              --token-id "$AVOW_TOKEN_ID" \
+              --json)
+          echo "$TX_OUT" | jq
+          TX_HASH=$(echo "$TX_OUT" | jq -r .tx_hash)
+          if [[ "$TX_HASH" != ltx1* ]]; then
+              echo "FAIL: tx_hash is not bech32m ltx1: $TX_HASH" >&2
               exit 1
-          }
+          fi
+          echo "OK: transfer submitted, tx_hash=$TX_HASH"
+
+          # Wait for the chain to ledger the tx (sequencer-side
+          # inclusion, fast — within a slot). The endpoint 404s until
+          # the tx is included.
+          echo "=== waiting for tx inclusion ==="
+          for i in {1..30}; do
+              if curl -sf "http://127.0.0.1:12346/v1/ledger/txs/${TX_HASH}" >/dev/null 2>&1; then
+                  echo "OK: tx visible at /v1/ledger/txs/${TX_HASH} after ${i} polls"
+                  break
+              fi
+              sleep 2
+          done
+          if ! curl -sf "http://127.0.0.1:12346/v1/ledger/txs/${TX_HASH}" >/dev/null 2>&1; then
+              echo "FAIL: tx never appeared at /v1/ledger/txs/${TX_HASH}" >&2
+              exit 1
+          fi
+
+          # Wait for Celestia finalization. Mocha block time is ~6s
+          # and `ligate_da_finalization_latency_seconds_count` is
+          # lazily registered (absent until the first observation),
+          # so we poll the file rather than grep-ing for a count that
+          # might not exist yet. ~10 min worst-case budget.
+          echo "=== waiting for DA finalization ==="
+          METRICS_FILE=/tmp/smoke-metrics.txt
+          DA_COUNT=""
+          for i in {1..60}; do
+              curl -sf http://127.0.0.1:9100/metrics -o "$METRICS_FILE" || true
+              DA_COUNT=$(awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}' "$METRICS_FILE")
+              if [ -n "$DA_COUNT" ] && awk "BEGIN { exit ($DA_COUNT > 0) ? 0 : 1 }"; then
+                  echo "OK: DA finalization count = ${DA_COUNT} (after ${i} polls × 10s)"
+                  break
+              fi
+              sleep 10
+          done
+
+          # Hard-assert. The smoke now produces a real tx, so the
+          # metric is required (no more WARN-not-fail).
           if [ ! -s "$METRICS_FILE" ]; then
               echo "FAIL: /metrics endpoint returned an empty body" >&2
               exit 1
           fi
           LIGATE_METRIC_LINES=$(grep -c '^ligate_' "$METRICS_FILE" || true)
           echo "OK: /metrics endpoint up (${LIGATE_METRIC_LINES} ligate_* metric lines)"
-          DA_COUNT=$(awk '/^ligate_da_finalization_latency_seconds_count /{print $2; exit}' "$METRICS_FILE")
-          if [ -n "$DA_COUNT" ]; then
-              echo "OK: DA finalization count = $DA_COUNT"
-          else
-              echo "WARN: ligate_da_finalization_latency_seconds_count absent -- expected for this tx-less smoke; real submit->finalize coverage tracked in ligate-chain#333"
+          if [ -z "$DA_COUNT" ] || ! awk "BEGIN { exit ($DA_COUNT > 0) ? 0 : 1 }"; then
+              echo "FAIL: ligate_da_finalization_latency_seconds_count never incremented after a real submit" >&2
+              echo "Last ligate_da_* snapshot:" >&2
+              grep -E '^ligate_da_' "$METRICS_FILE" >&2 || echo "(no ligate_da_* metrics)" >&2
+              exit 1
           fi
 
           echo "=== SMOKE PASSED ==="
