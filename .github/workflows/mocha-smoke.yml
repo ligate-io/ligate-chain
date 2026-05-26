@@ -68,7 +68,7 @@ jobs:
       # Celestia consensus gRPC endpoint, for blob submission
       # (`MsgPayForBlobs`). `ligate-node`'s Celestia adapter needs this
       # in addition to the light-node RPC: the RPC reads headers/blobs,
-      # the gRPC submits them. `devnet-1/celestia.toml` deliberately
+      # the gRPC submits them. `devnet/celestia.toml` deliberately
       # omits `grpc_url` so this env var is the single source of truth
       # (a hardcoded value in the TOML would shadow it -- same trap as
       # `signer_private_key`). The runner has no co-located
@@ -165,7 +165,7 @@ jobs:
           done
 
       # Generate ephemeral keys + run `ligate-genesis-tool` to produce
-      # a valid genesis bundle. The checked-in `devnet-1/genesis/`
+      # a valid genesis bundle. The checked-in `devnet/genesis/`
       # ships with placeholder addresses that fail strict genesis
       # validation. The real operator path runs this same flow with
       # operator-controlled keys; for CI we generate ephemeral keys
@@ -193,21 +193,21 @@ jobs:
 
           cat > /tmp/keys.toml <<EOF
           [addresses]
-          "lig1rh9vcu879l36z42xgw78wuksy8ma5vnzkrregmgmka9uqr8fyp8" = "$OPERATOR"
+          "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac" = "$OPERATOR"
           "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544" = "$DEMO1"
           "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz" = "$DEMO2"
           "celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzf30as" = "$MOCHA_TIA_DA_ADDRESS"
           EOF
 
           ./target/release/ligate-genesis-tool generate \
-              --template devnet-1/genesis \
+              --template devnet/genesis \
               --substitutions /tmp/keys.toml \
               --output /tmp/genesis \
               --da celestia
 
           # Anchor the ephemeral genesis to a live Mocha height. The
-          # checked-in `devnet-1/genesis/chain_state.json` ships
-          # `genesis_da_height: 0` (a placeholder; the real devnet-1
+          # checked-in `devnet/genesis/chain_state.json` ships
+          # `genesis_da_height: 0` (a placeholder; the real devnet-2
           # launch pins it at launch time). Booting against Mocha with
           # height 0 makes `ligate-node` request DA block 0, which
           # Celestia rejects with "height is equal to 0". Back off 50
@@ -252,7 +252,7 @@ jobs:
           # Start ligate-node in the background
           nohup ./target/release/ligate-node \
               --da-layer celestia \
-              --rollup-config-path devnet-1/celestia.toml \
+              --rollup-config-path devnet/celestia.toml \
               --genesis-config-dir "${GENESIS_DIR}" \
               --metrics-bind 127.0.0.1:9100 \
               > /tmp/ligate-node.log 2>&1 &
