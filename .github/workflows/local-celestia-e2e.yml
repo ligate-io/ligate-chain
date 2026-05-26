@@ -24,6 +24,7 @@ name: Local celestia E2E
 on:
   push:
     branches: [main]
+  workflow_dispatch:
   pull_request:
     paths:
       # DA-adapter touchpoints. Keep this list narrow: the workflow
