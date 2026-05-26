@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           # actions/checkout@v6 persists its own `Authorization` header in
-          # the local git config. When `peter-evans/create-pull-request@v6`
+          # the local git config. When `peter-evans/create-pull-request@v8`
           # later pushes the auto-PR branch, it adds its own header too,
           # producing `Duplicate header: "Authorization"` and a git HTTP
           # 400. Disable persistence; the create-pull-request action
@@ -83,7 +83,7 @@ jobs:
 
       - name: Open auto-PR
         if: steps.bump.outputs.changed == '1'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore: bump internal chain pins to v${{ steps.latest.outputs.chain }}"

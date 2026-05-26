@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Changed
+
+- **Bump `peter-evans/create-pull-request@v6` → `@v8` in `.github/workflows/bump-versions.yml`.** v6 runs on Node.js 20, which GitHub forces to Node.js 24 on 2026-06-02 and removes from runners entirely on 2026-09-16. v8 is the latest line and ships Node 24 compatibility. The auto-PR semantics are unchanged across the bump (same inputs, same `Authorization`-header collision fix from [#501](https://github.com/ligate-io/ligate-chain/pull/501)). No other Actions in chain's workflow tree show the Node-20 deprecation warning today.
+
 ### Added
 
 - **Auto-upgrade VMs on chain_hash-stable releases.** Closes the manual-upgrade gap surfaced when v0.3.0 → v0.3.1 shipped with unchanged `chain_hash` but the live VM stayed on v0.3.0 until a human ran `upgrade-chain.sh`. Two pieces. (1) `release.yml` emits a `chain-hash-unchanged.flag` release asset when the matching `CHANGELOG` section asserts that `chain_hash` is unchanged from the prior release (regex matches the canonical prose we already write by hand). (2) `ops/systemd/ligate-auto-upgrade.{service,timer}` polls the GitHub Releases API hourly: if a new tag is published AND the flag is present AND the bump isn't major-version AND the operator hasn't set `/etc/ligate/auto-upgrade.disabled` as a kill-switch sentinel, the timer invokes `upgrade-chain.sh <tag>` to do the binary swap. Anything that fails any gate is a no-op log line in journald — nothing destructive happens implicitly. Cloud-init installs the timer + service + script automatically on fresh VMs; existing VMs pick it up via `install -m 0755 scripts/auto-upgrade.sh /opt/ligate/scripts/auto-upgrade.sh` + `install -m 0644 ops/systemd/ligate-auto-upgrade.* /etc/systemd/system/` + `systemctl enable --now ligate-auto-upgrade.timer`. Closes [#503](https://github.com/ligate-io/ligate-chain/issues/503).
