@@ -551,7 +551,7 @@ Status codes used today:
   - `GET /ready` (readiness probe, separate from the error path) returns `{"status":"syncing","synced_da_height":N,"target_da_height":M}` while catching up to DA head. K8s `readinessProbe` convention.
   - `POST /v1/sequencer/txs` returns `{"status":503,"message":"...","details":{"Syncing":{"synced_da_height":N,"target_da_height":M}}}` when the sequencer is behind DA. Uses the standard envelope with a `details.Syncing` discriminant; sync state is the actionable info.
 
-The shape is regression-pinned by `crates/rollup/tests/binary_spawn_smoke.rs::rest_error_envelope_pin` (ligate-chain#201). Any SDK bump that silently changes the envelope breaks that test before it can break a client.
+An end-to-end regression test pinning this shape against a spawned chain binary is tracked as a follow-up under [ligate-chain#201](https://github.com/ligate-io/ligate-chain/issues/201) (audit + this doc landed first; the test itself wants careful sequencing against the existing `binary_spawn_smoke.rs` parallelism + a valid 32-byte bech32m lookup-key constructor).
 
 ## Versioning
 
