@@ -60,7 +60,13 @@ jobs:
   e2e:
     name: ligate-node + local celestia E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 45 min budget: cold-cache cargo build of `ligate-node` +
+    # `ligate-genesis-tool` is ~20-25 min on the free-tier runner
+    # (the `cargo test` 2-3 min seen in `ci.yml` is warm-cache).
+    # Swatinem cache below is `shared-key`'d with ci.yml so warm
+    # runs land in <5 min; first-on-this-branch and cache-miss runs
+    # still have ~20 min smoke headroom after the build.
+    timeout-minutes: 45
 
     # Run the celestia local devnet as a sidecar service. Docker
     # pulls + starts the container before any step runs.
