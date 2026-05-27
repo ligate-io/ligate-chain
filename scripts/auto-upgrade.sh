@@ -6,7 +6,7 @@
 #   1. A new release is published on GitHub.
 #   2. The release ships a `chain-hash-unchanged.flag` asset (set by
 #      `release.yml` when the matching CHANGELOG section asserts
-#      `chain_hash` is unchanged — the only case where an in-place
+#      `chain_hash` is unchanged, the only case where an in-place
 #      binary swap is safe without state quarantine + replay).
 #   3. The new version isn't a major-version bump from the running
 #      one (e.g. 0.x → 1.x stays manual).
@@ -63,7 +63,7 @@ fi
 
 # ──────────────────────────────────────────────────────────────────────
 # Read the running version off the chain itself. If the chain is
-# down, defer — restarting a downed chain via an auto-swap risks
+# down, defer, restarting a downed chain via an auto-swap risks
 # masking a real outage. The hourly timer retries naturally.
 # ──────────────────────────────────────────────────────────────────────
 if ! INFO=$(curl -fsSL --max-time 5 "$RPC_URL/v1/rollup/info" 2>&1); then
@@ -111,7 +111,7 @@ fi
 
 # ──────────────────────────────────────────────────────────────────────
 # Gate 3: the chain-hash-unchanged.flag asset. Absent means the release
-# author didn't assert chain_hash is preserved — i.e. either it did
+# author didn't assert chain_hash is preserved, i.e. either it did
 # change, or the assertion got lost. Either way, manual.
 # ──────────────────────────────────────────────────────────────────────
 HAS_FLAG=$(echo "$RELEASE_JSON" | jq -r --arg n "$SAFE_FLAG_NAME" \

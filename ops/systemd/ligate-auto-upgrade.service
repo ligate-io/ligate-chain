@@ -1,6 +1,6 @@
 [Unit]
 Description=Ligate Chain auto-upgrade poller
-# Wait for the chain to be up before polling — `auto-upgrade.sh`
+# Wait for the chain to be up before polling, `auto-upgrade.sh`
 # reads the running version off `/v1/rollup/info`, so racing the
 # main service's startup just produces a "deferring" log line and
 # wastes a timer tick.
