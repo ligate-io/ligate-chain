@@ -1,6 +1,6 @@
 {
   "description": "DA signer wallet (TIA) balance, burn rate, and runway. Powered by celestia-tia-exporter sidecar (ops/exporters/celestia-tia/). GCP cost panels (VM-hours, GCS storage, network egress, $USD MTD) are tracked separately in chain follow-up issue #392.",
-  "id": 2514337932513280,
+  "id": 802351786655744,
   "panels": [
     {
       "datasource": {
@@ -61,7 +61,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "AVOW balance of the faucet hot wallet (lig1kfaqfu\u2026). Drained by every successful drip (web @ 100 AVOW / bot @ 100-1000 AVOW). Source: api.ligate.io/v1/addresses/<addr> via Infinity datasource. Top up from treasury when balance drops below ~10,000 AVOW. Display shows raw nano-AVOW divided by 1e9 via the panel's Calculate-field transform.",
+      "description": "LGT balance of the faucet hot wallet (lig1kfaqfu…). Drained by every successful drip (web @ 100 LGT / bot @ 100-1000 LGT). Source: api.ligate.io/v1/addresses/<addr> via Infinity datasource. Top up from treasury when balance drops below ~10,000 LGT. Display shows raw nano-LGT divided by 1e9 via the panel's Calculate-field transform.",
       "fieldConfig": {
         "defaults": {
           "decimals": 2,
@@ -124,12 +124,12 @@
           }
         }
       ],
-      "title": "Faucet wallet AVOW balance",
+      "title": "Faucet wallet LGT balance",
       "transformations": [
         {
           "id": "calculateField",
           "options": {
-            "alias": "avow",
+            "alias": "lgt",
             "binary": {
               "left": "amount_nano",
               "operator": "/",
@@ -150,7 +150,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "Days of runway at observed burn rate, computed as balance / burn_per_day. Uses a 7d burn window for smoothing; clamps burn to a tiny floor (0.001 TIA/day) so periods of zero burn don't divide by zero. Display is capped at 3650 (10 years) \u2014 anything that reaches the cap means runway is effectively unbounded at observed burn. Note: for ~7d after any large top-up the burn window still contains the step jump, so the rate clamps to 0 and runway shows the cap; this is correct behaviour, not a bug. Green > 90 days, yellow 30-90, red < 30. The absolute-balance thresholds on the panel above are the real alert trigger.",
+      "description": "Days of runway at observed burn rate, computed as balance / burn_per_day. Uses a 7d burn window for smoothing; clamps burn to a tiny floor (0.001 TIA/day) so periods of zero burn don't divide by zero. Display is capped at 3650 (10 years), anything that reaches the cap means runway is effectively unbounded at observed burn. Note: for ~7d after any large top-up the burn window still contains the step jump, so the rate clamps to 0 and runway shows the cap; this is correct behaviour, not a bug. Green > 90 days, yellow 30-90, red < 30. The absolute-balance thresholds on the panel above are the real alert trigger.",
       "fieldConfig": {
         "defaults": {
           "decimals": 1,
@@ -258,7 +258,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "TIA burned per day, averaged over $window. clamp_min to 0 so balance INCREASES (top-ups) show as 0 burn instead of a giant negative \u2014 without that clamp, a 100k-TIA top-up over a 1h window appears as a -144M TIA/day rate, which is mathematically correct but operationally useless. Drawdown spike (>5 TIA/day) also drives the TIADrawdownSpike alert in ops/prometheus/alerts.yaml. Default window is 7d so the visualization smooths over any single top-up event; switch to 1h via the dropdown for live debugging.",
+      "description": "TIA burned per day, averaged over $window. clamp_min to 0 so balance INCREASES (top-ups) show as 0 burn instead of a giant negative, without that clamp, a 100k-TIA top-up over a 1h window appears as a -144M TIA/day rate, which is mathematically correct but operationally useless. Drawdown spike (>5 TIA/day) also drives the TIADrawdownSpike alert in ops/prometheus/alerts.yaml. Default window is 7d so the visualization smooths over any single top-up event; switch to 1h via the dropdown for live debugging.",
       "fieldConfig": {
         "defaults": {
           "decimals": 3,
@@ -491,7 +491,7 @@
         "type": "prometheus",
         "uid": "grafanacloud-prom"
       },
-      "description": "TIA burn rate over 5-minute windows, scaled to TIA/hour. Estimate. Steady-state value is `(blobs/hr) \u00d7 (per-blob estimate)`.",
+      "description": "TIA burn rate over 5-minute windows, scaled to TIA/hour. Estimate. Steady-state value is `(blobs/hr) × (per-blob estimate)`.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -545,7 +545,7 @@
         "type": "yesoreyeram-infinity-datasource",
         "uid": "afm64tqkoba4ga"
       },
-      "description": "Total daily GCP infrastructure spend, USD. Sourced from Cloud Billing \u2192 BigQuery export \u2192 /opt/ligate/bin/gcp-cost-fetch.sh on VM-1 (refreshed every 6h via systemd timer) \u2192 https://rpc.ligate.io/cost/daily.json. Returns [] until ~24h after Console enable, then populates rolling 30-day window.",
+      "description": "Total daily GCP infrastructure spend, USD. Sourced from Cloud Billing → BigQuery export → /opt/ligate/bin/gcp-cost-fetch.sh on VM-1 (refreshed every 6h via systemd timer) → https://rpc.ligate.io/cost/daily.json. Returns [] until ~24h after Console enable, then populates rolling 30-day window.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -600,14 +600,17 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
+            "uid": "cfnc6401c70u8c"
           },
+          "filters": [],
           "format": "timeseries",
+          "global_query_id": "",
+          "parser": "backend",
           "refId": "A",
           "root_selector": "",
           "source": "url",
           "type": "json",
-          "url": "https://rpc.ligate.io/cost/daily.json",
+          "url": "/cost/daily.json",
           "url_options": {
             "method": "GET"
           }
@@ -670,14 +673,17 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
+            "uid": "cfnc6401c70u8c"
           },
+          "filters": [],
           "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
           "refId": "A",
           "root_selector": "",
           "source": "url",
           "type": "json",
-          "url": "https://rpc.ligate.io/cost/by-service.json",
+          "url": "/cost/by-service.json",
           "url_options": {
             "method": "GET"
           }
@@ -740,14 +746,17 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
+            "uid": "cfnc6401c70u8c"
           },
+          "filters": [],
           "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
           "refId": "A",
           "root_selector": "",
           "source": "url",
           "type": "json",
-          "url": "https://rpc.ligate.io/cost/by-vm.json",
+          "url": "/cost/by-vm.json",
           "url_options": {
             "method": "GET"
           }
@@ -825,14 +834,17 @@
           ],
           "datasource": {
             "type": "yesoreyeram-infinity-datasource",
-            "uid": "afm64tqkoba4ga"
+            "uid": "cfnc6401c70u8c"
           },
+          "filters": [],
           "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
           "refId": "A",
           "root_selector": "",
           "source": "url",
           "type": "json",
-          "url": "https://rpc.ligate.io/cost/mtd.json",
+          "url": "/cost/mtd.json",
           "url_options": {
             "method": "GET"
           }
@@ -889,7 +901,7 @@
     "to": "now"
   },
   "timezone": "utc",
-  "title": "Ligate Devnet \u2014 Cost monitoring",
+  "title": "Ligate, Cost monitoring",
   "uid": "ligate-cost",
-  "version": 13
+  "version": 4
 }
