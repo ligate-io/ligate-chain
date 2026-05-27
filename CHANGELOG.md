@@ -8,6 +8,10 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
+### Added
+
+- **RFC: bounty marketplace design** at `docs/protocol/bounty-marketplace.md`. Specs the on-chain bounty primitive that closes the gap between "schema owner posts demand for evidence" and "Mneme user clicks Attest to earn." Bounty as schema (per chain#383 item 9), lifecycle (post / claim / dispute / finalize), escrow model (module-internal `StateMap` with bank-invariant audit), off-chain matching (indexer-side, the same boundary `rest-api.md` already draws), hybrid dispute mechanism (stake-bond v0, curator escalation v1, full slashing v2). Resolves all four open decisions on [#385](https://github.com/ligate-io/ligate-chain/issues/385) with recommendations. Identifies 5 sub-issues to file after the RFC merges (module skeleton, anchor-buyer LOI tracking, Mneme UI, indexer matching service, board-operator dashboard). Not implementation; this is the design that the implementation work composes against. Code lands in [follow-up PRs](https://github.com/ligate-io/ligate-chain/issues/385) per the sub-issues.
+
 ### Changed
 
 - **Bump `peter-evans/create-pull-request@v6` → `@v8` in `.github/workflows/bump-versions.yml`.** v6 runs on Node.js 20, which GitHub forces to Node.js 24 on 2026-06-02 and removes from runners entirely on 2026-09-16. v8 is the latest line and ships Node 24 compatibility. The auto-PR semantics are unchanged across the bump (same inputs, same `Authorization`-header collision fix from [#501](https://github.com/ligate-io/ligate-chain/pull/501)). No other Actions in chain's workflow tree show the Node-20 deprecation warning today.
