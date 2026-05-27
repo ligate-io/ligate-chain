@@ -530,7 +530,7 @@ Error responses from every endpoint under `/v1/ledger`, `/v1/sequencer`, `/v1/ro
 
 Field semantics:
 
-- **`status`**: numeric HTTP status code. Mirrors the response header — clients SHOULD use the header as the source of truth and treat the body field as redundant.
+- **`status`**: numeric HTTP status code. Mirrors the response header, clients SHOULD use the header as the source of truth and treat the body field as redundant.
 - **`message`**: human-readable error string. Stable enough for log scraping but not API contract; future SDK upgrades can change the prose without a wire-format bump.
 - **`details`**: free-shaped JSON object. Keys depend on the helper that built the response:
   - `not_found_404` → `{"id": "<looked-up id>"}`
