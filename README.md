@@ -17,6 +17,23 @@
 
 ---
 
+## Earn from schema authorship
+
+Schema developers earn a configurable slice of every attestation fee paid against their schema. Set `fee_routing_bps` at schema registration (up to 5000 = 50%, governance-tunable cap) and `fee_routing_addr` to the address you want paid. From that point on, every `SubmitAttestation` against the schema splits `total_fee * fee_routing_bps / 10000` to the routing address; the rest accrues to the protocol treasury.
+
+```rust
+attestation::CallMessage::RegisterSchema {
+    set_id,
+    payload_hash_alg: HashAlg::Sha256,
+    fee_routing_bps: 1000,                       // 10% to the schema author
+    fee_routing_addr: Some(developer_address),   // required when bps > 0
+}
+```
+
+No staking, no inflation, no listing fee. The mechanism is buyer-funded: attestation submitters pay, the schema author gets the cut. The same primitive is what the bounty marketplace ([chain#385](https://github.com/ligate-io/ligate-chain/issues/385)) and post-mainnet schema marketplace fee ([chain#524](https://github.com/ligate-io/ligate-chain/issues/524)) compose on top of. Spec: [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md) §"Fee distribution". Pre-testnet economics RFC: [`docs/protocol/pre-testnet-economics.md`](docs/protocol/pre-testnet-economics.md).
+
+---
+
 ## Quick start
 
 > **Just want to run a node, not build from source?**
