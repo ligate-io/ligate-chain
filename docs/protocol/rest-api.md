@@ -539,7 +539,7 @@ Field semantics:
 
 Request correlation rides on a response header, not in the body:
 
-- **`X-Request-Id`**: opaque ulid set by the SDK's `tower_request_id::RequestIdLayer` for every response (200s and error 4xx/5xx alike). Propagated via `PropagateHeaderLayer::new("x-request-id")`. Operators correlate client-side complaints with server logs by grepping `journalctl -u ligate-node` for this id.
+- **`X-Request-Id`**: an opaque ulid the SDK's `tower_request_id::RequestIdLayer` mints per request and logs server-side; the matching `PropagateHeaderLayer::new("x-request-id")` is configured to surface it as a response header. **Caveat:** the regression test in `binary_spawn_smoke.rs::rest_error_envelope_pin` caught that the header doesn't actually reach the client through our REST mount today (server-side correlation works; client-side does not). Treat the header as a server-side log-correlation tool, not a client-facing field, until the propagation gap closes. Tracked at [chain#516](https://github.com/ligate-io/ligate-chain/issues/516).
 
 Status codes used today:
 
@@ -551,7 +551,7 @@ Status codes used today:
   - `GET /ready` (readiness probe, separate from the error path) returns `{"status":"syncing","synced_da_height":N,"target_da_height":M}` while catching up to DA head. K8s `readinessProbe` convention.
   - `POST /v1/sequencer/txs` returns `{"status":503,"message":"...","details":{"Syncing":{"synced_da_height":N,"target_da_height":M}}}` when the sequencer is behind DA. Uses the standard envelope with a `details.Syncing` discriminant; sync state is the actionable info.
 
-The shape is regression-pinned by `crates/rollup/tests/binary_spawn_smoke.rs::rest_error_envelope_pin` (ligate-chain#201). The test spawns a `ligate-node` binary, fires a known-404 (well-formed bech32m `SchemaId` that maps to no registered schema) and a known-400 (malformed bech32m), and asserts the body shape + `X-Request-Id` header on both. `#[serial]` against the existing `binary_spawn_round_trips_register_and_submit` so the two binary-spawn tests run sequentially. Any SDK bump that silently changes the envelope breaks this test before it can break a client.
+The shape is regression-pinned by `crates/rollup/tests/binary_spawn_smoke.rs::rest_error_envelope_pin` (ligate-chain#201). The test spawns a `ligate-node` binary, fires a known-404 (well-formed bech32m `SchemaId` that maps to no registered schema) and a known-400 (malformed bech32m), and asserts the body shape on both. `#[serial]` against the existing `binary_spawn_round_trips_register_and_submit` so the two binary-spawn tests run sequentially. Any SDK bump that silently changes the envelope breaks this test before it can break a client. (The `X-Request-Id` header is not asserted today; see the caveat above and chain#516.)
 
 ## Versioning
 
