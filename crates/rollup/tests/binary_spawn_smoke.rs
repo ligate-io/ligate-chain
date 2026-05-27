@@ -60,6 +60,7 @@ use ed25519_dalek::{Signer, SigningKey};
 use ligate_client::submit::Submitter;
 use ligate_rollup::MockRollupSpec;
 use ligate_stf::runtime::RuntimeCall;
+use serial_test::serial;
 use sov_modules_api::capabilities::UniquenessData;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::transaction::{PriorityFeeBips, UnsignedTransaction};
@@ -206,6 +207,7 @@ async fn wait_for_ready(base: &str) -> Result<(), String> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
 async fn binary_spawn_round_trips_register_and_submit() {
     // 1. Per-test workspace + port.
     let temp_dir = TempDir::new().expect("temp dir");
@@ -458,4 +460,123 @@ async fn poll_latest_slot_at_least(
         sleep(Duration::from_millis(200)).await;
     }
     Err(format!("timeout waiting for slot >= {min_number} at {url}"))
+}
+
+/// Pin the REST error envelope shape: `{status, message, details}` +
+/// `X-Request-Id` response header. Fires a known-bad request against
+/// the attestation REST surface (the canonical chain-defined
+/// `errors::*` helper consumer) and asserts both the body shape and
+/// the correlation header.
+///
+/// Why: documented at `docs/protocol/rest-api.md::Error envelope`;
+/// the test catches a future SDK bump that silently changes the
+/// envelope (we re-export `sov_modules_api::rest::utils::errors`
+/// throughout the attestation handlers, so an SDK-side schema change
+/// would propagate through this entire surface). Tracking issue:
+/// ligate-chain#201.
+///
+/// `#[serial]` because this spawns a `ligate-node` binary on its own
+/// ephemeral port + tempdir, and running it in parallel with the
+/// other spawn-the-binary test in this file caused CI to time out
+/// both spawns at `wait_for_ready` on free-tier runners (a single
+/// chain boot saturates the runner's CPU; two parallel boots get
+/// neither across the 60s readiness budget). Same `#[serial]` tag
+/// as `restart_recovery.rs`'s file-level marker.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[serial]
+async fn rest_error_envelope_pin() {
+    let temp_dir = TempDir::new().expect("temp dir");
+    let port = pick_ephemeral_port().await;
+    let base = format!("http://127.0.0.1:{port}");
+    let _child = spawn_node(&temp_dir, port).await;
+    wait_for_ready(&base).await.expect("node ready");
+
+    let client = reqwest::Client::new();
+
+    // === 404 path: well-formed bech32m, but no schema at that id. ===
+    //
+    // `SchemaId::from([u8; 32])` Display-renders as canonical bech32m
+    // with `lsc1` HRP — same path the chain takes for every id it
+    // emits. Same construction shape as `e2e_smoke.rs`'s 404 case;
+    // the parser accepts the well-formed id, the lookup misses,
+    // the handler returns `errors::not_found_404("Schema", schema_id)`
+    // which the SDK renders as `{status:404, message, details:{id}}`.
+    let unknown = SchemaId::from([0xAAu8; 32]);
+    let unknown_str = unknown.to_string();
+    let not_found = client
+        .get(format!("{base}/v1/modules/attestation/schemas/{unknown_str}"))
+        .send()
+        .await
+        .expect("404 GET request");
+    assert_eq!(not_found.status().as_u16(), 404, "expected 404 for unknown schema id");
+
+    // Pin the X-Request-Id correlation header. Present on every
+    // response (success + error) per the SDK's
+    // `tower_request_id::RequestIdLayer` + `PropagateHeaderLayer`.
+    let request_id_404 = not_found
+        .headers()
+        .get("x-request-id")
+        .expect("x-request-id header present on 404")
+        .to_str()
+        .expect("x-request-id is a valid ASCII string")
+        .to_owned();
+    assert!(!request_id_404.is_empty(), "x-request-id must not be empty");
+
+    let body_404: serde_json::Value = not_found.json().await.expect("404 body parses as JSON");
+    assert_eq!(
+        body_404["status"].as_u64(),
+        Some(404),
+        "404 body.status must equal HTTP status, got {body_404:?}"
+    );
+    assert!(
+        body_404["message"].as_str().is_some_and(|s| !s.is_empty()),
+        "404 body.message must be a non-empty string, got {body_404:?}"
+    );
+    assert!(
+        body_404["details"].is_object(),
+        "404 body.details must be a JSON object, got {body_404:?}"
+    );
+    assert!(
+        body_404["details"]["id"].as_str().is_some(),
+        "404 body.details.id must be the looked-up id (not_found_404 helper convention), got {body_404:?}"
+    );
+
+    // === 400 path: malformed bech32m id, parser bails before lookup. ===
+    //
+    // `not-a-valid-bech32m-id` triggers `errors::bad_request_400` in
+    // the handler with the underlying parse error in `details`.
+    let bad_request = client
+        .get(format!("{base}/v1/modules/attestation/schemas/not-a-valid-bech32m-id"))
+        .send()
+        .await
+        .expect("400 GET request");
+    assert_eq!(bad_request.status().as_u16(), 400, "expected 400 for malformed bech32m id");
+
+    let request_id_400 = bad_request
+        .headers()
+        .get("x-request-id")
+        .expect("x-request-id header present on 400")
+        .to_str()
+        .expect("x-request-id is a valid ASCII string")
+        .to_owned();
+    assert!(!request_id_400.is_empty(), "x-request-id must not be empty on 400");
+    assert_ne!(
+        request_id_400, request_id_404,
+        "each request should produce a fresh x-request-id (ulid uniqueness)"
+    );
+
+    let body_400: serde_json::Value = bad_request.json().await.expect("400 body parses as JSON");
+    assert_eq!(
+        body_400["status"].as_u64(),
+        Some(400),
+        "400 body.status must equal HTTP status, got {body_400:?}"
+    );
+    assert!(
+        body_400["message"].as_str().is_some_and(|s| !s.is_empty()),
+        "400 body.message must be a non-empty string, got {body_400:?}"
+    );
+    assert!(
+        body_400["details"].is_object(),
+        "400 body.details must be a JSON object, got {body_400:?}"
+    );
 }
