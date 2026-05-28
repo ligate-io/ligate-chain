@@ -5,27 +5,32 @@
 //!
 //! [spec]: https://github.com/ligate-io/ligate-chain/blob/main/docs/protocol/bounty-marketplace.md
 //!
-//! # v0 implementation scope
+//! # Implementation scope
 //!
 //! This crate ships the module declarations, state shape, [`CallMessage`]
-//! variants, [`Event`] variants, and full handler logic for all five call
-//! messages per the RFC.
+//! variants, [`Event`] variants, and full handler logic for all six call
+//! messages: the five lifecycle calls (post / claim / dispute / resolve /
+//! cancel) plus the time-gated [`CallMessage::FinaliseBounty`] sweep.
 //!
 //! Cross-module composition: `Bounty` references `attestation` (for board
-//! schema and attestation reads on `ClaimBounty`) and `sov-bank` (for
-//! escrow + payout transfers). Escrow lives at the module-controlled
-//! address derived via `self.id.to_payable()` (the SDK pattern used by
+//! schema and attestation reads on `ClaimBounty`), `sov-bank` (for
+//! escrow + payout transfers), and `chain_state` (for the current
+//! rollup / DA height that drives expiry + dispute-window enforcement).
+//! Escrow lives at the module-controlled address derived via
+//! `self.id.to_payable()` (the SDK pattern used by
 //! `sov-sequencer-registry` for staked collateral); the chain-wide
 //! `AVOW` token id is read from the attestation module's authoritative
 //! state at tx time, keeping this module's wallet schema clean.
 //!
 //! # Module shape
 //!
-//! Five `StateMap`s mirroring the RFC's "State" section plus a
-//! per-poster nonce counter, five [`CallMessage`] variants for the
-//! lifecycle. Bounty boards are [`attestation::Schema`]s; this module's
-//! state references their [`SchemaId`] but does not duplicate schema
-//! data.
+//! `StateMap`s mirroring the RFC's "State" section (bounties, the
+//! `open_by_schema` reverse index, per-bounty escrow, disputes, the
+//! per-claim `claim_height` + per-bounty `latest_claim_height` window
+//! bookkeeping, and the `open_dispute_count`) plus a per-poster nonce
+//! counter; six [`CallMessage`] variants for the lifecycle. Bounty
+//! boards are [`attestation::Schema`]s; this module's state references
+//! their [`SchemaId`] but does not duplicate schema data.
 
 #![deny(missing_docs)]
 
@@ -33,7 +38,7 @@
 mod query;
 
 #[cfg(feature = "native")]
-pub use query::BountyResponse;
+pub use query::{BountyResponse, DisputeResponse};
 
 #[cfg(feature = "native")]
 pub mod metrics;
@@ -341,6 +346,16 @@ pub struct Bounty<S: Spec> {
     #[module]
     pub attestation: attestation::AttestationModule<S>,
 
+    /// Reference to the SDK's chain-state module. Handlers read the
+    /// current rollup height (for the "chain blocks" dispute window)
+    /// and the current DA height (`genesis_da_height + rollup_height`,
+    /// for `expiry_da_height` enforcement). Both reads go through
+    /// `StateReader<User>` accessors, which the handler's `TxState`
+    /// satisfies; the runtime already composes `chain_state`, so this
+    /// reference resolves without any runtime change.
+    #[module]
+    pub chain_state: sov_chain_state::ChainState<S>,
+
     /// All bounties, keyed by deterministic [`BountyId`].
     #[state]
     pub bounties: StateMap<BountyId, BountyState<S>>,
@@ -360,6 +375,31 @@ pub struct Bounty<S: Spec> {
     /// Active disputes keyed by [`DisputeKey`].
     #[state]
     pub disputes: StateMap<DisputeKey, DisputeState<S>>,
+
+    /// Rollup height at which each claim settled, keyed by the same
+    /// [`DisputeKey`] the dispute map uses. Lets
+    /// [`CallMessage::DisputeAttestation`] enforce the per-claim
+    /// `dispute_window_blocks` window: a dispute is only valid while
+    /// `current_rollup_height <= claim_height + dispute_window_blocks`.
+    /// A `(bounty, attestation)` pair with no entry here was never
+    /// paid out, so there is nothing to dispute.
+    #[state]
+    pub claim_height: StateMap<DisputeKey, u64>,
+
+    /// Highest rollup height any claim settled at, per bounty. Lets
+    /// [`CallMessage::FinaliseBounty`] confirm every claim's dispute
+    /// window has closed before sweeping dust + marking the bounty
+    /// [`BountyStatus::Finalised`].
+    #[state]
+    pub latest_claim_height: StateMap<BountyId, u64>,
+
+    /// Count of currently-open disputes per bounty. Incremented on
+    /// [`CallMessage::DisputeAttestation`], decremented on
+    /// [`CallMessage::ResolveDispute`]. Lets
+    /// [`CallMessage::FinaliseBounty`] reject finalisation while any
+    /// dispute is still open without enumerating the dispute map.
+    #[state]
+    pub open_dispute_count: StateMap<BountyId, u32>,
 
     /// Per-poster nonce counter. Incremented on each
     /// [`CallMessage::PostBounty`] for the given sender; combined with
@@ -388,9 +428,9 @@ pub struct Bounty<S: Spec> {
 // Call messages
 // ============================================================================
 
-/// Transactions this module accepts. v0 carries the wire shape; handler
-/// bodies are no-ops (real logic lands in follow-up PRs against
-/// [chain#519](https://github.com/ligate-io/ligate-chain/issues/519)).
+/// Transactions this module accepts. Full lifecycle: post, claim,
+/// dispute, resolve, cancel, and the time-gated finalise sweep
+/// ([chain#519](https://github.com/ligate-io/ligate-chain/issues/519)).
 #[derive(Debug, Clone, PartialEq, Eq, JsonSchema, UniversalWallet)]
 #[sov_modules_api::macros::serialize(Borsh, Serde)]
 #[schemars(bound = "S::Address: ::schemars::JsonSchema", rename = "BountyCallMessage")]
@@ -444,6 +484,17 @@ pub enum CallMessage<S: Spec> {
     /// Cancel an unfunded or expired bounty.
     CancelBounty {
         /// Bounty to cancel.
+        bounty_id: BountyId,
+    },
+
+    /// Finalise an exhausted-or-expired bounty once every claim's
+    /// dispute window has closed and no disputes remain open.
+    /// Permissionless: anyone may call it (the dust sweep always pays
+    /// the poster, so there is no incentive to gate the caller). Sweeps
+    /// any remaining escrow back to the poster and marks the bounty
+    /// [`BountyStatus::Finalised`].
+    FinaliseBounty {
+        /// Bounty to finalise.
         bounty_id: BountyId,
     },
 
@@ -523,6 +574,13 @@ pub enum Event<S: Spec> {
         bounty_id: BountyId,
         /// Amount returned to poster.
         refunded_to_poster: Amount,
+    },
+    /// A bounty was finalised after all dispute windows closed.
+    BountyFinalised {
+        /// Bounty that was finalised.
+        bounty_id: BountyId,
+        /// Dust escrow swept back to the poster on finalisation.
+        swept_to_poster: Amount,
     },
 }
 
@@ -654,10 +712,85 @@ pub enum BountyError {
     UnknownDispute,
 
     /// `CancelBounty` was called before expiry on a bounty that
-    /// already has claims paid out. v0 only allows cancel when
-    /// expired OR when no claims have been made (pool intact).
+    /// already has claims paid out. Cancel is only allowed when
+    /// `now >= expiry_da_height` OR when no claims have been made
+    /// (pool intact), per the RFC's cancel rule.
     #[error("cannot cancel: bounty has been claimed and is not yet expired")]
     CancelWhileClaimed,
+
+    /// `PostBounty` set `expiry_da_height` to a height that has
+    /// already passed (or equals the current DA height), so the
+    /// bounty would be born expired. `expiry_da_height` is an absolute
+    /// DA-layer height per the RFC; the chain reads the current DA
+    /// height as `genesis_da_height + rollup_height`.
+    #[error("expiry_da_height ({expiry}) must be in the future (current DA height {current})")]
+    ExpiryInPast {
+        /// Submitted expiry height.
+        expiry: u64,
+        /// Current DA height the chain computed.
+        current: u64,
+    },
+
+    /// `ClaimBounty` arrived at or after the bounty's
+    /// `expiry_da_height`. Expired bounties pay out nothing further;
+    /// the poster reclaims the remaining escrow via `CancelBounty`.
+    #[error("bounty expired at DA height {expiry} (current {current}); no further claims")]
+    BountyExpiredForClaim {
+        /// Bounty's expiry height.
+        expiry: u64,
+        /// Current DA height.
+        current: u64,
+    },
+
+    /// `DisputeAttestation` referenced a `(bounty, attestation)` pair
+    /// that was never paid out (no `claim_height` entry), so there is
+    /// no claim to contest.
+    #[error("no settled claim for this (bounty, attestation); nothing to dispute")]
+    NoClaimToDispute,
+
+    /// `DisputeAttestation` arrived after the per-claim dispute window
+    /// closed (`current_rollup_height > claim_height + dispute_window_blocks`).
+    #[error(
+        "dispute window closed at rollup height {window_close} (current {current}); claim is final"
+    )]
+    DisputeWindowClosed {
+        /// Rollup height the window closed at.
+        window_close: u64,
+        /// Current rollup height.
+        current: u64,
+    },
+
+    /// `FinaliseBounty` was called while the bounty is in a status
+    /// that cannot be finalised (must be `Open`, `Exhausted`, or
+    /// `Expired`; not already `Finalised` / `Cancelled`).
+    #[error("bounty status {status:?} cannot be finalised")]
+    NotFinalisable {
+        /// Bounty's current status.
+        status: BountyStatus,
+    },
+
+    /// `FinaliseBounty` was called before every claim's dispute window
+    /// closed.
+    #[error(
+        "dispute windows still open: latest claim at {latest_claim}, \
+         window {window} blocks, current rollup height {current}"
+    )]
+    DisputeWindowsStillOpen {
+        /// Highest rollup height any claim settled at.
+        latest_claim: u64,
+        /// The bounty's dispute window in rollup blocks.
+        window: u64,
+        /// Current rollup height.
+        current: u64,
+    },
+
+    /// `FinaliseBounty` was called while at least one dispute is still
+    /// open on the bounty.
+    #[error("cannot finalise: {open} dispute(s) still open")]
+    DisputesStillOpen {
+        /// Number of open disputes.
+        open: u32,
+    },
 
     /// Module pre-conditions not met. Should be unreachable after a
     /// clean `Module::genesis`, but surfaced as an explicit error so
@@ -734,6 +867,9 @@ impl<S: Spec> Module for Bounty<S> {
             CallMessage::CancelBounty { bounty_id } => {
                 self.handle_cancel_bounty(bounty_id, context, state)
             }
+            CallMessage::FinaliseBounty { bounty_id } => {
+                self.handle_finalise_bounty(bounty_id, context, state)
+            }
             CallMessage::_Phantom(_) => Ok(()),
         }
     }
@@ -751,6 +887,25 @@ impl<S: Spec> Bounty<S> {
             .avow_token_id
             .get(state)?
             .ok_or_else(|| BountyError::ModuleNotInitialised.into())
+    }
+
+    /// Current rollup block height, the chain's native clock. The RFC
+    /// denominates `dispute_window_blocks` in "chain blocks", so the
+    /// dispute-window arithmetic uses this value.
+    fn current_rollup_height(&self, state: &mut impl TxState<S>) -> anyhow::Result<u64> {
+        Ok(self.chain_state.rollup_height(state)?.get())
+    }
+
+    /// Current DA-layer height, computed as
+    /// `genesis_da_height + rollup_height`. `expiry_da_height` is an
+    /// absolute DA-layer height per the RFC (§"Expiry granularity");
+    /// the rollup advances one block per DA slot, so this is the value
+    /// a poster's `expiry_da_height` is compared against.
+    /// `genesis_da_height` is always set at genesis; a missing value is
+    /// treated as 0 defensively.
+    fn current_da_height(&self, state: &mut impl TxState<S>) -> anyhow::Result<u64> {
+        let genesis = self.chain_state.genesis_da_height(state)?.unwrap_or(0);
+        Ok(genesis.saturating_add(self.current_rollup_height(state)?))
     }
 
     /// Atomically read + increment the per-poster nonce. Returns the
@@ -825,6 +980,15 @@ impl<S: Spec> Bounty<S> {
         }
         if expiry_da_height == 0 {
             return Err(BountyError::InvalidExpiryHeight.into());
+        }
+        // Reject a bounty that would be born already expired.
+        let current_da = self.current_da_height(state)?;
+        if expiry_da_height <= current_da {
+            return Err(BountyError::ExpiryInPast {
+                expiry: expiry_da_height,
+                current: current_da,
+            }
+            .into());
         }
 
         // 2. Verify the board schema is registered.
@@ -906,6 +1070,18 @@ impl<S: Spec> Bounty<S> {
             return Err(BountyError::InvalidStatus { status: bounty.status }.into());
         }
 
+        // Reject claims at or after expiry. The remaining escrow is the
+        // poster's to reclaim via `CancelBounty` once expired.
+        let current_da = self.current_da_height(state)?;
+        if current_da >= bounty.expiry_da_height {
+            return Err(BountyError::BountyExpiredForClaim {
+                expiry: bounty.expiry_da_height,
+                current: current_da,
+            }
+            .into());
+        }
+        let current_rollup = self.current_rollup_height(state)?;
+
         // Pre-flight: confirm every claim matches the bounty and the
         // batch's total payout fits in the current escrow. Single
         // failure rejects the whole batch.
@@ -936,13 +1112,19 @@ impl<S: Spec> Bounty<S> {
             return Err(BountyError::EscrowInsufficient { escrow: escrow_now.0, would_pay }.into());
         }
 
-        // Pay out each claim.
+        // Pay out each claim, recording the rollup height it settled at
+        // so `DisputeAttestation` can enforce the per-claim window.
         let avow = self.read_avow_token_id(state)?;
         for (attestation_id, attester) in &payouts {
             self.bank.transfer_from(
                 self.id.clone().to_payable(),
                 attester,
                 Coins { amount: per_attestation, token_id: avow },
+                state,
+            )?;
+            self.claim_height.set(
+                &DisputeKey { bounty_id, attestation_id: *attestation_id },
+                &current_rollup,
                 state,
             )?;
             self.emit_event(
@@ -954,6 +1136,12 @@ impl<S: Spec> Bounty<S> {
                     attester: *attester,
                 },
             );
+        }
+        // Track the highest settle-height so `FinaliseBounty` knows when
+        // the last dispute window closes.
+        let prev_latest = self.latest_claim_height.get(&bounty_id, state)?.unwrap_or(0);
+        if current_rollup > prev_latest {
+            self.latest_claim_height.set(&bounty_id, &current_rollup, state)?;
         }
 
         // Update escrow + status.
@@ -986,6 +1174,19 @@ impl<S: Spec> Bounty<S> {
         if self.disputes.get(&key, state)?.is_some() {
             return Err(BountyError::DuplicateDispute.into());
         }
+
+        // A dispute contests a settled claim, so the claim must exist,
+        // and the dispute must arrive within the per-claim window.
+        let claim_height =
+            self.claim_height.get(&key, state)?.ok_or(BountyError::NoClaimToDispute)?;
+        let current_rollup = self.current_rollup_height(state)?;
+        let window_close = claim_height.saturating_add(u64::from(bounty.dispute_window_blocks));
+        if current_rollup > window_close {
+            return Err(
+                BountyError::DisputeWindowClosed { window_close, current: current_rollup }.into()
+            );
+        }
+
         let disputer: S::Address = *context.sender();
         let bond = bounty.per_attestation;
 
@@ -997,6 +1198,12 @@ impl<S: Spec> Bounty<S> {
             state,
         )?;
         self.disputes.set(&key, &DisputeState { disputer, bond, ground }, state)?;
+
+        // Track the open-dispute count so `FinaliseBounty` can reject
+        // finalisation while a dispute is unresolved.
+        let open = self.open_dispute_count.get(&bounty_id, state)?.unwrap_or(0);
+        self.open_dispute_count.set(&bounty_id, &open.saturating_add(1), state)?;
+
         self.emit_event(state, Event::BountyDisputed { bounty_id, attestation_id, disputer, bond });
         Ok(())
     }
@@ -1041,6 +1248,8 @@ impl<S: Spec> Bounty<S> {
             state,
         )?;
         self.disputes.remove(&key, state)?;
+        let open = self.open_dispute_count.get(&bounty_id, state)?.unwrap_or(0);
+        self.open_dispute_count.set(&bounty_id, &open.saturating_sub(1), state)?;
         self.emit_event(
             state,
             Event::DisputeResolved {
@@ -1072,9 +1281,15 @@ impl<S: Spec> Bounty<S> {
             return Err(BountyError::InvalidStatus { status: bounty.status }.into());
         }
 
+        // RFC cancel rule: allowed when no claims have been paid (pool
+        // intact) OR the bounty has expired. The expired-with-claims
+        // path lets the poster reclaim the remaining escrow after the
+        // bounty has run its course.
         let escrow_remaining = self.escrow.get(&bounty_id, state)?.unwrap_or(Amount::ZERO);
         let no_claims = escrow_remaining == bounty.pool;
-        if !no_claims {
+        let current_da = self.current_da_height(state)?;
+        let expired = current_da >= bounty.expiry_da_height;
+        if !no_claims && !expired {
             return Err(BountyError::CancelWhileClaimed.into());
         }
 
@@ -1088,7 +1303,9 @@ impl<S: Spec> Bounty<S> {
             )?;
             self.escrow.set(&bounty_id, &Amount::ZERO, state)?;
         }
-        bounty.status = BountyStatus::Cancelled;
+        // Expired bounties land in `Expired`; a clean pre-expiry cancel
+        // lands in `Cancelled`.
+        bounty.status = if expired { BountyStatus::Expired } else { BountyStatus::Cancelled };
         self.bounties.set(&bounty_id, &bounty, state)?;
 
         // Drop the open-index entry so the matching service stops
@@ -1105,6 +1322,85 @@ impl<S: Spec> Bounty<S> {
             state,
             Event::BountyExpired { bounty_id, refunded_to_poster: escrow_remaining },
         );
+        Ok(())
+    }
+
+    /// Finalise an exhausted-or-expired bounty: confirm no disputes are
+    /// open and every claim's dispute window has closed, sweep any dust
+    /// escrow back to the poster, drop the open-index entry, and mark
+    /// the bounty [`BountyStatus::Finalised`]. Permissionless: the dust
+    /// always flows to the poster, so there is no reason to gate the
+    /// caller (any node / indexer can finalise on the poster's behalf).
+    fn handle_finalise_bounty(
+        &mut self,
+        bounty_id: BountyId,
+        _context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut bounty = self.bounties.get(&bounty_id, state)?.ok_or(BountyError::UnknownBounty)?;
+        if matches!(bounty.status, BountyStatus::Cancelled | BountyStatus::Finalised) {
+            return Err(BountyError::NotFinalisable { status: bounty.status }.into());
+        }
+
+        // Only meaningful once the bounty is exhausted or expired; an
+        // open, non-expired bounty should be cancelled, not finalised.
+        let current_da = self.current_da_height(state)?;
+        let expired = current_da >= bounty.expiry_da_height;
+        if !expired && !matches!(bounty.status, BountyStatus::Exhausted) {
+            return Err(BountyError::NotFinalisable { status: bounty.status }.into());
+        }
+
+        // No dispute may be open.
+        let open = self.open_dispute_count.get(&bounty_id, state)?.unwrap_or(0);
+        if open > 0 {
+            return Err(BountyError::DisputesStillOpen { open }.into());
+        }
+
+        // Every claim's dispute window must have closed.
+        let current_rollup = self.current_rollup_height(state)?;
+        let latest_claim = self.latest_claim_height.get(&bounty_id, state)?.unwrap_or(0);
+        let window = u64::from(bounty.dispute_window_blocks);
+        if latest_claim > 0 && current_rollup <= latest_claim.saturating_add(window) {
+            return Err(BountyError::DisputeWindowsStillOpen {
+                latest_claim,
+                window,
+                current: current_rollup,
+            }
+            .into());
+        }
+
+        // Sweep any remaining (dust) escrow back to the poster.
+        let escrow_remaining = self.escrow.get(&bounty_id, state)?.unwrap_or(Amount::ZERO);
+        if escrow_remaining > Amount::ZERO {
+            let avow = self.read_avow_token_id(state)?;
+            self.bank.transfer_from(
+                self.id.clone().to_payable(),
+                &bounty.poster,
+                Coins { amount: escrow_remaining, token_id: avow },
+                state,
+            )?;
+            self.escrow.set(&bounty_id, &Amount::ZERO, state)?;
+        }
+
+        bounty.status = BountyStatus::Finalised;
+        self.bounties.set(&bounty_id, &bounty, state)?;
+
+        // Drop the open-index entry so the matching service stops
+        // surfacing the finalised bounty.
+        if let Some(open_list) = self.open_by_schema.get(&bounty.board_schema_id, state)? {
+            let filtered: Vec<BountyId> =
+                open_list.into_iter().filter(|id| *id != bounty_id).collect();
+            let safe: SafeVec<BountyId, MAX_OPEN_BOUNTIES_PER_SCHEMA> =
+                SafeVec::try_from(filtered).expect("filtered subset fits the original cap");
+            self.open_by_schema.set(&bounty.board_schema_id, &safe, state)?;
+        }
+
+        self.emit_event(
+            state,
+            Event::BountyFinalised { bounty_id, swept_to_poster: escrow_remaining },
+        );
+        #[cfg(feature = "native")]
+        metrics::record_finalise_bounty();
         Ok(())
     }
 }
