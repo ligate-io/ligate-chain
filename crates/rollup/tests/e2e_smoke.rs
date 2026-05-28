@@ -142,6 +142,7 @@ fn setup_with_seeded_state() -> StagedGenesis {
         blob_storage: (),
         attestation,
         bounty: bounty::BountyConfig::default(),
+        contracts: contract::ContractConfig::default(),
     };
 
     // The production `GenesisConfig` doesn't expose

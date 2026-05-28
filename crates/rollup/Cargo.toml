@@ -63,6 +63,9 @@ attestation = { path = "../modules/attestation", features = ["native"] }
 # can construct `GenesisConfig { ..., bounty: ... }` literally without
 # routing through `ligate-stf`'s re-export.
 bounty      = { path = "../modules/bounty", features = ["native"] }
+# Same reason as `bounty` above: direct dep for the genesis-literal
+# construction sites in `blueprint_smoke.rs` and `e2e_smoke.rs`.
+contract    = { path = "../modules/contract", features = ["native"] }
 
 # Prometheus + axum for the `/metrics` endpoint (issue #110, Phase 1).
 # axum runs in its own tokio task next to the SDK's REST server so we

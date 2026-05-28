@@ -271,6 +271,9 @@ where
         // Real per-board genesis seeding is post-mainnet work; until
         // then everything happens at runtime via `PostBounty` txs.
         bounty: bounty::BountyConfig::default(),
+        // v0 contract module ships with empty genesis. Real per-
+        // arbiter / per-contract seeding is post-mainnet work.
+        contracts: contract::ContractConfig::default(),
     };
     validate_config(&cfg)?;
     Ok(cfg)
