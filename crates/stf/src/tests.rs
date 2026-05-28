@@ -114,6 +114,7 @@ mod genesis_loader {
             chain_state: basic.chain_state,
             blob_storage: (),
             attestation,
+            bounty: bounty::BountyConfig::default(),
         }
     }
 

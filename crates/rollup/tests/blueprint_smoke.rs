@@ -85,6 +85,7 @@ fn runtime_genesis_config_round_trips_for_production_spec() {
         chain_state: basic.chain_state,
         blob_storage: (),
         attestation,
+        bounty: bounty::BountyConfig::default(),
     };
 
     // Dump each module to <tempdir>/<module>.json — same convention
