@@ -42,20 +42,14 @@ fn bounty_id_derive_is_deterministic() {
     let poster = b"lid1examplebountyposteraddressbytes";
     let board = SchemaId::from([0x42u8; 32]);
     let nonce = 7u64;
-    assert_eq!(
-        BountyId::derive(poster, &board, nonce),
-        BountyId::derive(poster, &board, nonce)
-    );
+    assert_eq!(BountyId::derive(poster, &board, nonce), BountyId::derive(poster, &board, nonce));
 }
 
 #[test]
 fn bounty_id_derive_distinguishes_nonces() {
     let poster = b"lid1examplebountyposteraddressbytes";
     let board = SchemaId::from([0x42u8; 32]);
-    assert_ne!(
-        BountyId::derive(poster, &board, 0),
-        BountyId::derive(poster, &board, 1)
-    );
+    assert_ne!(BountyId::derive(poster, &board, 0), BountyId::derive(poster, &board, 1));
 }
 
 #[test]
@@ -137,10 +131,7 @@ fn setup() -> TestEnv {
     // 1-of-1 attestor set + a schema owned by the poster.
     let signer = single_attestor_signer();
     let members = vec![PubKey::from(signer.verifying_key().to_bytes())];
-    let initial_attestor_sets = vec![InitialAttestorSet {
-        members: members.clone(),
-        threshold: 1,
-    }];
+    let initial_attestor_sets = vec![InitialAttestorSet { members: members.clone(), threshold: 1 }];
     let attestor_set_id = AttestorSet::derive_id(&members, 1);
     let schema_name = "themisra.bounty-board.v1".to_string();
     let board_schema_id = Schema::<S>::derive_id(&poster.address(), &schema_name, 1);
@@ -200,11 +191,7 @@ fn assert_reverted_with(receipt: &TxEffect<S>, phrase: &str) {
     }
 }
 
-fn post_bounty_msg(
-    board_schema_id: SchemaId,
-    pool: u128,
-    per_attestation: u128,
-) -> CallMessage<S> {
+fn post_bounty_msg(board_schema_id: SchemaId, pool: u128, per_attestation: u128) -> CallMessage<S> {
     CallMessage::PostBounty {
         board_schema_id,
         pool: Amount::new(pool),
@@ -242,11 +229,7 @@ fn submit_attestation_via_runner(
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.attester_user.create_plain_message::<RT, AttestationModule<S>>(
-            AttCall::SubmitAttestation {
-                schema_id: env.board_schema_id,
-                payload_hash,
-                signatures,
-            },
+            AttCall::SubmitAttestation { schema_id: env.board_schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
             assert!(
@@ -314,9 +297,11 @@ fn post_bounty_happy_path_escrows_pool_and_writes_state() {
 fn post_bounty_rejects_empty_pool() {
     let mut env = setup();
     env.runner.execute_transaction(TransactionTestCase {
-        input: env
-            .poster
-            .create_plain_message::<RT, Bounty<S>>(post_bounty_msg(env.board_schema_id, 0, 100)),
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(post_bounty_msg(
+            env.board_schema_id,
+            0,
+            100,
+        )),
         assert: Box::new(|result, _| {
             assert_reverted_with(&result.tx_receipt, "pool must be greater than zero");
         }),
@@ -327,9 +312,11 @@ fn post_bounty_rejects_empty_pool() {
 fn post_bounty_rejects_per_attestation_exceeding_pool() {
     let mut env = setup();
     env.runner.execute_transaction(TransactionTestCase {
-        input: env
-            .poster
-            .create_plain_message::<RT, Bounty<S>>(post_bounty_msg(env.board_schema_id, 100, 200)),
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(post_bounty_msg(
+            env.board_schema_id,
+            100,
+            200,
+        )),
         assert: Box::new(|result, _| {
             assert_reverted_with(&result.tx_receipt, "exceeds pool");
         }),
@@ -341,9 +328,7 @@ fn post_bounty_rejects_unknown_schema() {
     let mut env = setup();
     let unknown = SchemaId::from([0xFFu8; 32]);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env
-            .poster
-            .create_plain_message::<RT, Bounty<S>>(post_bounty_msg(unknown, 100, 10)),
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(post_bounty_msg(unknown, 100, 10)),
         assert: Box::new(|result, _| {
             assert_reverted_with(&result.tx_receipt, "board schema not found");
         }),
@@ -373,16 +358,16 @@ fn claim_bounty_pays_attestation_submitter_and_decrements_escrow() {
 
     // 3. Claim the attestation against the bounty.
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
-    let claims = SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
-        AttestationClaim { attestation_id },
-    ])
-    .expect("1 claim fits MAX_CLAIMS_PER_CALL");
+    let claims =
+        SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![AttestationClaim {
+            attestation_id,
+        }])
+        .expect("1 claim fits MAX_CLAIMS_PER_CALL");
 
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
-            bounty_id,
-            claims,
-        }),
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty { bounty_id, claims }),
         assert: Box::new(move |result, state| {
             assert!(result.tx_receipt.is_successful(), "claim should succeed");
 
@@ -415,8 +400,8 @@ fn claim_bounty_rejects_empty_batch() {
     });
 
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
-    let empty_claims = SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![])
-        .expect("empty vec fits");
+    let empty_claims =
+        SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![]).expect("empty vec fits");
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
@@ -444,24 +429,21 @@ fn claim_bounty_exhausts_when_escrow_drops_below_per_attestation() {
 
     let attestation_id = submit_attestation_via_runner(&mut env, [0xBBu8; 32]);
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
-    let claims = SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
-        AttestationClaim { attestation_id },
-    ])
-    .expect("1 claim fits");
+    let claims =
+        SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![AttestationClaim {
+            attestation_id,
+        }])
+        .expect("1 claim fits");
 
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
-            bounty_id,
-            claims,
-        }),
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty { bounty_id, claims }),
         assert: Box::new(move |result, state| {
             assert!(result.tx_receipt.is_successful());
             let module = Bounty::<S>::default();
-            let bounty = module
-                .bounties
-                .get(&bounty_id, state)
-                .unwrap_infallible()
-                .expect("bounty exists");
+            let bounty =
+                module.bounties.get(&bounty_id, state).unwrap_infallible().expect("bounty exists");
             assert_eq!(bounty.status, BountyStatus::Exhausted);
         }),
     });
@@ -496,11 +478,8 @@ fn dispute_locks_bond_into_escrow_and_writes_dispute_state() {
             assert!(result.tx_receipt.is_successful(), "dispute should succeed");
             let module = Bounty::<S>::default();
             let key = DisputeKey { bounty_id, attestation_id };
-            let dispute = module
-                .disputes
-                .get(&key, state)
-                .unwrap_infallible()
-                .expect("dispute in state");
+            let dispute =
+                module.disputes.get(&key, state).unwrap_infallible().expect("dispute in state");
             assert_eq!(dispute.bond, Amount::new(per));
             // Disputer's bank balance decreased by the bond amount,
             // proving the module captured the funds. The module's
@@ -562,10 +541,7 @@ fn resolve_dispute_accept_returns_bond_to_disputer() {
                 .get_balance_of(&disputer_addr, avow, state)
                 .unwrap_infallible()
                 .unwrap_or(Amount::ZERO);
-            assert!(
-                bal > Amount::ZERO,
-                "disputer has balance after bond returns, got {bal:?}"
-            );
+            assert!(bal > Amount::ZERO, "disputer has balance after bond returns, got {bal:?}");
         }),
     });
 }
@@ -672,11 +648,8 @@ fn cancel_bounty_refunds_remaining_pool_when_no_claims() {
         assert: Box::new(move |result, state| {
             assert!(result.tx_receipt.is_successful(), "cancel should succeed");
             let module = Bounty::<S>::default();
-            let bounty = module
-                .bounties
-                .get(&bounty_id, state)
-                .unwrap_infallible()
-                .expect("bounty exists");
+            let bounty =
+                module.bounties.get(&bounty_id, state).unwrap_infallible().expect("bounty exists");
             assert_eq!(bounty.status, BountyStatus::Cancelled);
             assert_eq!(
                 module.escrow.get(&bounty_id, state).unwrap_infallible(),
@@ -731,15 +704,15 @@ fn cancel_bounty_rejects_after_claims_paid() {
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF2u8; 32]);
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
-    let claims = SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
-        AttestationClaim { attestation_id },
-    ])
-    .expect("1 claim fits");
+    let claims =
+        SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![AttestationClaim {
+            attestation_id,
+        }])
+        .expect("1 claim fits");
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
-            bounty_id,
-            claims,
-        }),
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty { bounty_id, claims }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
