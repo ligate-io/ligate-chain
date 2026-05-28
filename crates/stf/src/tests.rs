@@ -115,6 +115,7 @@ mod genesis_loader {
             blob_storage: (),
             attestation,
             bounty: bounty::BountyConfig::default(),
+            contracts: contract::ContractConfig::default(),
         }
     }
 

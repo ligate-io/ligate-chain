@@ -124,4 +124,11 @@ where
     /// lands in follow-up PRs against
     /// [chain#519](https://github.com/ligate-io/ligate-chain/issues/519).
     pub bounty: bounty::Bounty<S>,
+
+    /// Ligate contract primitive: work-for-hire deliverable
+    /// contracts (sibling to bounty). v0 ships the module skeleton
+    /// with no-op handlers; full state-transition logic lands in
+    /// follow-up PRs against
+    /// [chain#536](https://github.com/ligate-io/ligate-chain/pull/536).
+    pub contracts: contract::Contracts<S>,
 }

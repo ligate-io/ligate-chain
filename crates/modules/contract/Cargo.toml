@@ -1,0 +1,45 @@
+[package]
+name = "contract"
+description = "Ligate contract primitive: work-for-hire deliverable contracts (chain#536 RFC)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+hex = "0.4"
+schemars.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+attestation     = { path = "../attestation" }
+sov-modules-api = { workspace = true }
+sov-bank        = { workspace = true }
+
+# Prometheus counters behind the `metrics` feature; matches the
+# attestation + bounty modules.
+prometheus = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Pure-Rust unit tests over `ContractId::derive` + `ContractStatus`
+# transitions, without the `librocksdb-sys` dep that integration tests
+# would need via `sov-test-utils`. Real handler tests ship in the
+# follow-up PR alongside the handler logic.
+contract    = { path = "." }
+attestation = { path = "../attestation" }
+
+[features]
+default = []
+native = [
+    "sov-modules-api/native",
+    "sov-bank/native",
+    "attestation/native",
+    "dep:prometheus",
+]
