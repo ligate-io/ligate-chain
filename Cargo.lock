@@ -619,7 +619,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "attestation"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
@@ -1064,7 +1064,7 @@ dependencies = [
 
 [[package]]
 name = "bounty"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
@@ -1641,7 +1641,7 @@ dependencies = [
 
 [[package]]
 name = "contract"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
@@ -4260,7 +4260,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-bootstrap-cli"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
@@ -4283,7 +4283,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-client"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
@@ -4303,7 +4303,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-genesis-tool"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4322,7 +4322,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-prover-risc0"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "risc0-build",
@@ -4331,7 +4331,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-rollup"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4385,7 +4385,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-stf"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
@@ -4419,7 +4419,7 @@ dependencies = [
 
 [[package]]
 name = "ligate-stf-declaration"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "attestation",
