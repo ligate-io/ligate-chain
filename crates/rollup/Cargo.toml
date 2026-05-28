@@ -58,6 +58,11 @@ ligate-stf = { path = "../stf", features = ["native"] }
 # definitions; the rest of the binary already gets the type via the
 # ligate-stf chain.
 attestation = { path = "../modules/attestation", features = ["native"] }
+# `bounty` ships v0 with empty genesis via `BountyConfig::default()`;
+# direct path dep so the rollup binary (and its blueprint/e2e tests)
+# can construct `GenesisConfig { ..., bounty: ... }` literally without
+# routing through `ligate-stf`'s re-export.
+bounty      = { path = "../modules/bounty", features = ["native"] }
 
 # Prometheus + axum for the `/metrics` endpoint (issue #110, Phase 1).
 # axum runs in its own tokio task next to the SDK's REST server so we

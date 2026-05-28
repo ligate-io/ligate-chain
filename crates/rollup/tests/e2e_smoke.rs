@@ -141,6 +141,7 @@ fn setup_with_seeded_state() -> StagedGenesis {
         chain_state: basic.chain_state,
         blob_storage: (),
         attestation,
+        bounty: bounty::BountyConfig::default(),
     };
 
     // The production `GenesisConfig` doesn't expose

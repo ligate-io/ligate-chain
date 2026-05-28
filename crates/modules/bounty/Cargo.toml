@@ -1,0 +1,49 @@
+[package]
+name = "bounty"
+description = "Ligate bounty marketplace module: buyer-funded attestation bounties (chain#385 RFC)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+borsh.workspace = true
+schemars.workspace = true
+serde.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+attestation     = { path = "../attestation" }
+sov-modules-api = { workspace = true }
+sov-bank        = { workspace = true }
+
+# Prometheus counters for the module's call paths. Optional behind
+# the `metrics` feature so the in-zkVM build doesn't pull
+# libcompiler_builtins dupes. Same pattern as the attestation module
+# (tracked under #110 Phase 1).
+prometheus = { workspace = true, optional = true }
+
+[dev-dependencies]
+# v0 tests are pure unit tests over BountyId derivation + DisputeKey
+# string conversion. Real integration tests that exercise handlers
+# end-to-end (via `sov-test-utils::TestRunner`) land in follow-up PRs
+# alongside the actual handler logic, where they'll pick up the
+# transitive `librocksdb-sys` / `sov-state` deps via `sov-test-utils`.
+# Re-importing the crate without the `native` feature here so the
+# pure-Rust unit tests don't pull `librocksdb-sys` for no reason.
+bounty      = { path = "." }
+attestation = { path = "../attestation" }
+
+[features]
+default = []
+native = [
+    "sov-modules-api/native",
+    "sov-bank/native",
+    "attestation/native",
+    "dep:prometheus",
+]
