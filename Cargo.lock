@@ -1063,6 +1063,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounty"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "attestation",
+ "borsh",
+ "bounty",
+ "prometheus",
+ "schemars 0.8.22",
+ "serde",
+ "sha2 0.11.0",
+ "sov-bank",
+ "sov-modules-api",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4365,6 +4382,7 @@ dependencies = [
  "anyhow",
  "attestation",
  "borsh",
+ "bounty",
  "schemars 0.8.22",
  "serde",
  "sov-accounts",

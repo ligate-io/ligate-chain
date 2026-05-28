@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/bootstrap-cli",
     "crates/modules/attestation",
+    "crates/modules/bounty",
     "crates/client-rs",
     "crates/genesis-tool",
     "crates/rollup",

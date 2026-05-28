@@ -43,6 +43,7 @@ sov-uniqueness          = { workspace = true }
 
 # Ligate-native modules.
 attestation = { path = "../modules/attestation" }
+bounty      = { path = "../modules/bounty" }
 
 [features]
 default = []
@@ -59,4 +60,5 @@ native = [
     "sov-sequencer-registry/native",
     "sov-uniqueness/native",
     "attestation/native",
+    "bounty/native",
 ]

@@ -197,6 +197,7 @@ BLACKLIST_DISCRIMINANT = 20
 # from the type name. Our struct is `AttestationModule`, hence
 # `ATTESTATION_MODULE_DISCRIMINANT`.
 ATTESTATION_MODULE_DISCRIMINANT = 21
+BOUNTY_DISCRIMINANT = 22
 
 # SDK test-module discriminants. Carried verbatim because the SDK's
 # own crate graph includes these modules behind feature flags and
