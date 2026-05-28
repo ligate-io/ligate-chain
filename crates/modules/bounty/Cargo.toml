@@ -46,6 +46,7 @@ sov-modules-api = { workspace = true, features = ["native"] }
 sov-bank        = { workspace = true, features = ["native"] }
 sov-state       = { workspace = true, features = ["native"] }
 sov-test-utils  = { workspace = true }
+strum.workspace = true
 
 [features]
 default = []
