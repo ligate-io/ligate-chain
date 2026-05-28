@@ -44,10 +44,7 @@ fn contract_id_derive_is_deterministic() {
 fn contract_id_derive_distinguishes_nonces() {
     let poster = b"lid1examplecontractposteraddrxxxxxxx";
     let criteria = [0x42u8; 32];
-    assert_ne!(
-        ContractId::derive(poster, &criteria, 0),
-        ContractId::derive(poster, &criteria, 1)
-    );
+    assert_ne!(ContractId::derive(poster, &criteria, 0), ContractId::derive(poster, &criteria, 1));
 }
 
 #[test]
@@ -193,21 +190,18 @@ fn submit_attestation_via_runner(env: &mut TestEnv, payload_hash: [u8; 32]) -> A
     };
     let digest = signed.digest();
     let sig_bytes = env.attestor_key.sign(&digest).to_bytes().to_vec();
-    let signatures =
-        SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(vec![AttestorSignature {
+    let signatures = SafeVec::<AttestorSignature, MAX_ATTESTATION_SIGNATURES>::try_from(vec![
+        AttestorSignature {
             pubkey: PubKey::from(env.attestor_key.verifying_key().to_bytes()),
             sig: SafeVec::<u8, MAX_ATTESTOR_SIGNATURE_BYTES>::try_from(sig_bytes)
                 .expect("64 bytes fits"),
-        }])
-        .expect("1 sig fits");
+        },
+    ])
+    .expect("1 sig fits");
 
     env.runner.execute_transaction(TransactionTestCase {
         input: env.worker.create_plain_message::<RT, AttestationModule<S>>(
-            AttCall::SubmitAttestation {
-                schema_id: env.schema_id,
-                payload_hash,
-                signatures,
-            },
+            AttCall::SubmitAttestation { schema_id: env.schema_id, payload_hash, signatures },
         ),
         assert: Box::new(|result, _state| {
             assert!(
@@ -304,13 +298,11 @@ fn commit_to_contract_locks_bond_and_writes_record() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(move |result, state| {
             assert!(result.tx_receipt.is_successful());
             let module = Contracts::<S>::default();
@@ -337,13 +329,11 @@ fn commit_to_contract_rejects_empty_bond() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::ZERO,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::ZERO,
+        }),
         assert: Box::new(|r, _| {
             assert_reverted_with(&r.tx_receipt, "bond must be greater than zero");
         }),
@@ -394,25 +384,21 @@ fn deliver_contract_happy_path_records_delivery() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
     let attestation_id = submit_attestation_via_runner(&mut env, [0xDDu8; 32]);
 
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::DeliverContract {
-                contract_id,
-                deliverable_attestation_id: attestation_id,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::DeliverContract {
+            contract_id,
+            deliverable_attestation_id: attestation_id,
+        }),
         assert: Box::new(move |result, state| {
             assert!(result.tx_receipt.is_successful());
             let module = Contracts::<S>::default();
@@ -439,13 +425,11 @@ fn deliver_contract_rejects_worker_without_commit() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xEEu8; 32]);
@@ -478,23 +462,19 @@ fn accept_delivery_pays_worker_and_refunds_bond() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF1u8; 32]);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::DeliverContract {
-                contract_id,
-                deliverable_attestation_id: attestation_id,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::DeliverContract {
+            contract_id,
+            deliverable_attestation_id: attestation_id,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
@@ -532,23 +512,19 @@ fn accept_delivery_rejects_non_poster() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF2u8; 32]);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::DeliverContract {
-                contract_id,
-                deliverable_attestation_id: attestation_id,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::DeliverContract {
+            contract_id,
+            deliverable_attestation_id: attestation_id,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
@@ -577,32 +553,26 @@ fn resolve_dispute_accept_pays_worker() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF3u8; 32]);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::DeliverContract {
-                contract_id,
-                deliverable_attestation_id: attestation_id,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::DeliverContract {
+            contract_id,
+            deliverable_attestation_id: attestation_id,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.poster.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::RejectDelivery {
-                contract_id,
-                ground: DisputeGround::CriteriaMismatch,
-            },
-        ),
+        input: env.poster.create_plain_message::<RT, Contracts<S>>(CallMessage::RejectDelivery {
+            contract_id,
+            ground: DisputeGround::CriteriaMismatch,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
@@ -639,32 +609,26 @@ fn resolve_dispute_reject_refunds_poster() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF4u8; 32]);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::DeliverContract {
-                contract_id,
-                deliverable_attestation_id: attestation_id,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::DeliverContract {
+            contract_id,
+            deliverable_attestation_id: attestation_id,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.poster.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::RejectDelivery {
-                contract_id,
-                ground: DisputeGround::MalformedDelivery,
-            },
-        ),
+        input: env.poster.create_plain_message::<RT, Contracts<S>>(CallMessage::RejectDelivery {
+            contract_id,
+            ground: DisputeGround::MalformedDelivery,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
@@ -701,29 +665,26 @@ fn resolve_dispute_rejects_non_arbiter() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF5u8; 32]);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::DeliverContract {
-                contract_id,
-                deliverable_attestation_id: attestation_id,
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::DeliverContract {
+            contract_id,
+            deliverable_attestation_id: attestation_id,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.poster.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::RejectDelivery { contract_id, ground: DisputeGround::Other },
-        ),
+        input: env.poster.create_plain_message::<RT, Contracts<S>>(CallMessage::RejectDelivery {
+            contract_id,
+            ground: DisputeGround::Other,
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
 
@@ -810,13 +771,11 @@ fn cancel_contract_rejects_after_commit() {
     });
     let contract_id = ContractId::derive(poster_addr.as_ref(), &[0xCCu8; 32], 0);
     env.runner.execute_transaction(TransactionTestCase {
-        input: env.worker.create_plain_message::<RT, Contracts<S>>(
-            CallMessage::CommitToContract {
-                contract_id,
-                commit_hash: [0xAAu8; 32],
-                bond: Amount::new(50),
-            },
-        ),
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: [0xAAu8; 32],
+            bond: Amount::new(50),
+        }),
         assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
     });
     env.runner.execute_transaction(TransactionTestCase {
