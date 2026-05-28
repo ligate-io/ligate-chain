@@ -265,6 +265,12 @@ where
         chain_state: read_json(&paths.chain_state)?,
         blob_storage: (),
         attestation: read_json(&paths.attestation)?,
+        // v0 bounty module ships with empty genesis (no boards or
+        // pools pre-seeded). The `BountyConfig::default()` produces
+        // the empty struct the module's `Module::genesis` expects.
+        // Real per-board genesis seeding is post-mainnet work; until
+        // then everything happens at runtime via `PostBounty` txs.
+        bounty: bounty::BountyConfig::default(),
     };
     validate_config(&cfg)?;
     Ok(cfg)

@@ -46,6 +46,10 @@ sov-rollup-apis = { workspace = true, optional = true }
 # Ligate-native modules referenced by the genesis loader (cross-
 # module invariant checks against `attestation::AttestationConfig`).
 attestation = { path = "../modules/attestation" }
+# `bounty` ships v0 with an empty `BountyConfig::default()` at genesis;
+# the dep keeps `create_genesis_config` compiling against the new
+# runtime field. Real per-board genesis seeding is post-mainnet work.
+bounty      = { path = "../modules/bounty" }
 
 # Test-only trait impls (MinimalGenesis for Runtime) live behind the
 # `test-utils` feature. Pulled in only when downstream integration
@@ -85,6 +89,7 @@ native = [
     "sov-rollup-interface/native",
     "sov-state/native",
     "attestation/native",
+    "bounty/native",
 ]
 # Opt-in test scaffolding: enables the `test_utils` module, which
 # provides `MinimalGenesis<Runtime<S>>` so the SDK's `TestRunner` can
