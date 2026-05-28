@@ -4301,6 +4301,7 @@ dependencies = [
  "axum",
  "bech32",
  "borsh",
+ "bounty",
  "clap",
  "ed25519-dalek",
  "hex",
