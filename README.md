@@ -25,9 +25,9 @@ It is deliberately domain-agnostic. The same primitives serve AI-prompt provenan
 
 ### The three primitives
 
-- **Attestation** — register a **schema** (what kind of claim), an **attestor set** (the M-of-N signers trusted to vouch for that kind of claim), then submit **attestations** (a specific claim, signed by the set). The chain stores only hashes and signatures, never plaintext payloads. ([spec](docs/protocol/attestation-v0.md))
-- **Bounty** — a standing, buyer-funded offer: _"I pay per verified attestation of type X."_ Open and fungible; anyone whose work the attestor set verifies gets paid. ([spec](docs/protocol/bounty-marketplace.md))
-- **Contract** — work-for-hire: one buyer escrows a pool for a specific deliverable, names an arbiter to resolve disputes, and the worker is paid on acceptance or an automatic timeout. ([spec](docs/protocol/contract-primitive.md))
+- **Attestation**: register a **schema** (what kind of claim), an **attestor set** (the M-of-N signers trusted to vouch for that kind of claim), then submit **attestations** (a specific claim, signed by the set). The chain stores only hashes and signatures, never plaintext payloads. ([spec](docs/protocol/attestation-v0.md))
+- **Bounty**: a standing, buyer-funded offer: _"I pay per verified attestation of type X."_ Open and fungible; anyone whose work the attestor set verifies gets paid. ([spec](docs/protocol/bounty-marketplace.md))
+- **Contract**: work-for-hire. One buyer escrows a pool for a specific deliverable, names an arbiter to resolve disputes, and the worker is paid on acceptance or an automatic timeout. ([spec](docs/protocol/contract-primitive.md))
 
 ### How it works
 
@@ -76,7 +76,7 @@ Defaults pick up `localnet/rollup.toml` (or `localnet/celestia.toml`) and the `l
 
 The bootstrap and dev accounts above are derived from string labels via SHA-256 and have no associated private key, so on a freshly-booted localnet there's no account anyone can sign with out-of-the-box. To make `cargo run --bin ligate-node` immediately useful, [`localnet/local-dev-key.json`](localnet/local-dev-key.json) ships a deterministic Ed25519 keypair (private-key seed = `0x0101…01`, address `lig132yw8ht5p8cetl2jmvknewjawt9xwzdlrk2pyxlnwjyqz3m499u`) pre-funded with 10 000 `AVOW`. Treat it like Anvil's account-0: convenient for local testing, **never** for any real network.
 
-Operators deploying `ligate-devnet-2` MUST remove this address from `localnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly — its private key being well-known is the point.
+Operators deploying `ligate-devnet-2` MUST remove this address from `localnet/genesis/bank.json` (or use a substituted genesis bundle from [`ligate-genesis-tool`](crates/genesis-tool)) before producing the deploy artefacts. The `local-dev-key.json` file itself is harmless to ship publicly. Its private key being well-known is the point.
 
 To use the dev key with [`ligate-cli`](https://github.com/ligate-io/ligate-cli):
 
@@ -100,7 +100,7 @@ ligate transfer --signer dev --to lig1xyz... --amount 1.0 \
 
 The previous `--mode {sequencer,follower}` flag and its corresponding 503-on-submit middleware were removed in chain#446 after a paper-leader incident (a Follower-mode node promoted via in-process role transition kept the boot-time `automatic_batch_production = false` flag, holding the lock but never posting). DbElected gates posting on the lock and the SDK already returns 503 on `POST /v1/sequencer/txs` when not the leader, so the chain-level mode toggle was redundant.
 
-A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`localnet/README.md`](localnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md) — note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
+A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until then the protocol runs single-node locally as above. Per-flavour boot details (Mock / Celestia, env vars, secret-store helpers) live in [`localnet/README.md`](localnet/README.md). Forward-looking operator notes (genesis ceremony, attestor key generation, multi-org topology) are in [`docs/development/devnet.md`](docs/development/devnet.md). Note that runbook still has sections marked **Preview only** from before Phase A landed; refresh tracked separately.
 
 ## What is this repo
 
@@ -118,7 +118,7 @@ The canonical specification is in [`docs/protocol/attestation-v0.md`](docs/proto
 
 ## What Ligate Chain is, and isn't
 
-Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The closer comparisons are Celestia, Hyperliquid, dYdX v4, or Cosmos app-chains: each chain has a narrow remit and is shaped around it. Our remit is on-chain attestation infrastructure — any cryptographically signed off-chain record, verifiable later by anyone, with the curated module set (tokens, NFTs, payments, identity, agents) layered around it. AI provenance is the highest-conviction wedge use case (via Themisra) but the protocol is domain-agnostic: anyone registers a schema and an attestor set, anyone submits attestations under it.
+Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contract platform. The closer comparisons are Celestia, Hyperliquid, dYdX v4, or Cosmos app-chains: each chain has a narrow remit and is shaped around it. Our remit is on-chain attestation infrastructure: any cryptographically signed off-chain record, verifiable later by anyone, with the curated module set (tokens, NFTs, payments, identity, agents) layered around it. AI provenance is the highest-conviction wedge use case (via Themisra) but the protocol is domain-agnostic: anyone registers a schema and an attestor set, anyone submits attestations under it.
 
 **It is:**
 
@@ -133,7 +133,7 @@ Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contrac
 - An L2 in the Optimism / Arbitrum sense. We do not settle to Ethereum.
 - A general DeFi platform. The chain is shaped for attestation primitives plus a few sister modules. Lending, AMMs, perps, and similar live on chains designed for them.
 
-**What you can build on Ligate Chain today and through the v1 roadmap:** apps that register schemas and submit attestations (any domain — AI provenance, supply-chain, document notary, oracle data, governance receipts, KYC checkpoints, sensor logs, you name it); apps that issue fungible tokens or NFTs once `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) modules ship; apps that compose with payments, identity, agent registry, and disputes modules as those land. **What you can't build today:** anything requiring arbitrary smart-contract execution (no EVM in v0–v3; tracked as a v4 option in [#52](https://github.com/ligate-io/ligate-chain/issues/52)). For chain-shaped Web3 features through curated modules + a permissionless attestation primitive, this is the chain. For arbitrary Solidity/Rust contracts, an EVM L2 or Solana is the right place today.
+**What you can build on Ligate Chain today and through the v1 roadmap:** apps that register schemas and submit attestations (any domain: AI provenance, supply-chain, document notary, oracle data, governance receipts, KYC checkpoints, sensor logs, you name it); apps that issue fungible tokens or NFTs once `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) modules ship; apps that compose with payments, identity, agent registry, and disputes modules as those land. **What you can't build today:** anything requiring arbitrary smart-contract execution (no EVM in v0-v3; tracked as a v4 option in [#52](https://github.com/ligate-io/ligate-chain/issues/52)). For chain-shaped Web3 features through curated modules + a permissionless attestation primitive, this is the chain. For arbitrary Solidity/Rust contracts, an EVM L2 or Solana is the right place today.
 
 ## Architecture
 
@@ -177,9 +177,9 @@ Ligate Chain is a **sovereign rollup**, not a peer-to-peer blockchain. Full node
 Coordination happens through two places, **never through node-to-node messaging**:
 
 - **The sequencer** is the canonical entry point for transactions. Users submit transactions to its RPC; it batches them, picks an order, and posts the batch as a blob to Celestia. In v0, Ligate Labs runs the only sequencer; multi-sequencer (leader rotation, based-rollup) is a v1+ direction.
-- **Celestia** is the source of truth for inclusion and ordering. Every node sees the same blob stream and therefore reaches the same state. The chain's "consensus" is delegated to Celestia's DA + ordering — the rollup itself only enforces the STF. Disagreements about state are impossible if a node has correctly executed the STF over the same blobs.
+- **Celestia** is the source of truth for inclusion and ordering. Every node sees the same blob stream and therefore reaches the same state. The chain's "consensus" is delegated to Celestia's DA + ordering; the rollup itself only enforces the STF. Disagreements about state are impossible if a node has correctly executed the STF over the same blobs.
 
-This is the standard rollup model. Same shape as every Sovereign SDK rollup, every modern Cosmos app-chain on Celestia (Stride, Dymension), and every Ethereum L2 (Optimism, Arbitrum, Base) — minus settlement back to Ethereum, since we are sovereign and don't post proofs to an L1.
+This is the standard rollup model. Same shape as every Sovereign SDK rollup, every modern Cosmos app-chain on Celestia (Stride, Dymension), and every Ethereum L2 (Optimism, Arbitrum, Base), minus settlement back to Ethereum, since we are sovereign and don't post proofs to an L1.
 
 ### Attestors are application-layer, not consensus
 
@@ -201,13 +201,13 @@ For v0 devnet:
 | Layer | Status | Path to decentralise |
 |---|---|---|
 | Data availability | **Decentralised** via Celestia | Already there |
-| State verification | **Decentralised** — anyone runs `ligate-node` and re-derives | Already there |
+| State verification | **Decentralised**: anyone runs `ligate-node` and re-derives | Already there |
 | Sequencer | **Centralised** (Ligate Labs) | v1+: leader rotation / shared sequencer |
 | Public RPC endpoint | **Centralised** (Ligate Labs hosted) | Anyone runs their own full node today; community RPCs over time |
-| Schema attestor sets | **Federated per-schema** (3–5 orgs each for first-party schemas) | Permissionless: any project registers its own |
+| Schema attestor sets | **Federated per-schema** (3-5 orgs each for first-party schemas) | Permissionless: any project registers its own |
 | Prover | **Centralised** (Ligate Labs) | v2: prover marketplace (#39) |
 
-The attestation primitive itself is permissionless from day one — anyone can register a new schema with a new attestor set without asking us. The infrastructure around it (sequencer, RPC, prover) decentralises over the v1 → v2 horizon.
+The attestation primitive itself is permissionless from day one: anyone can register a new schema with a new attestor set without asking us. The infrastructure around it (sequencer, RPC, prover) decentralises over the v1 → v2 horizon.
 
 ## Workspace layout
 
@@ -222,7 +222,7 @@ Cargo workspace (resolver 2). Members:
 - [`crates/rollup/provers/risc0`](crates/rollup/provers/risc0): the Risc0 inner zkVM prover, including the Celestia guest binary that runs the full STF inside the zkVM.
 - [`crates/client-rs`](crates/client-rs): the Rust client SDK for applications talking to the chain. Typed builders and ed25519 helpers on the new SDK.
 - [`crates/genesis-tool`](crates/genesis-tool): operator-facing offline tool. `keys generate`, `verify`, `generate` (substitute keys into a template genesis bundle).
-- [`crates/bootstrap-cli`](crates/bootstrap-cli): operator-facing online tool. Runs the post-genesis canonical-schema registration ceremony — submits one `RegisterAttestorSet` + one `RegisterSchema` tx per entry in `canonical-schemas.toml`. Idempotent. See [`docs/development/canonical-schema-registration.md`](docs/development/canonical-schema-registration.md).
+- [`crates/bootstrap-cli`](crates/bootstrap-cli): operator-facing online tool. Runs the post-genesis canonical-schema registration ceremony: submits one `RegisterAttestorSet` + one `RegisterSchema` tx per entry in `canonical-schemas.toml`. Idempotent. See [`docs/development/canonical-schema-registration.md`](docs/development/canonical-schema-registration.md).
 
 Localnet config (genesis files, Celestia and rollup TOMLs) lives in [`localnet/`](localnet) and is checked in so anyone can boot a local node against Celestia mocha-testnet.
 
@@ -255,20 +255,20 @@ The SDK pulls in `librocksdb-sys`, which needs `libclang` at build time:
 
 A clean macOS dev machine hits three failure modes in sequence on the first `cargo check`. All three are documented in [`CONTRIBUTING.md`](CONTRIBUTING.md), but here's the one-shot recipe to get going:
 
-1. **`librocksdb-sys` link** — the two `export`s above.
-2. **Risc0 rustup toolchain override** — `cargo` errors with `override toolchain 'risc0' is not installed` before the workspace even compiles. Install the toolchain manager:
+1. **`librocksdb-sys` link**: the two `export`s above.
+2. **Risc0 rustup toolchain override**: `cargo` errors with `override toolchain 'risc0' is not installed` before the workspace even compiles. Install the toolchain manager:
    ```bash
    curl -L https://risc0.com/install | bash
    rzup install
    ```
    This is a ~1-2 GB one-time install. If you don't plan to touch the prover (Phase A.4 / `crates/rollup/provers/risc0`), the lighter alternative is `export RUSTUP_TOOLCHAIN=1.93.0` per shell to bypass the override.
-3. **Metal kernel build** — Risc0 tries to compile macOS Metal kernels at build time. If you don't have full Xcode (only Command Line Tools), set:
+3. **Metal kernel build**: Risc0 tries to compile macOS Metal kernels at build time. If you don't have full Xcode (only Command Line Tools), set:
    ```bash
    export RISC0_SKIP_BUILD_KERNELS=1
    ```
-   **Do NOT set this in CI** — Linux runners build CPU kernels cleanly, and skipping there produces unresolved-symbol errors at link time. Per-machine workaround only.
+   **Do NOT set this in CI**: Linux runners build CPU kernels cleanly, and skipping there produces unresolved-symbol errors at link time. Per-machine workaround only.
 
-Tracking: [#417](https://github.com/ligate-io/ligate-chain/issues/417) covers proposed ergonomic improvements (`.cargo/config.toml`, etc.) — cargo doesn't support target-conditional env vars natively, so this stays a documented per-machine setup for now.
+Tracking: [#417](https://github.com/ligate-io/ligate-chain/issues/417) covers proposed ergonomic improvements (`.cargo/config.toml`, etc.); cargo doesn't support target-conditional env vars natively, so this stays a documented per-machine setup for now.
 
 ### CI gates
 
@@ -325,8 +325,8 @@ The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures
 
 Two primitives turn attestations into paid work, both with module-controlled escrow (funds live at the module's own derived address, not a third party):
 
-- **Bounty** — a buyer escrows a pool against a schema and pays `per_attestation` for each accepted claim. Acceptance is rule-based (`Any` / `AttestorSet` / `PayloadHashes` / `PeerCount`); claims carry a dispute window; unclaimed or expired pools refund to the poster; `FinaliseBounty` closes out a fully-settled bounty. Built for fungible, parallel work, many contributors against one schema. ([spec](docs/protocol/bounty-marketplace.md))
-- **Contract** — a buyer escrows a pool for one specific deliverable and names an arbiter. A worker commits with a bond, delivers, and is paid on the buyer's acceptance, an arbiter's dispute resolution, or an automatic timeout if the buyer never responds (the work-for-hire guarantee). Built for one-buyer, one-deliverable work. ([spec](docs/protocol/contract-primitive.md))
+- **Bounty**: a buyer escrows a pool against a schema and pays `per_attestation` for each accepted claim. Acceptance is rule-based (`Any` / `AttestorSet` / `PayloadHashes` / `PeerCount`); claims carry a dispute window; unclaimed or expired pools refund to the poster; `FinaliseBounty` closes out a fully-settled bounty. Built for fungible, parallel work, many contributors against one schema. ([spec](docs/protocol/bounty-marketplace.md))
+- **Contract**: a buyer escrows a pool for one specific deliverable and names an arbiter. A worker commits with a bond, delivers, and is paid on the buyer's acceptance, an arbiter's dispute resolution, or an automatic timeout if the buyer never responds (the work-for-hire guarantee). Built for one-buyer, one-deliverable work. ([spec](docs/protocol/contract-primitive.md))
 
 Discovery and matching (which open bounties an attestation is eligible for, leaderboards, history) are indexer concerns, not consensus: the chain does point lookups, the off-chain indexer does the joins.
 
@@ -377,9 +377,9 @@ The full contributor guide is in [`CONTRIBUTING.md`](CONTRIBUTING.md): local dev
 
 Required reading before a non-trivial protocol PR:
 
-1. [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md) — the protocol specification.
-2. [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md) — addressing and signature schemes.
-3. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — the CI gates.
+1. [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md): the protocol specification.
+2. [`docs/protocol/addresses-and-signing.md`](docs/protocol/addresses-and-signing.md): addressing and signature schemes.
+3. [`.github/workflows/ci.yml`](.github/workflows/ci.yml): the CI gates.
 
 This project adopts the [Contributor Covenant](CODE_OF_CONDUCT.md). Security disclosures go through [`SECURITY.md`](SECURITY.md), not public issues.
 
