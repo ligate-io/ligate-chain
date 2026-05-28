@@ -4,15 +4,20 @@
 //!
 //! [spec]: https://github.com/ligate-io/ligate-chain/blob/main/docs/protocol/contract-primitive.md
 //!
-//! # v0 implementation scope
+//! # Implementation scope
 //!
 //! Module declarations, state shape, [`CallMessage`] variants,
-//! [`Event`] variants, AND handler logic for all seven call messages.
+//! [`Event`] variants, AND handler logic for all eight call messages:
+//! the seven lifecycle calls (post / commit / deliver / accept / reject
+//! / resolve / cancel) plus the time-gated
+//! [`CallMessage::FinalizeDelivery`] auto-accept sweep.
 //!
 //! Cross-module composition: `Contracts` references `attestation` (for
-//! the `avow_token_id` read + delivery-attestation existence check)
-//! and `sov-bank` (for escrow + payout transfers). Escrow lives at
-//! the module-controlled address derived via `self.id.to_payable()`
+//! the `avow_token_id` read + delivery-attestation existence check),
+//! `sov-bank` (for escrow + payout transfers), and `chain_state` (for
+//! the current rollup / DA height that stamps `delivered_at_block` and
+//! drives the auto-accept timeout + expiry enforcement). Escrow lives
+//! at the module-controlled address derived via `self.id.to_payable()`
 //! (matches the bounty module + the SDK's `sov-sequencer-registry`
 //! pattern). The chain-wide `AVOW` token id is read from the
 //! attestation module's authoritative state at tx time, keeping this
@@ -20,7 +25,7 @@
 //!
 //! # Module shape
 //!
-//! Five `StateMap`s mirroring the RFC's §"State" section, plus seven
+//! Five `StateMap`s mirroring the RFC's §"State" section, plus eight
 //! [`CallMessage`] variants for the contract lifecycle. Contracts are
 //! sibling to bounties, not anchored to schemas: the poster names a
 //! specific arbiter at post time, and disputes flow through that
@@ -40,7 +45,7 @@
 mod query;
 
 #[cfg(feature = "native")]
-pub use query::ContractResponse;
+pub use query::{ContractDisputeResponse, ContractResponse, DeliveryResponse};
 
 #[cfg(feature = "native")]
 pub mod metrics;
@@ -270,6 +275,17 @@ pub struct Contracts<S: Spec> {
     #[module]
     pub attestation: attestation::AttestationModule<S>,
 
+    /// Reference to the SDK's chain-state module. Handlers read the
+    /// current rollup height to stamp `delivered_at_block` and to
+    /// drive the auto-acceptance timeout, and the current DA height
+    /// (`genesis_da_height + rollup_height`) for `expiry_da_height`
+    /// enforcement. Both reads use `StateReader<User>` accessors, which
+    /// the handler's `TxState` satisfies; the runtime already composes
+    /// `chain_state`, so this reference resolves without any runtime
+    /// change. Mirrors the bounty module.
+    #[module]
+    pub chain_state: sov_chain_state::ChainState<S>,
+
     /// All contracts, keyed by deterministic [`ContractId`].
     #[state]
     pub contracts: StateMap<ContractId, ContractState<S>>,
@@ -357,10 +373,9 @@ impl core::str::FromStr for CommitKey {
 
 // ----- Call messages ----------------------------------------------------------
 
-/// Transactions this module accepts.
-///
-/// v0 carries the wire shape; handler bodies are no-ops (real
-/// state-transition logic lands in follow-up PRs against chain#536).
+/// Transactions this module accepts. Full lifecycle: post, commit,
+/// deliver, accept, reject, resolve, cancel, plus the permissionless
+/// auto-accept timeout sweep (chain#536).
 #[derive(Debug, Clone, PartialEq, Eq, JsonSchema, UniversalWallet)]
 #[sov_modules_api::macros::serialize(Borsh, Serde)]
 #[schemars(bound = "S::Address: ::schemars::JsonSchema", rename = "ContractCallMessage")]
@@ -434,6 +449,19 @@ pub enum CallMessage<S: Spec> {
     /// callable when status is Open (no commits yet) or expired.
     CancelContract {
         /// Contract to cancel.
+        contract_id: ContractId,
+    },
+
+    /// Auto-accept a delivery whose acceptance window has elapsed
+    /// without the poster accepting or rejecting. Permissionless:
+    /// anyone may trigger it (settlement always flows to the worker,
+    /// so the worker, an indexer, or a watcher can finalise). This is
+    /// the work-for-hire trust guarantee, the worker gets paid even if
+    /// the buyer ghosts. Valid only when the contract is
+    /// [`ContractStatus::Delivered`] and
+    /// `current_rollup_height > delivered_at_block + dispute_window_blocks`.
+    FinalizeDelivery {
+        /// Contract whose delivery is being auto-accepted.
         contract_id: ContractId,
     },
 
@@ -636,6 +664,43 @@ pub enum ContractError {
     )]
     CancelWhileActive,
 
+    /// `PostContract` set `expiry_da_height` to a height that has
+    /// already passed, so the contract would be born expired.
+    /// `expiry_da_height` is an absolute DA height; the chain reads the
+    /// current DA height as `genesis_da_height + rollup_height`.
+    #[error("expiry_da_height ({expiry}) must be in the future (current DA height {current})")]
+    ExpiryInPast {
+        /// Submitted expiry height.
+        expiry: u64,
+        /// Current DA height the chain computed.
+        current: u64,
+    },
+
+    /// An operation requiring a live contract ran at or after the
+    /// contract's `expiry_da_height` (e.g. a `DeliverContract` that
+    /// missed the window). The poster reclaims the pool via
+    /// `CancelContract` once expired.
+    #[error("contract expired at DA height {expiry} (current {current})")]
+    ContractExpired {
+        /// Contract's expiry height.
+        expiry: u64,
+        /// Current DA height.
+        current: u64,
+    },
+
+    /// `FinalizeDelivery` was called while the acceptance window is
+    /// still open. The poster still has until
+    /// `delivered_at_block + dispute_window_blocks` to accept or reject.
+    #[error(
+        "acceptance window still open: closes at rollup height {window_close} (current {current})"
+    )]
+    AcceptanceWindowOpen {
+        /// Rollup height the window closes at.
+        window_close: u64,
+        /// Current rollup height.
+        current: u64,
+    },
+
     /// Module pre-conditions not met. Should be unreachable after a
     /// clean `Module::genesis`.
     #[error(
@@ -714,6 +779,9 @@ impl<S: Spec> Module for Contracts<S> {
             CallMessage::CancelContract { contract_id } => {
                 self.handle_cancel_contract(contract_id, context, state)
             }
+            CallMessage::FinalizeDelivery { contract_id } => {
+                self.handle_finalize_delivery(contract_id, context, state)
+            }
             CallMessage::_Phantom(_) => Ok(()),
         };
 
@@ -738,6 +806,24 @@ impl<S: Spec> Contracts<S> {
             .avow_token_id
             .get(state)?
             .ok_or_else(|| ContractError::ModuleNotInitialised.into())
+    }
+
+    /// Current rollup block height, the chain's native clock. Stamped
+    /// onto a [`DeliveryRecord`] as `delivered_at_block` and used to
+    /// drive the `dispute_window_blocks` auto-acceptance timeout (the
+    /// RFC denominates the window in "chain blocks").
+    fn current_rollup_height(&self, state: &mut impl TxState<S>) -> anyhow::Result<u64> {
+        Ok(self.chain_state.rollup_height(state)?.get())
+    }
+
+    /// Current DA-layer height, computed as
+    /// `genesis_da_height + rollup_height`. `expiry_da_height` is an
+    /// absolute DA-layer height per the RFC; the rollup advances one
+    /// block per DA slot, so this is the value `expiry_da_height` is
+    /// compared against. A missing `genesis_da_height` is treated as 0.
+    fn current_da_height(&self, state: &mut impl TxState<S>) -> anyhow::Result<u64> {
+        let genesis = self.chain_state.genesis_da_height(state)?.unwrap_or(0);
+        Ok(genesis.saturating_add(self.current_rollup_height(state)?))
     }
 
     /// Atomically read + increment the per-poster nonce.
@@ -783,6 +869,15 @@ impl<S: Spec> Contracts<S> {
         }
         if expiry_da_height == 0 {
             return Err(ContractError::InvalidExpiryHeight.into());
+        }
+        // Reject a contract that would be born already expired.
+        let current_da = self.current_da_height(state)?;
+        if expiry_da_height <= current_da {
+            return Err(ContractError::ExpiryInPast {
+                expiry: expiry_da_height,
+                current: current_da,
+            }
+            .into());
         }
         if arbiter_fee_bps > MAX_ARBITER_FEE_BPS {
             return Err(ContractError::ArbiterFeeExceedsCap {
@@ -885,6 +980,17 @@ impl<S: Spec> Contracts<S> {
         if !matches!(contract.status, ContractStatus::Committed) {
             return Err(ContractError::InvalidStatus { status: contract.status }.into());
         }
+        // A delivery landing at or after expiry misses the window; the
+        // worker must deliver before `expiry_da_height`. The poster
+        // reclaims the pool via `CancelContract` once expired.
+        let current_da = self.current_da_height(state)?;
+        if current_da >= contract.expiry_da_height {
+            return Err(ContractError::ContractExpired {
+                expiry: contract.expiry_da_height,
+                current: current_da,
+            }
+            .into());
+        }
         if self.deliveries.get(&contract_id, state)?.is_some() {
             return Err(ContractError::DuplicateDelivery.into());
         }
@@ -902,11 +1008,10 @@ impl<S: Spec> Contracts<S> {
         let record = DeliveryRecord {
             worker,
             deliverable_attestation_id,
-            // TODO: pull the current chain block height once the SDK
-            // surfaces it to handlers. v0 pins 0; the timeout-based
-            // auto-accept flow ships once block height is available
-            // (chain#452 family).
-            delivered_at_block: 0,
+            // Stamp the rollup height the delivery landed at; the
+            // auto-acceptance deadline is `delivered_at_block +
+            // dispute_window_blocks`, enforced by `FinalizeDelivery`.
+            delivered_at_block: self.current_rollup_height(state)?,
         };
         self.deliveries.set(&contract_id, &record, state)?;
         contract.status = ContractStatus::Delivered;
@@ -1128,10 +1233,19 @@ impl<S: Spec> Contracts<S> {
         ) {
             return Err(ContractError::InvalidStatus { status: contract.status }.into());
         }
-        // v0: only cancel when status is Open (no commits yet). The
-        // expired-with-commits case lands once handlers can read DA
-        // height (chain#452 family).
-        if !matches!(contract.status, ContractStatus::Open) {
+        // Cancel is allowed from `Open` (no commits yet) at any time,
+        // or from any non-terminal status once the contract has
+        // expired. The pool refund always flows to the poster.
+        //
+        // Worker bonds locked by committed-but-undelivered workers on
+        // an expired contract are NOT swept here: the commits map is
+        // keyed by `(contract, worker)` with no enumeration, and
+        // multi-worker bond handling is a v1 concern (RFC §"Open
+        // questions"). A delivered worker recovers their bond via
+        // `AcceptDelivery` / `FinalizeDelivery` / dispute resolution.
+        let current_da = self.current_da_height(state)?;
+        let expired = current_da >= contract.expiry_da_height;
+        if !matches!(contract.status, ContractStatus::Open) && !expired {
             return Err(ContractError::CancelWhileActive.into());
         }
 
@@ -1146,13 +1260,88 @@ impl<S: Spec> Contracts<S> {
             )?;
             self.escrow.set(&contract_id, &Amount::ZERO, state)?;
         }
-        contract.status = ContractStatus::Cancelled;
+        // Expired contracts land in `Expired`; a clean pre-expiry
+        // cancel from `Open` lands in `Cancelled`.
+        if expired {
+            contract.status = ContractStatus::Expired;
+            self.contracts.set(&contract_id, &contract, state)?;
+            self.emit_event(
+                state,
+                Event::ContractExpired { contract_id, refunded_to_poster: escrow_remaining },
+            );
+        } else {
+            contract.status = ContractStatus::Cancelled;
+            self.contracts.set(&contract_id, &contract, state)?;
+            self.emit_event(
+                state,
+                Event::ContractCancelled { contract_id, refunded_to_poster: escrow_remaining },
+            );
+        }
+        Ok(())
+    }
+
+    /// Auto-accept a delivered contract once the poster's acceptance
+    /// window has elapsed. Permissionless: settlement always flows to
+    /// the worker (pool + bond refund), so anyone may finalise on the
+    /// worker's behalf. This is the work-for-hire guarantee, a worker
+    /// is paid for delivered work even if the buyer never responds.
+    /// Mirrors [`Self::handle_accept_delivery`]'s settlement, gated on
+    /// the timeout instead of the poster's signature.
+    fn handle_finalize_delivery(
+        &mut self,
+        contract_id: ContractId,
+        _context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        if !matches!(contract.status, ContractStatus::Delivered) {
+            return Err(ContractError::InvalidStatus { status: contract.status }.into());
+        }
+        let delivery =
+            self.deliveries.get(&contract_id, state)?.ok_or(ContractError::NoDelivery)?;
+
+        // The acceptance window must have closed.
+        let current_rollup = self.current_rollup_height(state)?;
+        let window_close =
+            delivery.delivered_at_block.saturating_add(u64::from(contract.dispute_window_blocks));
+        if current_rollup <= window_close {
+            return Err(ContractError::AcceptanceWindowOpen {
+                window_close,
+                current: current_rollup,
+            }
+            .into());
+        }
+
+        let pool = contract.pool;
+        let worker = delivery.worker;
+        let avow = self.read_avow_token_id(state)?;
+
+        // Payout: pool from module escrow → worker.
+        self.bank.transfer_from(
+            self.id.clone().to_payable(),
+            &worker,
+            Coins { amount: pool, token_id: avow },
+            state,
+        )?;
+        self.escrow.set(&contract_id, &Amount::ZERO, state)?;
+
+        // Refund the winning worker's bond.
+        let key = Self::commit_key(contract_id, &worker);
+        if let Some(commit) = self.commits.get(&key, state)? {
+            self.bank.transfer_from(
+                self.id.clone().to_payable(),
+                &worker,
+                Coins { amount: commit.bond, token_id: avow },
+                state,
+            )?;
+            self.commits.remove(&key, state)?;
+        }
+
+        contract.status = ContractStatus::Accepted;
         self.contracts.set(&contract_id, &contract, state)?;
 
-        self.emit_event(
-            state,
-            Event::ContractCancelled { contract_id, refunded_to_poster: escrow_remaining },
-        );
+        self.emit_event(state, Event::DeliveryAccepted { contract_id, worker, payout: pool });
         Ok(())
     }
 }
