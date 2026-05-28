@@ -28,12 +28,17 @@ sov-bank        = { workspace = true }
 prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
-# Pure-Rust unit tests over `ContractId::derive` + `ContractStatus`
-# transitions, without the `librocksdb-sys` dep that integration tests
-# would need via `sov-test-utils`. Real handler tests ship in the
-# follow-up PR alongside the handler logic.
-contract    = { path = "." }
-attestation = { path = "../attestation" }
+# Tier 1 (pure unit) + tier 2 (TestRunner-based integration) tests
+# both live in `tests/integration.rs`. sov-test-utils brings the
+# `librocksdb-sys` transitive dep; CI handles libclang.
+contract        = { path = ".", features = ["native"] }
+attestation     = { path = "../attestation", features = ["native"] }
+ed25519-dalek.workspace = true
+sov-modules-api = { workspace = true, features = ["native"] }
+sov-bank        = { workspace = true, features = ["native"] }
+sov-state       = { workspace = true, features = ["native"] }
+sov-test-utils  = { workspace = true }
+strum.workspace = true
 
 [features]
 default = []
