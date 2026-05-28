@@ -9,7 +9,7 @@
 //!
 //! This crate ships the module declarations, state shape, [`CallMessage`]
 //! variants, and [`Event`] variants exactly as the RFC describes. Handler
-//! bodies are no-ops at v0 ([`Ok`](Result::Ok)-returning stubs); real
+//! bodies are no-ops at v0 ([`Ok`]-returning stubs); real
 //! state-transition logic lands in follow-up PRs tracked under
 //! [chain#519](https://github.com/ligate-io/ligate-chain/issues/519).
 //!

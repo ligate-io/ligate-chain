@@ -32,14 +32,16 @@ use sov_modules_api::Runtime as RuntimeTrait;
 type Spec = MockRollupSpec<Native>;
 
 /// Currently expected runtime `CHAIN_HASH`, hex-encoded (lowercase, no
-/// `0x` prefix, 64 chars). Computed against SDK fork rev
-/// `572cada6c6c84ef8d90baef451484a2161bdb85c` on `ligate-mainline`
-/// (post-bech32m + post-MempoolMetrics).
+/// `0x` prefix, 64 chars). Bumped when the `bounty` module was added
+/// to the runtime composition in chain#519 (the v0 skeleton PR);
+/// adding a module to the composition struct shifts the borsh schema
+/// fingerprint that flows into `CHAIN_HASH`. Prior value (pre-bounty)
+/// was `eec077f4736df42cddb547236468dad32f1fd6822aaad1e822ce596307552df2`.
 ///
 /// Updates require: bump this value, update `STATE.md`, note the reason
 /// in the commit message.
 const EXPECTED_CHAIN_HASH: &str =
-    "eec077f4736df42cddb547236468dad32f1fd6822aaad1e822ce596307552df2";
+    "0db23038539976d0eaeb57fe4e6843d1e32dd66d428af400e9caace1fb180efc";
 
 #[test]
 fn chain_hash_matches_pinned_value() {
