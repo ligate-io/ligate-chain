@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>The permissionless on-chain attestation protocol.</strong><br>
-  A sovereign rollup on Celestia. AI provenance is the wedge use case, not the only one.
+  <strong>An attestation-native sovereign rollup.</strong><br>
+  Register verifiable claims, run the attestor sets that vouch for them, and pay for verified work through an on-chain marketplace. Domain-agnostic; AI provenance is the first vertical, not the only one.
 </p>
 
 <div align="center">
@@ -17,20 +17,21 @@
 
 ---
 
-## Earn from schema authorship
+## What is Ligate Chain
 
-Schema developers earn a configurable slice of every attestation fee paid against their schema. Set `fee_routing_bps` at schema registration (up to 5000 = 50%, governance-tunable cap) and `fee_routing_addr` to the address you want paid. From that point on, every `SubmitAttestation` against the schema splits `total_fee * fee_routing_bps / 10000` to the routing address; the rest accrues to the protocol treasury.
+Ligate Chain is an **attestation-native sovereign rollup**. Its core primitive is the *attestation*: a signed, on-chain record that some claim is true. Around that sits a marketplace that pays for producing verified claims. The chain never sees what you attest; it records who vouched for what, and settles payment for verified work.
 
-```rust
-attestation::CallMessage::RegisterSchema {
-    set_id,
-    payload_hash_alg: HashAlg::Sha256,
-    fee_routing_bps: 1000,                       // 10% to the schema author
-    fee_routing_addr: Some(developer_address),   // required when bps > 0
-}
-```
+It is deliberately domain-agnostic. The same primitives serve AI-prompt provenance (the first vertical, via Themisra), code and security audits, data labeling, supply-chain and ESG claims, document notarization, oracle feeds, governance receipts: anywhere the pattern is "trusted parties vouch that X is true, and someone gets paid for it."
 
-No staking, no inflation, no listing fee. The mechanism is buyer-funded: attestation submitters pay, the schema author gets the cut. The same primitive is what the bounty marketplace ([chain#385](https://github.com/ligate-io/ligate-chain/issues/385)) and post-mainnet schema marketplace fee ([chain#524](https://github.com/ligate-io/ligate-chain/issues/524)) compose on top of. Spec: [`docs/protocol/attestation-v0.md`](docs/protocol/attestation-v0.md) §"Fee distribution". Pre-testnet economics RFC: [`docs/protocol/pre-testnet-economics.md`](docs/protocol/pre-testnet-economics.md).
+### The three primitives
+
+- **Attestation** — register a **schema** (what kind of claim), an **attestor set** (the M-of-N signers trusted to vouch for that kind of claim), then submit **attestations** (a specific claim, signed by the set). The chain stores only hashes and signatures, never plaintext payloads. ([spec](docs/protocol/attestation-v0.md))
+- **Bounty** — a standing, buyer-funded offer: _"I pay per verified attestation of type X."_ Open and fungible; anyone whose work the attestor set verifies gets paid. ([spec](docs/protocol/bounty-marketplace.md))
+- **Contract** — work-for-hire: one buyer escrows a pool for a specific deliverable, names an arbiter to resolve disputes, and the worker is paid on acceptance or an automatic timeout. ([spec](docs/protocol/contract-primitive.md))
+
+### How it works
+
+Ligate Chain is a [Sovereign SDK](https://github.com/Sovereign-Labs/sovereign-sdk) rollup. The sequencer orders transactions and posts them as blobs to **Celestia** for data availability; every full node pulls the same blob stream and independently runs the state-transition function to derive identical state; a **Risc0** zkVM proves that execution. There is no node-to-node gossip and no settlement to Ethereum, the chain is sovereign and delegates ordering plus availability to Celestia. Attestor sets are an application layer, not consensus participants: they sign claims off-chain, and the on-chain `attestation` module verifies those signatures against the registered set. Economics are buyer-funded, with no inflation and no staking required to use the chain: submitters pay a fee, and schema authors can route up to 50% of it to themselves ([economics RFC](docs/protocol/pre-testnet-economics.md)). The [Architecture](#architecture) section goes deeper.
 
 ---
 
@@ -103,7 +104,7 @@ A public devnet with federated attestor orgs is targeted for **Q2 2026**. Until 
 
 ## What is this repo
 
-This repository holds the **Ligate Chain protocol** and its first-party SDKs. Its one core product in v0 is a generic **attestation protocol**: anyone can register an attestor set and a schema, then submit cryptographically signed records ("attestations") under it that anyone can verify later. The chain stores only hashes and signatures, never plaintext payloads.
+This repository holds the **Ligate Chain protocol** and its first-party SDKs. The v0 surface is a generic **attestation protocol** plus a **marketplace** that pays for verified work: anyone can register an attestor set and a schema, submit cryptographically signed records ("attestations") under it that anyone can verify later, and fund bounties or contracts that pay out when the work is attested. The chain stores only hashes and signatures, never plaintext payloads.
 
 Product-specific code (Themisra, Iris, Kleidon) lives in separate repositories. Those products are the first consumers of this protocol, not part of it. They register their own schemas and attestor sets and submit attestations through the same public interface any other builder would use.
 
@@ -122,7 +123,7 @@ Ligate Chain is a **specialized app-chain**, not a general-purpose smart-contrac
 **It is:**
 
 - A sovereign rollup on Celestia DA. Own state, own token (AVOW), own sequencer, own protocol logic.
-- A curated module set. Today: `attestation`. Planned: `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) in v1, `payments`, `agents`, `identity`, `disputes` later. Each module is a designed product surface, not a sandbox.
+- A curated module set. Today: `attestation`, `bounty`, `contract`. Planned: `tokens` ([#47](https://github.com/ligate-io/ligate-chain/issues/47)) and `nft` ([#48](https://github.com/ligate-io/ligate-chain/issues/48)) in v1, `payments`, `agents`, `identity`, `disputes` later. Each module is a designed product surface, not a sandbox.
 - Permissionless at the **schema** level: anyone registers a schema on the attestation module and submits attestations under it. No gatekeeper.
 
 **It isn't:**
@@ -213,7 +214,9 @@ The attestation primitive itself is permissionless from day one — anyone can r
 Cargo workspace (resolver 2). Members:
 
 - [`crates/modules/attestation`](crates/modules/attestation): the attestation protocol module. Data shapes, state layout, call handlers, signature validation, and fee routing through `sov-bank`.
-- [`crates/stf`](crates/stf): the runtime crate that composes the chain's modules (`bank`, `accounts`, `sequencer_registry`, `attester_incentives`, `prover_incentives`, `operator_incentives`, `attestation`) into a state-transition function. `CHAIN_HASH` is derived from the runtime schema at build time so genesis can't drift from code.
+- [`crates/modules/bounty`](crates/modules/bounty): the bounty marketplace module. Buyer-funded, schema-anchored bounties that pay the submitter of an accepted attestation; full lifecycle (post / claim / dispute / resolve / cancel / finalise) with module-controlled escrow, composed on `attestation` + `chain_state`.
+- [`crates/modules/contract`](crates/modules/contract): the contract module. Work-for-hire deliverable contracts with a named arbiter and a timeout-based auto-accept (post / commit / deliver / accept / reject / resolve / cancel / finalize-delivery).
+- [`crates/stf`](crates/stf): the runtime crate that composes the chain's modules (`bank`, `accounts`, `sequencer_registry`, `attester_incentives`, `prover_incentives`, `operator_incentives`, `uniqueness`, `chain_state`, `blob_storage`, `attestation`, `bounty`, `contract`) into a state-transition function. `CHAIN_HASH` is derived from the runtime schema at build time so genesis can't drift from code.
 - [`crates/stf-declaration`](crates/stf-declaration): the runtime declaration consumed by the SDK macros.
 - [`crates/rollup`](crates/rollup): the node binary (`ligate-node`). Wires the STF to the Celestia DA adapter and exposes the RPC surface.
 - [`crates/rollup/provers/risc0`](crates/rollup/provers/risc0): the Risc0 inner zkVM prover, including the Celestia guest binary that runs the full STF inside the zkVM.
@@ -318,11 +321,21 @@ An application's attestation shape: `owner`, `name`, `version`, the `AttestorSet
 
 The on-chain record: `(schema_id, payload_hash, submitter, timestamp, signatures)`, keyed by `(schema_id, payload_hash)` and write-once. The chain verifies the supplied signatures against the schema's attestor set at submit time; later reads are cheap RPC queries against a `StateMap`.
 
+### Bounty & Contract (the marketplace)
+
+Two primitives turn attestations into paid work, both with module-controlled escrow (funds live at the module's own derived address, not a third party):
+
+- **Bounty** — a buyer escrows a pool against a schema and pays `per_attestation` for each accepted claim. Acceptance is rule-based (`Any` / `AttestorSet` / `PayloadHashes` / `PeerCount`); claims carry a dispute window; unclaimed or expired pools refund to the poster; `FinaliseBounty` closes out a fully-settled bounty. Built for fungible, parallel work, many contributors against one schema. ([spec](docs/protocol/bounty-marketplace.md))
+- **Contract** — a buyer escrows a pool for one specific deliverable and names an arbiter. A worker commits with a bond, delivers, and is paid on the buyer's acceptance, an arbiter's dispute resolution, or an automatic timeout if the buyer never responds (the work-for-hire guarantee). Built for one-buyer, one-deliverable work. ([spec](docs/protocol/contract-primitive.md))
+
+Discovery and matching (which open bounties an attestation is eligible for, leaderboards, history) are indexer concerns, not consensus: the chain does point lookups, the off-chain indexer does the joins.
+
 ## Development status
 
-**Devnet.** `ligate-devnet-2` is live on Celestia Mocha-testnet. As of Phase A:
+**Devnet.** `ligate-devnet-2` is live on Celestia Mocha-testnet (running `v0.3.1`). The `v0.4.0` release adds the bounty + contract marketplace; because it shifts `chain_hash` it is not state-compatible with devnet-2 and ships via a `ligate-devnet-3` re-genesis (cutover in progress). Current surface:
 
 - Attestation module: data types, state layout, call handlers, ed25519 signature validation, replay protection, fee routing.
+- Marketplace modules (`v0.4.0`): `bounty` (buyer-funded, schema-anchored, full lifecycle with module escrow, dispute windows, and finalise) and `contract` (work-for-hire with a named arbiter and a timeout-based auto-accept). Both compose on `attestation` + `chain_state`.
 - Runtime: `ligate-stf` composes the curated module set on the upgraded Sovereign SDK.
 - DA: Celestia adapter wired for block submission and ingestion.
 - ZK: Risc0 inner zkVM with a Celestia guest binary that runs the full STF.
