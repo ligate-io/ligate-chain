@@ -4,17 +4,19 @@
 //!
 //! [spec]: https://github.com/ligate-io/ligate-chain/blob/main/docs/protocol/contract-primitive.md
 //!
-//! # v0 skeleton scope
+//! # v0 implementation scope
 //!
-//! Module declarations, state shape, [`CallMessage`] variants, [`Event`]
-//! variants exactly as the RFC describes. Handler bodies are no-op
-//! stubs at v0; real state-transition logic lands in the follow-up
-//! PR tracked under chain#536's sub-issues.
+//! Module declarations, state shape, [`CallMessage`] variants,
+//! [`Event`] variants, AND handler logic for all seven call messages.
 //!
-//! Skeleton ships first because adding a module to the runtime
-//! composition bumps `chain_hash` (new module shifts the borsh schema
-//! fingerprint), and we want that change to ship cleanly through one
-//! release. Handler PRs are zero-impact on chain identity afterwards.
+//! Cross-module composition: `Contracts` references `attestation` (for
+//! the `avow_token_id` read + delivery-attestation existence check)
+//! and `sov-bank` (for escrow + payout transfers). Escrow lives at
+//! the module-controlled address derived via `self.id.to_payable()`
+//! (matches the bounty module + the SDK's `sov-sequencer-registry`
+//! pattern). The chain-wide `AVOW` token id is read from the
+//! attestation module's authoritative state at tx time, keeping this
+//! module's wallet schema clean.
 //!
 //! # Module shape
 //!
@@ -48,11 +50,11 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sov_bank::Amount;
+use sov_bank::{Amount, Coins, IntoPayable};
 use sov_modules_api::macros::UniversalWallet;
 use sov_modules_api::{
-    Context, DaSpec, GenesisState, Module, ModuleId, ModuleInfo, ModuleRestApi, Spec, StateMap,
-    TxState,
+    Context, DaSpec, EventEmitter, GenesisState, Module, ModuleId, ModuleInfo, ModuleRestApi, Spec,
+    StateMap, TxState,
 };
 use thiserror::Error as ThisError;
 
@@ -541,11 +543,110 @@ pub enum Event<S: Spec> {
 #[derive(Debug, ThisError)]
 #[non_exhaustive]
 pub enum ContractError {
-    /// v0 handlers are no-op stubs; full implementation lands in
-    /// follow-up PRs against chain#536.
-    #[error("contract module handler not yet implemented (chain#536 follow-up)")]
-    NotImplemented,
+    /// `pool` was zero, which would post an unfunded contract.
+    #[error("contract pool must be greater than zero")]
+    EmptyPool,
+
+    /// `expiry_da_height` was 0 (or otherwise inconsistent).
+    #[error("expiry_da_height must be greater than zero")]
+    InvalidExpiryHeight,
+
+    /// `arbiter_fee_bps` exceeded the protocol cap (default 5000 = 50%).
+    /// Defensive: griefing arbiters charging absurd fees should not
+    /// be accepted at post time.
+    #[error("arbiter_fee_bps ({bps}) exceeds protocol cap ({cap})")]
+    ArbiterFeeExceedsCap {
+        /// Submitted bps.
+        bps: u16,
+        /// Protocol cap (5000).
+        cap: u16,
+    },
+
+    /// A [`ContractId`] collision was detected. Should be unreachable
+    /// given the per-poster nonce.
+    #[error("contract id collision (per-poster nonce invariant broken)")]
+    DuplicateContract,
+
+    /// Referenced contract id isn't stored.
+    #[error("contract not found")]
+    UnknownContract,
+
+    /// Caller is not the contract's poster (for poster-only ops).
+    #[error("not authorised: caller is not the contract poster")]
+    NotPoster,
+
+    /// Caller is not the contract's arbiter (for arbiter-only ops).
+    #[error("not authorised: caller is not the contract arbiter")]
+    NotArbiter,
+
+    /// Contract status doesn't permit this op.
+    #[error("contract status {status:?} not valid for this operation")]
+    InvalidStatus {
+        /// Current status.
+        status: ContractStatus,
+    },
+
+    /// Worker bond was zero on `CommitToContract`. Even at v0 bonds
+    /// need to be non-zero to make grief-disputes costly.
+    #[error("commit bond must be greater than zero")]
+    EmptyBond,
+
+    /// Same `(contract_id, worker)` already has a commit.
+    #[error("worker already committed to this contract")]
+    DuplicateCommit,
+
+    /// `DeliverContract` reached for a worker who hadn't committed.
+    /// v0 requires commit-then-deliver to keep the flow disciplined.
+    #[error("worker has not committed to this contract")]
+    NoActiveCommit,
+
+    /// `DeliverContract` referenced an attestation id that doesn't
+    /// exist in the attestation module's store.
+    #[error("attestation not found in attestation module")]
+    UnknownAttestation,
+
+    /// `DeliverContract` would overwrite an existing delivery. v0
+    /// only accepts the first delivery per contract; later workers
+    /// who committed but lost the race can `CancelContract` only via
+    /// the poster's choice + bonds-refund flow.
+    #[error("contract already has a delivery")]
+    DuplicateDelivery,
+
+    /// No delivery exists yet for an op that needs one (`Accept` /
+    /// `Reject`).
+    #[error("contract has no delivery to accept or reject")]
+    NoDelivery,
+
+    /// `RejectDelivery` reached for a contract that's not in
+    /// [`ContractStatus::Delivered`].
+    #[error("contract has no pending delivery to reject")]
+    NoPendingDelivery,
+
+    /// `ResolveContractDispute` reached for a contract that isn't in
+    /// [`ContractStatus::Disputed`].
+    #[error("contract is not in dispute")]
+    NotInDispute,
+
+    /// `CancelContract` reached when the contract has commits or
+    /// delivery in flight. v0 only allows cancel from Open with no
+    /// commits, or from Expired.
+    #[error(
+        "cannot cancel: contract has active commits or a delivery; \
+         cancel only when no commits yet (or after expiry)"
+    )]
+    CancelWhileActive,
+
+    /// Module pre-conditions not met. Should be unreachable after a
+    /// clean `Module::genesis`.
+    #[error(
+        "contract module not initialised: cross-module attestation read failed for avow_token_id"
+    )]
+    ModuleNotInitialised,
 }
+
+/// Maximum `arbiter_fee_bps` accepted at post time. Same value as the
+/// attestation module's `DEFAULT_MAX_BUILDER_BPS` (5000 = 50%).
+const MAX_ARBITER_FEE_BPS: u16 = 5000;
 
 // ----- Genesis configuration --------------------------------------------------
 
@@ -575,22 +676,483 @@ impl<S: Spec> Module for Contracts<S> {
     fn call(
         &mut self,
         msg: Self::CallMessage,
-        _context: &Context<Self::Spec>,
-        _state: &mut impl TxState<S>,
+        context: &Context<Self::Spec>,
+        state: &mut impl TxState<S>,
     ) -> Result<(), Self::Error> {
-        match msg {
-            CallMessage::PostContract { .. }
-            | CallMessage::CommitToContract { .. }
-            | CallMessage::DeliverContract { .. }
-            | CallMessage::AcceptDelivery { .. }
-            | CallMessage::RejectDelivery { .. }
-            | CallMessage::ResolveContractDispute { .. }
-            | CallMessage::CancelContract { .. } => {
-                #[cfg(feature = "native")]
-                metrics::record_contract_call();
-                Ok(())
+        let result = match msg {
+            CallMessage::PostContract {
+                arbiter,
+                criteria_doc_hash,
+                pool,
+                expiry_da_height,
+                dispute_window_blocks,
+                arbiter_fee_bps,
+            } => self.handle_post_contract(
+                arbiter,
+                criteria_doc_hash,
+                pool,
+                expiry_da_height,
+                dispute_window_blocks,
+                arbiter_fee_bps,
+                context,
+                state,
+            ),
+            CallMessage::CommitToContract { contract_id, commit_hash, bond } => {
+                self.handle_commit_to_contract(contract_id, commit_hash, bond, context, state)
+            }
+            CallMessage::DeliverContract { contract_id, deliverable_attestation_id } => self
+                .handle_deliver_contract(contract_id, deliverable_attestation_id, context, state),
+            CallMessage::AcceptDelivery { contract_id } => {
+                self.handle_accept_delivery(contract_id, context, state)
+            }
+            CallMessage::RejectDelivery { contract_id, ground } => {
+                self.handle_reject_delivery(contract_id, ground, context, state)
+            }
+            CallMessage::ResolveContractDispute { contract_id, decision } => {
+                self.handle_resolve_contract_dispute(contract_id, decision, context, state)
+            }
+            CallMessage::CancelContract { contract_id } => {
+                self.handle_cancel_contract(contract_id, context, state)
             }
             CallMessage::_Phantom(_) => Ok(()),
+        };
+
+        #[cfg(feature = "native")]
+        if result.is_ok() {
+            metrics::record_contract_call();
         }
+        result
+    }
+}
+
+// ============================================================================
+// Handlers
+// ============================================================================
+
+impl<S: Spec> Contracts<S> {
+    /// Resolve the chain-wide `AVOW` token id at tx time by reading
+    /// the attestation module's authoritative copy. Same pattern as
+    /// the bounty module.
+    fn read_avow_token_id(&self, state: &mut impl TxState<S>) -> anyhow::Result<sov_bank::TokenId> {
+        self.attestation
+            .avow_token_id
+            .get(state)?
+            .ok_or_else(|| ContractError::ModuleNotInitialised.into())
+    }
+
+    /// Atomically read + increment the per-poster nonce.
+    fn bump_poster_nonce(
+        &mut self,
+        poster: &S::Address,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<u64> {
+        let current = self.next_poster_nonce.get(poster, state)?.unwrap_or(0);
+        self.next_poster_nonce.set(poster, &current.saturating_add(1), state)?;
+        Ok(current)
+    }
+
+    /// Build the `CommitKey` for a `(contract, worker)` pair. The
+    /// worker address is copied byte-for-byte; `S::Address`'s 28-byte
+    /// representation matches the chain's `MultiAddress` shape.
+    fn commit_key(contract_id: ContractId, worker: &S::Address) -> CommitKey {
+        let mut worker_bytes = [0u8; 28];
+        let addr_bytes = worker.as_ref();
+        let len = core::cmp::min(addr_bytes.len(), 28);
+        worker_bytes[..len].copy_from_slice(&addr_bytes[..len]);
+        CommitKey { contract_id, worker_bytes }
+    }
+
+    /// Post a new contract. Validates inputs, derives a unique
+    /// [`ContractId`], escrows `pool` `AVOW` from the poster into the
+    /// module-controlled address, writes [`ContractState`], emits
+    /// [`Event::ContractPosted`].
+    #[allow(clippy::too_many_arguments)]
+    fn handle_post_contract(
+        &mut self,
+        arbiter: S::Address,
+        criteria_doc_hash: [u8; 32],
+        pool: Amount,
+        expiry_da_height: u64,
+        dispute_window_blocks: u32,
+        arbiter_fee_bps: u16,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        if pool == Amount::ZERO {
+            return Err(ContractError::EmptyPool.into());
+        }
+        if expiry_da_height == 0 {
+            return Err(ContractError::InvalidExpiryHeight.into());
+        }
+        if arbiter_fee_bps > MAX_ARBITER_FEE_BPS {
+            return Err(ContractError::ArbiterFeeExceedsCap {
+                bps: arbiter_fee_bps,
+                cap: MAX_ARBITER_FEE_BPS,
+            }
+            .into());
+        }
+
+        let poster: S::Address = *context.sender();
+        let nonce = self.bump_poster_nonce(&poster, state)?;
+        let contract_id = ContractId::derive(poster.as_ref(), &criteria_doc_hash, nonce);
+        if self.contracts.get(&contract_id, state)?.is_some() {
+            return Err(ContractError::DuplicateContract.into());
+        }
+
+        let avow = self.read_avow_token_id(state)?;
+        self.bank.transfer_from(
+            &poster,
+            self.id.clone().to_payable(),
+            Coins { amount: pool, token_id: avow },
+            state,
+        )?;
+
+        let contract_state = ContractState {
+            poster,
+            arbiter,
+            criteria_doc_hash,
+            pool,
+            expiry_da_height,
+            dispute_window_blocks,
+            arbiter_fee_bps,
+            status: ContractStatus::Open,
+        };
+        self.contracts.set(&contract_id, &contract_state, state)?;
+        self.escrow.set(&contract_id, &pool, state)?;
+
+        self.emit_event(state, Event::ContractPosted { contract_id, poster, arbiter, pool });
+        Ok(())
+    }
+
+    /// Worker commits to delivering. Locks `bond` AVOW into the
+    /// module escrow account. Allows multiple workers to commit in
+    /// parallel (each (contract, worker) pair is a separate key).
+    fn handle_commit_to_contract(
+        &mut self,
+        contract_id: ContractId,
+        commit_hash: [u8; 32],
+        bond: Amount,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        if bond == Amount::ZERO {
+            return Err(ContractError::EmptyBond.into());
+        }
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        if !matches!(contract.status, ContractStatus::Open | ContractStatus::Committed) {
+            return Err(ContractError::InvalidStatus { status: contract.status }.into());
+        }
+
+        let worker: S::Address = *context.sender();
+        let key = Self::commit_key(contract_id, &worker);
+        if self.commits.get(&key, state)?.is_some() {
+            return Err(ContractError::DuplicateCommit.into());
+        }
+
+        let avow = self.read_avow_token_id(state)?;
+        self.bank.transfer_from(
+            &worker,
+            self.id.clone().to_payable(),
+            Coins { amount: bond, token_id: avow },
+            state,
+        )?;
+
+        self.commits.set(&key, &CommitRecord { worker, commit_hash, bond }, state)?;
+
+        // Move status forward to Committed on the first commit.
+        if matches!(contract.status, ContractStatus::Open) {
+            contract.status = ContractStatus::Committed;
+            self.contracts.set(&contract_id, &contract, state)?;
+        }
+
+        self.emit_event(state, Event::WorkerCommitted { contract_id, worker, commit_hash, bond });
+        Ok(())
+    }
+
+    /// Worker delivers. Records the delivery + the attestation id
+    /// pointing at proof-of-work. v0: only the first delivery is
+    /// accepted per contract.
+    fn handle_deliver_contract(
+        &mut self,
+        contract_id: ContractId,
+        deliverable_attestation_id: AttestationId,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        if !matches!(contract.status, ContractStatus::Committed) {
+            return Err(ContractError::InvalidStatus { status: contract.status }.into());
+        }
+        if self.deliveries.get(&contract_id, state)?.is_some() {
+            return Err(ContractError::DuplicateDelivery.into());
+        }
+
+        let worker: S::Address = *context.sender();
+        let key = Self::commit_key(contract_id, &worker);
+        if self.commits.get(&key, state)?.is_none() {
+            return Err(ContractError::NoActiveCommit.into());
+        }
+
+        if self.attestation.attestations.get(&deliverable_attestation_id, state)?.is_none() {
+            return Err(ContractError::UnknownAttestation.into());
+        }
+
+        let record = DeliveryRecord {
+            worker,
+            deliverable_attestation_id,
+            // TODO: pull the current chain block height once the SDK
+            // surfaces it to handlers. v0 pins 0; the timeout-based
+            // auto-accept flow ships once block height is available
+            // (chain#452 family).
+            delivered_at_block: 0,
+        };
+        self.deliveries.set(&contract_id, &record, state)?;
+        contract.status = ContractStatus::Delivered;
+        self.contracts.set(&contract_id, &contract, state)?;
+
+        self.emit_event(
+            state,
+            Event::ContractDelivered { contract_id, worker, deliverable_attestation_id },
+        );
+        Ok(())
+    }
+
+    /// Poster accepts the delivery. Pays the pool to the worker;
+    /// refunds the worker's bond. Transitions to Accepted.
+    fn handle_accept_delivery(
+        &mut self,
+        contract_id: ContractId,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        let caller: S::Address = *context.sender();
+        if caller != contract.poster {
+            return Err(ContractError::NotPoster.into());
+        }
+        if !matches!(contract.status, ContractStatus::Delivered) {
+            return Err(ContractError::InvalidStatus { status: contract.status }.into());
+        }
+        let delivery =
+            self.deliveries.get(&contract_id, state)?.ok_or(ContractError::NoDelivery)?;
+        let pool = contract.pool;
+        let worker = delivery.worker;
+
+        let avow = self.read_avow_token_id(state)?;
+        // Payout: pool from module escrow → worker.
+        self.bank.transfer_from(
+            self.id.clone().to_payable(),
+            &worker,
+            Coins { amount: pool, token_id: avow },
+            state,
+        )?;
+        self.escrow.set(&contract_id, &Amount::ZERO, state)?;
+
+        // Refund the winning worker's bond.
+        let key = Self::commit_key(contract_id, &worker);
+        if let Some(commit) = self.commits.get(&key, state)? {
+            self.bank.transfer_from(
+                self.id.clone().to_payable(),
+                &worker,
+                Coins { amount: commit.bond, token_id: avow },
+                state,
+            )?;
+            self.commits.remove(&key, state)?;
+        }
+
+        contract.status = ContractStatus::Accepted;
+        self.contracts.set(&contract_id, &contract, state)?;
+
+        self.emit_event(state, Event::DeliveryAccepted { contract_id, worker, payout: pool });
+        Ok(())
+    }
+
+    /// Poster rejects the delivery. Writes a `DisputeRecord` and
+    /// transitions to Disputed. Bond stays locked until arbiter
+    /// resolves.
+    fn handle_reject_delivery(
+        &mut self,
+        contract_id: ContractId,
+        ground: DisputeGround,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        let caller: S::Address = *context.sender();
+        if caller != contract.poster {
+            return Err(ContractError::NotPoster.into());
+        }
+        if !matches!(contract.status, ContractStatus::Delivered) {
+            return Err(ContractError::NoPendingDelivery.into());
+        }
+        let delivery =
+            self.deliveries.get(&contract_id, state)?.ok_or(ContractError::NoDelivery)?;
+
+        self.disputes.set(
+            &contract_id,
+            &DisputeRecord { worker: delivery.worker, ground },
+            state,
+        )?;
+        contract.status = ContractStatus::Disputed;
+        self.contracts.set(&contract_id, &contract, state)?;
+
+        self.emit_event(
+            state,
+            Event::DeliveryRejected { contract_id, worker: delivery.worker, reason: ground },
+        );
+        Ok(())
+    }
+
+    /// Arbiter resolves an open dispute. Pool + bond flow per
+    /// `DisputeDecision`; arbiter earns `arbiter_fee_bps` slice of
+    /// the pool. Transitions to Accepted / Rejected.
+    fn handle_resolve_contract_dispute(
+        &mut self,
+        contract_id: ContractId,
+        decision: DisputeDecision,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        let caller: S::Address = *context.sender();
+        if caller != contract.arbiter {
+            return Err(ContractError::NotArbiter.into());
+        }
+        if !matches!(contract.status, ContractStatus::Disputed) {
+            return Err(ContractError::NotInDispute.into());
+        }
+        let dispute = self.disputes.get(&contract_id, state)?.ok_or(ContractError::NotInDispute)?;
+
+        let pool = contract.pool;
+        let arbiter_cut =
+            Amount::new(pool.0.saturating_mul(u128::from(contract.arbiter_fee_bps)) / 10_000);
+        let pool_after_cut = Amount::new(pool.0.saturating_sub(arbiter_cut.0));
+        let avow = self.read_avow_token_id(state)?;
+
+        // Always pay the arbiter their cut from the escrow.
+        if arbiter_cut > Amount::ZERO {
+            self.bank.transfer_from(
+                self.id.clone().to_payable(),
+                &contract.arbiter,
+                Coins { amount: arbiter_cut, token_id: avow },
+                state,
+            )?;
+        }
+
+        let worker = dispute.worker;
+        let key = Self::commit_key(contract_id, &worker);
+        let commit = self.commits.get(&key, state)?;
+
+        let (winner, new_status) = match decision {
+            DisputeDecision::AcceptDelivery => {
+                // Worker wins: pool_after_cut → worker, bond refunded.
+                if pool_after_cut > Amount::ZERO {
+                    self.bank.transfer_from(
+                        self.id.clone().to_payable(),
+                        &worker,
+                        Coins { amount: pool_after_cut, token_id: avow },
+                        state,
+                    )?;
+                }
+                if let Some(ref commit) = commit {
+                    self.bank.transfer_from(
+                        self.id.clone().to_payable(),
+                        &worker,
+                        Coins { amount: commit.bond, token_id: avow },
+                        state,
+                    )?;
+                }
+                (worker, ContractStatus::Accepted)
+            }
+            DisputeDecision::RejectDelivery => {
+                // Poster wins: pool_after_cut refunded to poster,
+                // bond forfeited to poster too.
+                if pool_after_cut > Amount::ZERO {
+                    self.bank.transfer_from(
+                        self.id.clone().to_payable(),
+                        &contract.poster,
+                        Coins { amount: pool_after_cut, token_id: avow },
+                        state,
+                    )?;
+                }
+                if let Some(ref commit) = commit {
+                    self.bank.transfer_from(
+                        self.id.clone().to_payable(),
+                        &contract.poster,
+                        Coins { amount: commit.bond, token_id: avow },
+                        state,
+                    )?;
+                }
+                (contract.poster, ContractStatus::Rejected)
+            }
+        };
+
+        self.escrow.set(&contract_id, &Amount::ZERO, state)?;
+        if commit.is_some() {
+            self.commits.remove(&key, state)?;
+        }
+        self.disputes.remove(&contract_id, state)?;
+
+        contract.status = new_status;
+        self.contracts.set(&contract_id, &contract, state)?;
+
+        self.emit_event(state, Event::ContractDisputeResolved { contract_id, decision, winner });
+        Ok(())
+    }
+
+    /// Poster cancels an Open contract (no commits) and refunds the
+    /// escrow. v0 rejects the "cancel while commits in flight" case.
+    fn handle_cancel_contract(
+        &mut self,
+        contract_id: ContractId,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> anyhow::Result<()> {
+        let mut contract =
+            self.contracts.get(&contract_id, state)?.ok_or(ContractError::UnknownContract)?;
+        let caller: S::Address = *context.sender();
+        if caller != contract.poster {
+            return Err(ContractError::NotPoster.into());
+        }
+        if matches!(
+            contract.status,
+            ContractStatus::Cancelled
+                | ContractStatus::Accepted
+                | ContractStatus::Rejected
+                | ContractStatus::Expired
+        ) {
+            return Err(ContractError::InvalidStatus { status: contract.status }.into());
+        }
+        // v0: only cancel when status is Open (no commits yet). The
+        // expired-with-commits case lands once handlers can read DA
+        // height (chain#452 family).
+        if !matches!(contract.status, ContractStatus::Open) {
+            return Err(ContractError::CancelWhileActive.into());
+        }
+
+        let escrow_remaining = self.escrow.get(&contract_id, state)?.unwrap_or(Amount::ZERO);
+        if escrow_remaining > Amount::ZERO {
+            let avow = self.read_avow_token_id(state)?;
+            self.bank.transfer_from(
+                self.id.clone().to_payable(),
+                &contract.poster,
+                Coins { amount: escrow_remaining, token_id: avow },
+                state,
+            )?;
+            self.escrow.set(&contract_id, &Amount::ZERO, state)?;
+        }
+        contract.status = ContractStatus::Cancelled;
+        self.contracts.set(&contract_id, &contract, state)?;
+
+        self.emit_event(
+            state,
+            Event::ContractCancelled { contract_id, refunded_to_poster: escrow_remaining },
+        );
+        Ok(())
     }
 }
