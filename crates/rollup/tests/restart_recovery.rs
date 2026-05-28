@@ -70,6 +70,23 @@ fn ligate_node_binary() -> &'static str {
     env!("CARGO_BIN_EXE_ligate-node")
 }
 
+/// Binary-spawn tests are skipped under `cargo llvm-cov`. They spawn a
+/// separate `ligate-node` process whose coverage llvm-cov cannot
+/// capture anyway, and the coverage-instrumented binary boots far
+/// slower than [`READY_TIMEOUT`], which reintroduced the chain#540
+/// flake under the coverage job even with the cross-binary fslock
+/// (`file_serial`). The plain `cargo test` CI job still runs these for
+/// real. Detected via `LLVM_PROFILE_FILE`, which cargo-llvm-cov sets
+/// on every instrumented binary.
+fn skip_under_llvm_cov() -> bool {
+    if std::env::var_os("LLVM_PROFILE_FILE").is_some() {
+        eprintln!("skipping binary-spawn test under llvm-cov instrumentation (chain#540)");
+        true
+    } else {
+        false
+    }
+}
+
 /// Allocate an ephemeral port by binding `127.0.0.1:0`, reading the
 /// assigned port, then closing the socket so the spawned node can
 /// reuse it.
@@ -188,6 +205,9 @@ async fn hard_kill(mut child: Child) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[file_serial(node_spawn)]
 async fn idle_kill_resumes_cleanly() {
+    if skip_under_llvm_cov() {
+        return;
+    }
     // Scenario 1: node starts, sits idle for a brief moment with no
     // tx pressure, gets SIGKILLed, comes back. Tests the simplest
     // restart-safety case: clean idle state must survive.
@@ -228,6 +248,9 @@ async fn idle_kill_resumes_cleanly() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[file_serial(node_spawn)]
 async fn kill_after_blocks_produced_preserves_height() {
+    if skip_under_llvm_cov() {
+        return;
+    }
     // Scenario 2: let the chain produce a handful of blocks, kill,
     // respawn, assert height didn't go backward.
     let temp_dir = TempDir::new().expect("temp dir");
@@ -288,6 +311,9 @@ async fn kill_after_blocks_produced_preserves_height() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[file_serial(node_spawn)]
 async fn respawn_continues_producing_blocks() {
+    if skip_under_llvm_cov() {
+        return;
+    }
     // Scenario 3: kill, respawn, verify the chain keeps producing
     // new blocks (not just preserves old state). The strongest
     // smoke of "we can keep going" rather than "we can stay still".
@@ -341,6 +367,9 @@ async fn respawn_continues_producing_blocks() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[file_serial(node_spawn)]
 async fn double_restart_still_advances() {
+    if skip_under_llvm_cov() {
+        return;
+    }
     // Scenario 4: two kill cycles in a row. Catches "first kill is
     // fine but a second kill on the recovered state corrupts" bugs
     // — a class of restart-safety regressions that wouldn't show
