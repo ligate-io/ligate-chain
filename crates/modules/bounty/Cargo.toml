@@ -29,15 +29,24 @@ sov-bank        = { workspace = true }
 prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
-# v0 tests are pure unit tests over BountyId derivation + DisputeKey
-# string conversion. Real integration tests that exercise handlers
-# end-to-end (via `sov-test-utils::TestRunner`) land in follow-up PRs
-# alongside the actual handler logic, where they'll pick up the
-# transitive `librocksdb-sys` / `sov-state` deps via `sov-test-utils`.
-# Re-importing the crate without the `native` feature here so the
-# pure-Rust unit tests don't pull `librocksdb-sys` for no reason.
-bounty      = { path = "." }
-attestation = { path = "../attestation" }
+# Bounty's integration tests run real handler flows via
+# `sov-test-utils::TestRunner`: PostBounty escrow, ClaimBounty payout
+# composition with cross-module attestation reads, dispute lock + bond
+# payout, cancel + refund. `sov-test-utils` brings the storage
+# backend (`librocksdb-sys`) transitively; CI handles the libclang
+# system dep, local dev on Apple Silicon may need `brew install
+# llvm`. The 5 unit tests in `tests/integration.rs` that exercise
+# `BountyId::derive` + `DisputeKey` round-trip still pass without the
+# storage backend; they live alongside the broader handler tests in
+# the same file.
+bounty          = { path = ".", features = ["native"] }
+attestation     = { path = "../attestation", features = ["native"] }
+ed25519-dalek.workspace = true
+sov-modules-api = { workspace = true, features = ["native"] }
+sov-bank        = { workspace = true, features = ["native"] }
+sov-state       = { workspace = true, features = ["native"] }
+sov-test-utils  = { workspace = true }
+strum.workspace = true
 
 [features]
 default = []
