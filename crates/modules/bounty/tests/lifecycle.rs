@@ -467,3 +467,66 @@ fn finalise_rejected_with_open_dispute() {
         }),
     });
 }
+
+#[test]
+fn finalise_rejected_before_window_closes() {
+    let mut env = setup();
+    let board = env.board_schema_id;
+    let poster_addr = env.poster.address();
+
+    // Large dispute window so it stays open even after expiry passes.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(post_with(board, 450, 100, 30, 100)),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
+    let attestation_id = submit_attestation_via_runner(&mut env, [0xA8u8; 32]);
+    let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
+            bounty_id,
+            claims: single_claim(attestation_id),
+        }),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
+
+    // Past expiry (so the bounty is finalisable) but the claim's
+    // 100-block dispute window is still open.
+    env.runner.advance_slots(40);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(CallMessage::FinaliseBounty { bounty_id }),
+        assert: Box::new(|result, _| {
+            assert_reverted_with(&result.tx_receipt, "dispute windows still open");
+        }),
+    });
+}
+
+#[test]
+fn finalise_rejected_when_open_and_not_expired() {
+    let mut env = setup();
+    let board = env.board_schema_id;
+    let poster_addr = env.poster.address();
+
+    // Far-future expiry, no claims: the bounty is plain Open, neither
+    // exhausted nor expired, so it cannot be finalised.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(post_with(board, 500, 100, 100_000, 5)),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
+    let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env
+            .poster
+            .create_plain_message::<RT, Bounty<S>>(CallMessage::FinaliseBounty { bounty_id }),
+        assert: Box::new(|result, _| {
+            assert_reverted_with(&result.tx_receipt, "cannot be finalised");
+        }),
+    });
+}

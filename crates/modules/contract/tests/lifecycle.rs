@@ -375,3 +375,40 @@ fn cancel_after_expiry_marks_expired_and_refunds() {
         }),
     });
 }
+
+#[test]
+fn finalize_rejected_when_not_delivered() {
+    let mut env = setup();
+    let arbiter_addr = env.arbiter.address();
+    let poster_addr = env.poster.address();
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.poster.create_plain_message::<RT, Contracts<S>>(post_with(
+            arbiter_addr,
+            1_000,
+            100_000,
+            5,
+        )),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
+    let contract_id = ContractId::derive(poster_addr.as_ref(), &CRITERIA_DOC_HASH, 0);
+    // Commit but do NOT deliver: status is Committed, not Delivered, so
+    // there is nothing to auto-accept.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::CommitToContract {
+            contract_id,
+            commit_hash: COMMIT_HASH,
+            bond: Amount::new(100),
+        }),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
+
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.worker.create_plain_message::<RT, Contracts<S>>(CallMessage::FinalizeDelivery {
+            contract_id,
+        }),
+        assert: Box::new(|result, _| {
+            assert_reverted_with(&result.tx_receipt, "not valid for this operation");
+        }),
+    });
+}
