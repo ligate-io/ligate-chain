@@ -21,7 +21,7 @@ use std::str::FromStr;
 use attestation::{
     AttestationConfig, AttestationModule, AttestorSet, AttestorSignature, CallMessage as AttCall,
     InitialAttestorSet, InitialSchema, PubKey, Schema, SchemaId, SignedAttestationPayload,
-    MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS, MAX_ATTESTOR_SIGNATURE_BYTES,
+    MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SIGNATURE_BYTES,
 };
 use bounty::{
     AcceptancePredicate, AttestationClaim, Bounty, BountyId, BountyStatus, CallMessage,
@@ -97,19 +97,6 @@ generate_optimistic_runtime!(
 
 type S = sov_test_utils::TestSpec;
 type RT = BountyRuntime<S>;
-
-/// Three deterministic ed25519 signing keys used as attestors.
-fn sample_signers() -> [SigningKey; 3] {
-    [
-        SigningKey::from_bytes(&[1u8; 32]),
-        SigningKey::from_bytes(&[2u8; 32]),
-        SigningKey::from_bytes(&[3u8; 32]),
-    ]
-}
-
-fn pubkeys_of(signers: &[SigningKey]) -> Vec<PubKey> {
-    signers.iter().map(|sk| PubKey::from(sk.verifying_key().to_bytes())).collect()
-}
 
 /// Per-test scaffolding: a `TestRunner` plus the actors genesis
 /// allocated `AVOW` to.
