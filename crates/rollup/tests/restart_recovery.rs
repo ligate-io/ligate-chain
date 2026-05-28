@@ -39,7 +39,13 @@
 use std::path::Path;
 use std::time::Duration;
 
-use serial_test::serial;
+// `file_serial(node_spawn)` uses fslock to serialise across the
+// `binary_spawn_smoke.rs` and `restart_recovery.rs` test binaries.
+// Plain `#[serial]` only serialises within ONE test binary; cargo
+// test runs the two binaries in parallel, which previously caused
+// resource contention on 2-vCPU CI runners (chain#540). Both files
+// MUST use the same key (`node_spawn`) to share the lock.
+use serial_test::file_serial;
 use tempfile::TempDir;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
@@ -47,9 +53,11 @@ use tokio::process::{Child, Command};
 use tokio::time::{sleep, Instant};
 
 /// Hard ceiling on how long we'll wait for the node's `/v1/rollup/info`
-/// to return 200. Cold first-tick on MockDa is ~1s; 60s is generous
-/// for slow CI runners.
-const READY_TIMEOUT: Duration = Duration::from_secs(60);
+/// to return 200. Cold first-tick on MockDa is ~1s; 180s gives 2-vCPU
+/// CI runners headroom even when the `binary_spawn_smoke.rs` binary is
+/// blocked on the fslock immediately before us and we get the lock
+/// while the kernel is still cooling down from its spawn (chain#540).
+const READY_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Polling cadence while waiting for readiness.
 const READY_POLL: Duration = Duration::from_millis(250);
@@ -113,7 +121,7 @@ async fn spawn_node(temp_dir: &Path, port: u16) -> Child {
 
     // Disable the metrics endpoint. `ligate-node` defaults
     // `--metrics-bind` to `127.0.0.1:9100`, which races with parallel
-    // test runs (this file's tests are `#[serial]` but the OS holds
+    // test runs (this file's tests are `#[file_serial(node_spawn)]` but the OS holds
     // the port in TIME_WAIT between sequential SIGKILL + respawn
     // cycles, and `cargo llvm-cov` sometimes parallelizes across
     // crates anyway). Tests don't assert on metrics; disable the
@@ -178,7 +186,7 @@ async fn hard_kill(mut child: Child) {
 // ----- Scenarios ------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[serial]
+#[file_serial(node_spawn)]
 async fn idle_kill_resumes_cleanly() {
     // Scenario 1: node starts, sits idle for a brief moment with no
     // tx pressure, gets SIGKILLed, comes back. Tests the simplest
@@ -218,7 +226,7 @@ async fn idle_kill_resumes_cleanly() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[serial]
+#[file_serial(node_spawn)]
 async fn kill_after_blocks_produced_preserves_height() {
     // Scenario 2: let the chain produce a handful of blocks, kill,
     // respawn, assert height didn't go backward.
@@ -278,7 +286,7 @@ async fn kill_after_blocks_produced_preserves_height() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[serial]
+#[file_serial(node_spawn)]
 async fn respawn_continues_producing_blocks() {
     // Scenario 3: kill, respawn, verify the chain keeps producing
     // new blocks (not just preserves old state). The strongest
@@ -331,7 +339,7 @@ async fn respawn_continues_producing_blocks() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[serial]
+#[file_serial(node_spawn)]
 async fn double_restart_still_advances() {
     // Scenario 4: two kill cycles in a row. Catches "first kill is
     // fine but a second kill on the recovered state corrupts" bugs
