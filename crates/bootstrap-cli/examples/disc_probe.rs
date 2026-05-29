@@ -9,11 +9,21 @@
 //     cargo run --example disc_probe -p ligate-bootstrap-cli
 //
 use attestation::{
-    AttestorSet, AttestorSetId, AttestorSignature, CallMessage, PayloadHash, PubKey, Schema,
-    SchemaId, MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS, MAX_ATTESTOR_SIGNATURE_BYTES,
+    AttestationId, AttestorSet, AttestorSetId, AttestorSignature, CallMessage, PayloadHash, PubKey,
+    Schema, SchemaId, MAX_ATTESTATION_SIGNATURES, MAX_ATTESTOR_SET_MEMBERS,
+    MAX_ATTESTOR_SIGNATURE_BYTES,
+};
+use bounty::{
+    AcceptancePredicate, AttestationClaim, BountyId, CallMessage as BountyCall,
+    DisputeDecision as BountyDecision, DisputeGround as BountyGround, MAX_CLAIMS_PER_CALL,
+};
+use contract::{
+    CallMessage as ContractCall, ContractId, DisputeDecision as ContractDecision,
+    DisputeGround as ContractGround,
 };
 use ligate_rollup::MockRollupSpec;
 use ligate_stf::runtime::RuntimeCall;
+use sov_bank::Amount;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::{Address, SafeString, SafeVec, Spec};
 
@@ -66,6 +76,110 @@ fn main() {
         signatures,
     });
     print_call("SubmitAttestation (1 sig, all-FF)", submit);
+
+    // ---- Bounty module (RuntimeCall::Bounty = 0x0A) ----
+    // PostBounty with the trivial `Any` acceptance predicate.
+    let post_any = RuntimeCall::Bounty(BountyCall::PostBounty {
+        board_schema_id: SchemaId::from([0xCC; 32]),
+        pool: Amount::new(1_000_000_000),
+        per_attestation: Amount::new(100_000_000),
+        acceptance: AcceptancePredicate::Any,
+        expiry_da_height: 12_345,
+        dispute_window_blocks: 100,
+    });
+    print_call("Bounty::PostBounty (Any, CC schema)", post_any);
+
+    // PostBounty with the `PeerCount` predicate (covers the disc 0x03 + u8 arm).
+    let post_peer = RuntimeCall::Bounty(BountyCall::PostBounty {
+        board_schema_id: SchemaId::from([0xCC; 32]),
+        pool: Amount::new(1_000_000_000),
+        per_attestation: Amount::new(100_000_000),
+        acceptance: AcceptancePredicate::PeerCount { min_attestors: 3 },
+        expiry_da_height: 12_345,
+        dispute_window_blocks: 100,
+    });
+    print_call("Bounty::PostBounty (PeerCount=3)", post_peer);
+
+    // ClaimBounty with one AttestationClaim.
+    let claims =
+        SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![AttestationClaim {
+            attestation_id: AttestationId::from([0x22; 32]),
+        }])
+        .unwrap();
+    let claim = RuntimeCall::Bounty(BountyCall::ClaimBounty {
+        bounty_id: BountyId::from([0x11; 32]),
+        claims,
+    });
+    print_call("Bounty::ClaimBounty (1 claim, 0x22 attestation)", claim);
+
+    // DisputeAttestation (ground = Other = disc 0x03).
+    let dispute = RuntimeCall::Bounty(BountyCall::DisputeAttestation {
+        bounty_id: BountyId::from([0x11; 32]),
+        attestation_id: AttestationId::from([0x22; 32]),
+        ground: BountyGround::Other,
+    });
+    print_call("Bounty::DisputeAttestation (ground=Other)", dispute);
+
+    // ResolveDispute (decision = Reject = disc 0x01).
+    let resolve = RuntimeCall::Bounty(BountyCall::ResolveDispute {
+        bounty_id: BountyId::from([0x11; 32]),
+        attestation_id: AttestationId::from([0x22; 32]),
+        decision: BountyDecision::Reject,
+    });
+    print_call("Bounty::ResolveDispute (decision=Reject)", resolve);
+
+    // CancelBounty (single-id shape; FinaliseBounty is identical bar the disc).
+    let cancel =
+        RuntimeCall::Bounty(BountyCall::CancelBounty { bounty_id: BountyId::from([0x11; 32]) });
+    print_call("Bounty::CancelBounty (0x11 bounty)", cancel);
+
+    // ---- Contract module (RuntimeCall::Contracts = 0x0B) ----
+    // PostContract: arbiter address + criteria hash + fee bps.
+    let arbiter: SovAddress = SovAddress::from(Address::from([0x42u8; 28]));
+    let post_contract = RuntimeCall::Contracts(ContractCall::PostContract {
+        arbiter,
+        criteria_doc_hash: [0x33; 32],
+        pool: Amount::new(2_000_000_000),
+        expiry_da_height: 999,
+        dispute_window_blocks: 50,
+        arbiter_fee_bps: 500,
+    });
+    print_call("Contracts::PostContract (0x42 arbiter, 0x33 criteria)", post_contract);
+
+    // CommitToContract: contract id + commit hash + bond.
+    let commit = RuntimeCall::Contracts(ContractCall::CommitToContract {
+        contract_id: ContractId::from([0x44; 32]),
+        commit_hash: [0x55; 32],
+        bond: Amount::new(500_000_000),
+    });
+    print_call("Contracts::CommitToContract (0x44 contract, 0x55 commit)", commit);
+
+    // DeliverContract: contract id + deliverable attestation id.
+    let deliver = RuntimeCall::Contracts(ContractCall::DeliverContract {
+        contract_id: ContractId::from([0x44; 32]),
+        deliverable_attestation_id: AttestationId::from([0x22; 32]),
+    });
+    print_call("Contracts::DeliverContract (0x44 contract, 0x22 attestation)", deliver);
+
+    // RejectDelivery (ground = Other = disc 0x03 in the contract enum).
+    let reject = RuntimeCall::Contracts(ContractCall::RejectDelivery {
+        contract_id: ContractId::from([0x44; 32]),
+        ground: ContractGround::Other,
+    });
+    print_call("Contracts::RejectDelivery (ground=Other)", reject);
+
+    // ResolveContractDispute (decision = RejectDelivery = disc 0x01).
+    let resolve_c = RuntimeCall::Contracts(ContractCall::ResolveContractDispute {
+        contract_id: ContractId::from([0x44; 32]),
+        decision: ContractDecision::RejectDelivery,
+    });
+    print_call("Contracts::ResolveContractDispute (RejectDelivery)", resolve_c);
+
+    // AcceptDelivery (single-id shape; CancelContract + FinalizeDelivery identical bar the disc).
+    let accept = RuntimeCall::Contracts(ContractCall::AcceptDelivery {
+        contract_id: ContractId::from([0x44; 32]),
+    });
+    print_call("Contracts::AcceptDelivery (0x44 contract)", accept);
 
     // Deterministic id derivations the TS side can pin.
     println!();

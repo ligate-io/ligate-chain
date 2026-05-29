@@ -32,9 +32,12 @@ toml = "1.1"
 # `ligate-node` binary executes, so a successful borsh round-trip
 # here means a successful borsh round-trip on the chain.
 attestation     = { path = "../modules/attestation", features = ["native"] }
+bounty          = { path = "../modules/bounty", features = ["native"] }
+contract        = { path = "../modules/contract", features = ["native"] }
 ligate-client   = { path = "../client-rs", features = ["submit"] }
 ligate-rollup   = { path = "../rollup" }
 ligate-stf      = { path = "../stf", features = ["native"] }
+sov-bank        = { workspace = true, features = ["native"] }
 sov-modules-api = { workspace = true, features = ["native"] }
 
 [dev-dependencies]
