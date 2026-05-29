@@ -81,7 +81,7 @@ enum DaFlavor {
     /// integration tests, cross-OS genesis-determinism CI.
     Mock,
     /// Celestia DA (bech32 `celestia1...` `seq_da_address`). Use for
-    /// `ligate-devnet-2` and any production-shape deployment.
+    /// `ligate-devnet-3` and any production-shape deployment.
     #[default]
     Celestia,
 }

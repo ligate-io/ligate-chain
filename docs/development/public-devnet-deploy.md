@@ -1,6 +1,6 @@
 # Public devnet deploy runbook
 
-How to bring up a `ligate-devnet-2` node on GCP, in either operator role:
+How to bring up a `ligate-devnet-3` node on GCP, in either operator role:
 
 - **Sequencer** (the canonical Ligate-Labs node, single-instance in v0).
 - **Follower** (any third-party operator running their own copy of the chain state).
@@ -274,7 +274,7 @@ curl https://rpc.ligate.io/ready
 
 # Chain identity (the network operators are talking to).
 curl https://rpc.ligate.io/v1/rollup/info
-# {"chain_id":"ligate-devnet-2","chain_hash":"<64 hex>","version":"X.Y.Z"}
+# {"chain_id":"ligate-devnet-3","chain_hash":"<64 hex>","version":"X.Y.Z"}
 
 # Followers cross-check chain_hash against the canonical Ligate-Labs node:
 diff <(curl -s https://rpc.ligate.io/v1/rollup/info | jq -r .chain_hash) \
@@ -295,7 +295,7 @@ $EDITOR devnet-1/canonical-schemas.toml  # fill in real attestor pubkeys
 
 # 2. Run the ceremony binary. Auto-fetches chain_hash from /v1/rollup/info.
 #    --chain-id is the numeric u64 CHAIN_ID from constants.toml (NOT
-#    the "ligate-devnet-2" human-readable string).
+#    the "ligate-devnet-3" human-readable string).
 cargo run --release -p ligate-bootstrap-cli -- register-canonical-schemas \
     --config devnet-1/canonical-schemas.toml \
     --signer-key ~/.ligate-keys/devnet-1/operator.key \
@@ -374,7 +374,7 @@ The `ligate-node` systemd unit reads from `/etc/ligate/env`, which on first boot
 | Symptom | Likely cause | First check | Fix |
 |---|---|---|---|
 | `ligate-node` won't start, "missing [chain] section" | Wrong config file passed | `journalctl -u ligate-node` | Check `--rollup-config-path` points at `/opt/ligate/devnet/celestia.toml`, not the localnet one |
-| `ligate-node` won't start, "chain_id 'X' does not match the locked ladder" | Operator typo in `[chain]` | `cat /opt/ligate/devnet/celestia.toml \| grep chain_id` | Fix to `ligate-devnet-2`, restart |
+| `ligate-node` won't start, "chain_id 'X' does not match the locked ladder" | Operator typo in `[chain]` | `cat /opt/ligate/devnet/celestia.toml \| grep chain_id` | Fix to `ligate-devnet-3`, restart |
 | Sequencer cannot reach Celestia | Light node down or wrong endpoint | `systemctl status celestia-light`, `curl ws://127.0.0.1:26658` | Restart `celestia-light`; if persistent, check Mocha bridge availability |
 | `/ready` returns 503 with high target_da_height | Node is catching up | Look at `synced_da_height` over 5 min | Wait; sync rate ~1 block/s on healthy network |
 | `/ready` returns 503 indefinitely | Sequencer can't keep up with DA | Check `block_height` metric and DA polling rate | Increase `da_polling_interval_ms` upward, or check for state-corruption indicators |
@@ -385,13 +385,13 @@ The `ligate-node` systemd unit reads from `/etc/ligate/env`, which on first boot
 
 ## Mocha reset re-genesis playbook
 
-Mocha resets roughly once a year. When it does, our chain's DA-layer references go stale; the cleanest recovery is to spin up a fresh chain id (`ligate-devnet-2`) on the new Mocha epoch.
+Mocha resets roughly once a year. When it does, our chain's DA-layer references go stale; the cleanest recovery is to spin up a fresh chain id (`ligate-devnet-3`) on the new Mocha epoch.
 
 Steps:
 
 1. Wait for the Celestia team's announcement of the new Mocha genesis hash.
 2. In `ligate-chain`, copy `devnet-1/` to `devnet-2/`. Edit:
-   - `celestia.toml`: bump `chain_id = "ligate-devnet-2"`, update `storage.path = "devnet-2/data-celestia"`.
+   - `celestia.toml`: bump `chain_id = "ligate-devnet-3"`, update `storage.path = "devnet-2/data-celestia"`.
    - `genesis/`: regenerate via `ligate-genesis-tool` ([#191](https://github.com/ligate-io/ligate-chain/issues/191)), keeping the same operator-controlled keys.
 3. Add CI test rows in `crates/rollup/tests/localnet_config.rs` for `devnet-2/` (mirror the `devnet_1_*` tests).
 4. Land the PR; tag a new release (`v0.2.0-devnet-2` or similar).

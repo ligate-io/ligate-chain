@@ -1,4 +1,4 @@
-# Ligate `ligate-devnet-3` rollup config (Celestia DA, public).
+# Ligate `ligate-devnet-2` rollup config (Celestia DA, public).
 #
 # Boots a single-sequencer node against Celestia Mocha testnet for the
 # canonical public devnet rung of the chain-id ladder. Mock zkVM still
@@ -26,7 +26,7 @@
 #
 # Differences from `devnet/celestia.toml`:
 #
-#   - chain_id is `ligate-devnet-3` (locked ladder rung; #181)
+#   - chain_id is `ligate-devnet-2` (locked ladder rung; #181)
 #   - storage.path differs so a single host can run both localnet and
 #     devnet side by side
 #   - comments emphasise public-devnet hygiene (env-var overrides,
@@ -35,12 +35,12 @@
 # See `devnet/README.md` for the full operator narrative and
 # `docs/development/public-devnet-deploy.md` for the deploy runbook.
 
-# Chain identity. `ligate-devnet-3` is the public-devnet rung of the
+# Chain identity. `ligate-devnet-2` is the public-devnet rung of the
 # locked ladder per `docs/protocol/attestation-v0.md` `Chain id`. The
 # binary refuses to boot with any value outside the ladder; the
 # validator lives in `crates/rollup/src/chain_config.rs` (#181).
 [chain]
-chain_id = "ligate-devnet-3"
+chain_id = "ligate-devnet-2"
 
 [da]
 # Celestia RPC endpoint for reading blobs + headers.

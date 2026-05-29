@@ -4,7 +4,7 @@
 //! response:
 //!
 //! - `chain_id`: the Cosmos-style string from the rollup config's
-//!   `[chain]` section (e.g. `ligate-localnet`, `ligate-devnet-2`).
+//!   `[chain]` section (e.g. `ligate-localnet`, `ligate-devnet-3`).
 //!   Bumps on state-breaking restarts only; stable across STF
 //!   upgrades.
 //! - `chain_hash`: the runtime's build-script-generated 32-byte

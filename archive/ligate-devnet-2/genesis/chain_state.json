@@ -1,0 +1,25 @@
+{
+  "current_time": 0,
+  "genesis_da_height": 0,
+  "inner_code_commitment": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "operating_mode": "zk",
+  "outer_code_commitment": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ]
+}

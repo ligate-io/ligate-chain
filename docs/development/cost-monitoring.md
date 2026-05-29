@@ -1,6 +1,6 @@
 # Cost monitoring — Mocha TIA spend + GCP infra spend
 
-**Status:** v0 — Grafana dashboard + Alertmanager rules for cost visibility on `ligate-devnet-2`. Companion to [`da-signer-rotation.md`](runbooks/da-signer-rotation.md) (TIA wallet management), [`alerts/`](runbooks/alerts/) (alert runbooks), and [`public-devnet-deploy.md`](public-devnet-deploy.md) (the deploy this monitors).
+**Status:** v0 — Grafana dashboard + Alertmanager rules for cost visibility on `ligate-devnet-3`. Companion to [`da-signer-rotation.md`](runbooks/da-signer-rotation.md) (TIA wallet management), [`alerts/`](runbooks/alerts/) (alert runbooks), and [`public-devnet-deploy.md`](public-devnet-deploy.md) (the deploy this monitors).
 
 Two cost surfaces:
 
@@ -49,7 +49,7 @@ Top-up procedure: [`da-signer-rotation.md` "TIA balance monitoring"](runbooks/da
 
 ### Steady-state expectation
 
-`ligate-devnet-2`'s baseline:
+`ligate-devnet-3`'s baseline:
 
 | Resource | Quantity | $/mo |
 |---|---|---|

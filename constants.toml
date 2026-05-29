@@ -26,7 +26,7 @@ freeze       = [1, 1]
 # value finalised at TGE; devnet uses 4242 (distinct from the SDK
 # demo's 4321 so a misconfigured client failing back to demo defaults
 # is obvious in logs). Per #54, the user-facing string identifier is
-# `ligate-devnet-2` / `ligate-1` and lives in the rollup config TOML,
+# `ligate-devnet-3` / `ligate-1` and lives in the rollup config TOML,
 # not here.
 CHAIN_ID = 4242
 CHAIN_NAME = "Ligate"

@@ -1,0 +1,24 @@
+{
+  "gas_token_config": {
+    "address_and_balances": [
+      [
+        "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac",
+        "900000000000000000"
+      ],
+      [
+        "lig19tzzufavjqtzgwt58nqjs43gx0j3swsmxcmz9c9uv2suy5hj544",
+        "50000000000000000"
+      ],
+      [
+        "lig1e0lp7e5tzl49dfe0nz0xx46ks3hv7ehw9af2xy6n22ygjmnj4sz",
+        "50000000000000000"
+      ]
+    ],
+    "admins": [
+      "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac"
+    ],
+    "token_decimals": 9,
+    "token_name": "AVOW"
+  },
+  "tokens": []
+}

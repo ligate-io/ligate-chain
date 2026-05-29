@@ -1,0 +1,9 @@
+{
+  "minimum_bond": "1000000000000",
+  "sequencer_config": {
+    "is_preferred_sequencer": true,
+    "seq_bond": "5000000000000",
+    "seq_da_address": "celestia1mphanjz38a5fvftsdr20ct388gtnxhlq52wr33",
+    "seq_rollup_address": "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac"
+  }
+}

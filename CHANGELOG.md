@@ -8,7 +8,9 @@ This file is human-curated. Every PR adds an entry under `## [Unreleased]`; rele
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- **devnet-2 to devnet-3 chain-id cutover.** Bumps the public-devnet rung from `ligate-devnet-2` to `ligate-devnet-3` to deploy the v0.4.0 bounty + contract marketplace. v0.4.0 shifts `chain_hash` (`eec077f4…` to `60ec4d0b…`) so it is not state-compatible with devnet-2 (no safe in-place binary swap; the `ligate-auto-upgrade` poller correctly skips a flagless release and leaves the live chain on v0.3.1 until this coordinated cutover). Mechanics: the deployed `devnet/` config is snapshotted to `archive/ligate-devnet-2/` (genesis files of the retired network kept for historical reference); `chain_id = "ligate-devnet-3"` in `devnet/celestia.toml`; `genesis_da_height` stays `0` in the committed genesis and the operator pins it to a live Mocha height at boot per `docs/development/runbooks/chain-id-bump.md`; sequencer / treasury / demo operator addresses and the 1B AVOW initial distribution are unchanged from devnet-2. The canonical Themisra schema is re-registered post-genesis. Per-network chain-id-string references across configs, code comments, and operator docs are updated to devnet-3; deployed GCP resource identifiers (`ligate-devnet-2-sequencer` / `-rpc` / `-sequencer-signer`) and Grafana dashboard text are preserved (the latter follows once devnet-3 is live and the new bech32 `chain_hash` is readable). Closes the chain-id ladder bump from rung 2 to 3.
 
 ## [0.4.0] - 2026-05-29
 

@@ -1,0 +1,16 @@
+{
+  "initial_provers": [
+    [
+      "lig1zd9j2z6x55ydnv9m8f0pdw3vs2j8u0w5sdqeaf478dzp6s998ac",
+      "1000000000000"
+    ]
+  ],
+  "minimum_bond": [
+    1000,
+    1000
+  ],
+  "proving_penalty": [
+    10,
+    10
+  ]
+}

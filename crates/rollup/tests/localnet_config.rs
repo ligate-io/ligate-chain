@@ -108,7 +108,7 @@ fn devnet_celestia_toml_parses_against_celestia_blueprint_types() {
     // Pin the committed chain id so a typo (e.g. bumping to
     // `ligate-1` on the devnet config) breaks here rather than at
     // first boot.
-    assert_eq!(chain.chain_id, "ligate-devnet-2");
+    assert_eq!(chain.chain_id, "ligate-devnet-3");
 }
 
 #[test]
