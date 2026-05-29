@@ -51,6 +51,7 @@ If you don't take one of those steps and you DO want clean state, the DA replay 
   - Same sequencer registry as the outgoing chain (unless rotating per [`sequencer-key-rotation.md`](./sequencer-key-rotation.md))
   - Canonical Themisra schemas (via `ligate-bootstrap` binary, or `cargo run -p ligate-bootstrap-cli`, if re-registering)
 - [ ] `localnet/rollup.toml` updated to point at the new genesis dir and chain id
+- [ ] **Faucet/drip address funded in genesis.** `devnet/genesis/bank.json` MUST include the `ligate-api` drip address (`lig1kfaqfux…`) with a balance (1M AVOW). A fresh genesis otherwise leaves it at zero, and `ligate-api`'s startup drip-budget check (`GET /v1/modules/bank/tokens/{AVOW}/balances/{drip}`) 404s on a zero-balance address → the api **refuses to boot** → every Railway deploy crash-loops → the public API silently stays pinned to the pre-cutover deployment and indexes nothing on the new chain, even though the chain itself is healthy. Genesis balances do not affect `chain_hash`. (Baked into the committed `bank.json` as of the devnet-3 cutover; verify it's present before bumping. Emergency unblock if you forgot: set `DRIP_MIN_BUDGET=0` on the api to skip the check, then fund the drip address.)
 
 ### Operations
 
@@ -135,6 +136,22 @@ Two independent operators confirm the first new-chain block is identical between
 - Faucet: confirm `curl https://faucet.ligate.io/health` returns the new `chain_id` field.
 - Indexer: confirm `curl https://api.ligate.io/v1/info` returns the new `chain_id` and `indexer_height` advancing past 0.
 - Explorer: spot-check `explorer.ligate.io` renders the new latest block.
+
+**Update the api's signing env vars to the new chain's values, and do it BEFORE the api redeploy.** The faucet's drip signer binds every tx to `chain_hash` and transfers `AVOW_TOKEN_ID`, and both change on a re-genesis: `chain_hash` whenever the runtime composition shifts (e.g. a new module in a version bump), and the `AVOW` token id on every fresh genesis. If they stay stale the api boots fine and the GET surface looks healthy, but `POST /v1/drip` submits transactions that **fail signature authentication** on the new chain. The recipient is never funded, the drip handler's inclusion poll times out, and the caller gets a **502** with `drip/status` reporting `addresses_dripped: 0`. Set both (64-char hex) on the `ligate-api` service:
+
+```sh
+# chain_hash: decode the bech32m chain hash from the new chain's
+#   `GET /v1/rollup/info` (`lsch1...`) to 32-byte hex.
+# avow_token_id: decode the new AVOW token id (`token_1...`, e.g. from
+#   any funded address's `GET /v1/addresses/<addr>`) to 32-byte hex.
+# (ligate-js: `decodeChainHash` / `tokenIdToHex` produce the hex.)
+railway variables \
+  --set "CHAIN_HASH=<64-hex>" \
+  --set "AVOW_TOKEN_ID=<64-hex>" \
+  --service ligate-api
+```
+
+Discovered on the devnet-3 cutover: the faucet 502'd for hours because v0.4.0 added the bounty + contract modules (shifting `chain_hash`) and the fresh genesis minted a new `AVOW` token id, but the api kept the devnet-2 values. This is the second re-genesis faucet gotcha alongside genesis-funding the drip address above.
 
 **If you re-genesised with the same `chain_id` (the v0.2.0 case): you MUST also wipe the api's Postgres + restart the api process.** The api's TRUNCATE migration only covers the `attestations` table; the other 6 tables (`slots`, `transactions`, `attestor_sets`, `schemas`, `address_summaries`, `indexer_state`) keep their pre-wipe rows, AND the api's in-memory cursor `indexer_state.last_indexed_height` caches the pre-wipe height. The api will silently stop ingesting because the chain has "regressed" below its cached cursor.
 
