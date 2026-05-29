@@ -137,6 +137,22 @@ Two independent operators confirm the first new-chain block is identical between
 - Indexer: confirm `curl https://api.ligate.io/v1/info` returns the new `chain_id` and `indexer_height` advancing past 0.
 - Explorer: spot-check `explorer.ligate.io` renders the new latest block.
 
+**Update the api's signing env vars to the new chain's values, and do it BEFORE the api redeploy.** The faucet's drip signer binds every tx to `chain_hash` and transfers `AVOW_TOKEN_ID`, and both change on a re-genesis: `chain_hash` whenever the runtime composition shifts (e.g. a new module in a version bump), and the `AVOW` token id on every fresh genesis. If they stay stale the api boots fine and the GET surface looks healthy, but `POST /v1/drip` submits transactions that **fail signature authentication** on the new chain. The recipient is never funded, the drip handler's inclusion poll times out, and the caller gets a **502** with `drip/status` reporting `addresses_dripped: 0`. Set both (64-char hex) on the `ligate-api` service:
+
+```sh
+# chain_hash: decode the bech32m chain hash from the new chain's
+#   `GET /v1/rollup/info` (`lsch1...`) to 32-byte hex.
+# avow_token_id: decode the new AVOW token id (`token_1...`, e.g. from
+#   any funded address's `GET /v1/addresses/<addr>`) to 32-byte hex.
+# (ligate-js: `decodeChainHash` / `tokenIdToHex` produce the hex.)
+railway variables \
+  --set "CHAIN_HASH=<64-hex>" \
+  --set "AVOW_TOKEN_ID=<64-hex>" \
+  --service ligate-api
+```
+
+Discovered on the devnet-3 cutover: the faucet 502'd for hours because v0.4.0 added the bounty + contract modules (shifting `chain_hash`) and the fresh genesis minted a new `AVOW` token id, but the api kept the devnet-2 values. This is the second re-genesis faucet gotcha alongside genesis-funding the drip address above.
+
 **If you re-genesised with the same `chain_id` (the v0.2.0 case): you MUST also wipe the api's Postgres + restart the api process.** The api's TRUNCATE migration only covers the `attestations` table; the other 6 tables (`slots`, `transactions`, `attestor_sets`, `schemas`, `address_summaries`, `indexer_state`) keep their pre-wipe rows, AND the api's in-memory cursor `indexer_state.last_indexed_height` caches the pre-wipe height. The api will silently stop ingesting because the chain has "regressed" below its cached cursor.
 
 Recovery (do these in order):
