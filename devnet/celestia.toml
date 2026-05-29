@@ -125,6 +125,16 @@ pruner_versions_to_keep = 20
 # Celestia produces ~12s blocks; polling 6× per block keeps inclusion
 # latency low without spamming the local light node.
 da_polling_interval_ms = 500
+# Persist the raw signed-transaction body in the ledger DB so the
+# ledger API (`/v1/ledger/txs`) returns it instead of an empty body.
+# ligate-api decodes the body to surface the real per-tx nonce +
+# signer pubkey (and computes the fee), replacing the null/0
+# placeholders that result when bodies are elided. Defaults to false
+# in the SDK (`save_tx_bodies`); we opt in. Modest ledger-size
+# increase, acceptable at devnet scale. Takes effect for txs ingested
+# after the node restarts with this set; pre-existing txs stay
+# body-less. See ligate-chain#550.
+save_tx_bodies = true
 
 [runner.http_config]
 # Localhost only by intent. Caddy (or your reverse proxy of choice)
