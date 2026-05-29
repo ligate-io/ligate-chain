@@ -1,0 +1,60 @@
+# Canonical schemas registered post-genesis on `ligate-devnet-2`.
+#
+# After `ligate-node` boots and starts producing blocks, the operator
+# runs:
+#
+#   cargo run -p ligate-bootstrap-cli -- register-canonical-schemas \
+#       --config devnet/canonical-schemas.toml \
+#       --signer-key /etc/ligate/keys/themisra-bootstrap.key \
+#       --rpc http://localhost:12346 \
+#       --chain-id <numeric CHAIN_ID from constants.toml>   # devnet: 4242
+#
+# That submits one `RegisterAttestorSet` + one `RegisterSchema` tx per
+# `[[schemas]]` entry below. Idempotent: re-runs skip already-landed
+# registrations.
+#
+# This is the .example template. Copy to `canonical-schemas.toml`
+# (gitignored), fill in the real attestor pubkeys for the federated
+# Themisra quorum, and commit only the .example version of this file.
+# The .example file MUST stay in sync with the in-repo schema specs
+# under `docs/protocol/schemas/` (the `attestor_members` field is the
+# only thing that varies between local dev and public devnet).
+#
+# Tracking issue: #231 (operator key ceremony + post-genesis bootstrap).
+
+# Where the JSON Schema docs live, relative to THIS TOML file's directory.
+# Default points at `docs/protocol/schemas/`.
+schema_root = "../docs/protocol/schemas"
+
+# ---------------------------------------------------------------------
+# themisra.proof-of-prompt v1.0.0
+#
+# First canonical schema for the Themisra Proof-of-Prompt product.
+# Spec: docs/protocol/schemas/themisra.proof-of-prompt-v1.json
+# LIP-5 (#185) iterates the spec; iterations ship as v2+, not as
+# mutations of v1.
+#
+# Attestor set: 3-of-? federated. Replace `attestor_members` with the
+# real ed25519 pubkeys from your operator key ceremony output.
+# ---------------------------------------------------------------------
+[[schemas]]
+name = "themisra.proof-of-prompt"
+version = 1
+spec_file = "themisra.proof-of-prompt-v1.json"
+
+# 2-of-3 quorum. M-of-N: at least `attestor_threshold` of the listed
+# `attestor_members` must sign each attestation.
+attestor_threshold = 2
+attestor_members = [
+  # Replace with real 32-byte ed25519 pubkeys (64-char lowercase hex,
+  # no `0x` prefix). The order is part of the attestor_set_id
+  # derivation, so commit to the order before generating keys.
+  "0000000000000000000000000000000000000000000000000000000000000000",
+  "1111111111111111111111111111111111111111111111111111111111111111",
+  "2222222222222222222222222222222222222222222222222222222222222222",
+]
+
+# Fee-routing share for the schema owner. `0` = no routing (all fees
+# go to the network treasury). When set > 0, requires `fee_routing_addr`.
+fee_routing_bps = 0
+# fee_routing_addr = "lig1..."

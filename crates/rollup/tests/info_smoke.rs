@@ -97,7 +97,7 @@ async fn info_handles_concurrent_requests() {
     // refresh, but a misbehaving load balancer or webhook could fire
     // many parallel reads. Ensure the handler doesn't serialize
     // (would surface as visible latency on a busy node).
-    let addr = spawn_info_server("ligate-devnet-2", [0xABu8; 32]).await;
+    let addr = spawn_info_server("ligate-devnet-3", [0xABu8; 32]).await;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -112,7 +112,7 @@ async fn info_handles_concurrent_requests() {
                 client.get(format!("http://{addr}/rollup/info")).send().await.expect("response");
             assert_eq!(resp.status().as_u16(), 200);
             let body: RollupInfo = resp.json().await.expect("json");
-            assert_eq!(body.chain_id, "ligate-devnet-2");
+            assert_eq!(body.chain_id, "ligate-devnet-3");
         }));
     }
     for j in joins {

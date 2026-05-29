@@ -22,10 +22,10 @@ first.
 
 Ligate Chain v0 devnet is a **federated attestation testnet**:
 
-- **Chain id**: `ligate-devnet-2`. The trailing number bumps only on a
+- **Chain id**: `ligate-devnet-3`. The trailing number bumps only on a
   state-breaking restart (full reset, new genesis); soft upgrades via
   the upgrade module ([#42](https://github.com/ligate-io/ligate-chain/issues/42))
-  keep the same id. Full ladder (`ligate-localnet` / `ligate-devnet-2` /
+  keep the same id. Full ladder (`ligate-localnet` / `ligate-devnet-3` /
   `ligate-testnet-1` / `ligate-1`) is locked in
   [the protocol spec](../protocol/attestation-v0.md#chain-id) per
   [#54](https://github.com/ligate-io/ligate-chain/issues/54).

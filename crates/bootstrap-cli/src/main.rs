@@ -141,7 +141,7 @@ async fn run(args: Args) -> Result<()> {
                     eprintln!("connected to {} (ligate-node {})", info.chain_id, info.version);
                     let id = chain_id.unwrap_or_else(|| {
                         // `chain_id` in /rollup/info is the human-readable
-                        // string ("ligate-devnet-2"); the chain signs txs
+                        // string ("ligate-devnet-3"); the chain signs txs
                         // against a u64 numeric id defined as `CHAIN_ID`
                         // in `constants.toml`. Until /rollup/info also
                         // exposes the numeric form, operators must pass
