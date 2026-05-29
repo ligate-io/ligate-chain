@@ -51,6 +51,7 @@ If you don't take one of those steps and you DO want clean state, the DA replay 
   - Same sequencer registry as the outgoing chain (unless rotating per [`sequencer-key-rotation.md`](./sequencer-key-rotation.md))
   - Canonical Themisra schemas (via `ligate-bootstrap` binary, or `cargo run -p ligate-bootstrap-cli`, if re-registering)
 - [ ] `localnet/rollup.toml` updated to point at the new genesis dir and chain id
+- [ ] **Faucet/drip address funded in genesis.** `devnet/genesis/bank.json` MUST include the `ligate-api` drip address (`lig1kfaqfux…`) with a balance (1M AVOW). A fresh genesis otherwise leaves it at zero, and `ligate-api`'s startup drip-budget check (`GET /v1/modules/bank/tokens/{AVOW}/balances/{drip}`) 404s on a zero-balance address → the api **refuses to boot** → every Railway deploy crash-loops → the public API silently stays pinned to the pre-cutover deployment and indexes nothing on the new chain, even though the chain itself is healthy. Genesis balances do not affect `chain_hash`. (Baked into the committed `bank.json` as of the devnet-3 cutover; verify it's present before bumping. Emergency unblock if you forgot: set `DRIP_MIN_BUDGET=0` on the api to skip the check, then fund the drip address.)
 
 ### Operations
 
