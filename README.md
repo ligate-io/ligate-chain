@@ -38,7 +38,7 @@ Ligate Chain is a [Sovereign SDK](https://github.com/Sovereign-Labs/sovereign-sd
 ## Quick start
 
 > **Just want to run a node, not build from source?**
-> Pre-built Linux x86_64 / Linux arm64 / macOS arm64 binaries ship on every release: <https://github.com/ligate-io/ligate-chain/releases>. A multi-arch container image is also published on every release tag at `ghcr.io/ligate-io/ligate-chain:<version>` (e.g. `:0.3.1`, plus `:latest`). See [docs.ligate.io/nodes](https://docs.ligate.io/nodes) for the operator-facing install + boot recipes.
+> Pre-built Linux x86_64 / Linux arm64 / macOS arm64 binaries ship on every release: <https://github.com/ligate-io/ligate-chain/releases>. A multi-arch container image is also published on every release tag at `ghcr.io/ligate-io/ligate-chain:<version>` (e.g. `:0.4.0`, plus `:latest`). See [docs.ligate.io/nodes](https://docs.ligate.io/nodes) for the operator-facing install + boot recipes.
 
 ### Build and test
 
@@ -332,7 +332,7 @@ Discovery and matching (which open bounties an attestation is eligible for, lead
 
 ## Development status
 
-**Devnet.** `ligate-devnet-2` is live on Celestia Mocha-testnet (running `v0.3.1`). The `v0.4.0` release adds the bounty + contract marketplace; because it shifts `chain_hash` it is not state-compatible with devnet-2 and ships via a `ligate-devnet-3` re-genesis (cutover in progress). Current surface:
+**Devnet.** `ligate-devnet-2` is live on Celestia Mocha-testnet (running `v0.4.0`). The `v0.4.0` release adds the bounty + contract marketplace; because it shifts `chain_hash` it is not state-compatible with devnet-2 and ships via a `ligate-devnet-3` re-genesis (cutover in progress). Current surface:
 
 - Attestation module: data types, state layout, call handlers, ed25519 signature validation, replay protection, fee routing.
 - Marketplace modules (`v0.4.0`): `bounty` (buyer-funded, schema-anchored, full lifecycle with module escrow, dispute windows, and finalise) and `contract` (work-for-hire with a named arbiter and a timeout-based auto-accept). Both compose on `attestation` + `chain_state`.

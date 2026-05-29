@@ -436,7 +436,7 @@ docker run -d \
     -e SOV_CELESTIA_GRPC_URL=http://host.docker.internal:9090 \
     -e SOV_CELESTIA_SIGNER_KEY="$(gcloud secrets versions access latest --secret=ligate-devnet-2-sequencer-signer)" \
     -e RUST_LOG=info,sov=info \
-    ghcr.io/ligate-io/ligate-chain:v0.3.1 \
+    ghcr.io/ligate-io/ligate-chain:v0.4.0 \
     --da-layer celestia \
     --rollup-config-path /opt/ligate/devnet/celestia.toml \
     --genesis-config-dir /opt/ligate/devnet/genesis \
