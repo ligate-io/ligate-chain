@@ -60,7 +60,13 @@ use ed25519_dalek::{Signer, SigningKey};
 use ligate_client::submit::Submitter;
 use ligate_rollup::MockRollupSpec;
 use ligate_stf::runtime::RuntimeCall;
-use serial_test::serial;
+// `file_serial(node_spawn)` uses fslock to serialise across the
+// `binary_spawn_smoke.rs` and `restart_recovery.rs` test binaries.
+// Plain `#[serial]` only serialises within ONE test binary; cargo
+// test runs the two binaries in parallel, which previously caused
+// resource contention on 2-vCPU CI runners (chain#540). Both files
+// MUST use the same key (`node_spawn`) to share the lock.
+use serial_test::file_serial;
 use sov_modules_api::capabilities::UniquenessData;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::transaction::{PriorityFeeBips, UnsignedTransaction};
@@ -100,9 +106,11 @@ const TEST_MAX_FEE_NANO: u128 = 100_000_000;
 const DEV_PRIVATE_KEY_BYTES: [u8; 32] = [0x01; 32];
 
 /// Hard ceiling on how long we'll wait for the node's `/v1/rollup/info`
-/// to return 200. Cold first-tick on MockDa is ~1s; 60s is generous
-/// for slow CI runners.
-const READY_TIMEOUT: Duration = Duration::from_secs(60);
+/// to return 200. Cold first-tick on MockDa is ~1s; 180s gives 2-vCPU
+/// CI runners headroom even when the `restart_recovery.rs` binary is
+/// blocked on the fslock immediately before us and we get the lock
+/// while the kernel is still cooling down from its spawn (chain#540).
+const READY_TIMEOUT: Duration = Duration::from_secs(180);
 
 /// Polling cadence while waiting for readiness.
 const READY_POLL: Duration = Duration::from_millis(250);
@@ -113,6 +121,23 @@ const READY_POLL: Duration = Duration::from_millis(250);
 /// and we get a stable path here without invoking cargo recursively.
 fn ligate_node_binary() -> &'static str {
     env!("CARGO_BIN_EXE_ligate-node")
+}
+
+/// Binary-spawn tests are skipped under `cargo llvm-cov`. They spawn a
+/// separate `ligate-node` process whose coverage llvm-cov cannot
+/// capture anyway, and the coverage-instrumented binary boots far
+/// slower than [`READY_TIMEOUT`], which reintroduced the chain#540
+/// flake under the coverage job even with the cross-binary fslock
+/// (`file_serial`). The plain `cargo test` CI job still runs these for
+/// real. Detected via `LLVM_PROFILE_FILE`, which cargo-llvm-cov sets
+/// on every instrumented binary.
+fn skip_under_llvm_cov() -> bool {
+    if std::env::var_os("LLVM_PROFILE_FILE").is_some() {
+        eprintln!("skipping binary-spawn test under llvm-cov instrumentation (chain#540)");
+        true
+    } else {
+        false
+    }
 }
 
 /// Allocate an ephemeral port by binding `127.0.0.1:0`, reading the
@@ -207,8 +232,11 @@ async fn wait_for_ready(base: &str) -> Result<(), String> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[serial]
+#[file_serial(node_spawn)]
 async fn binary_spawn_round_trips_register_and_submit() {
+    if skip_under_llvm_cov() {
+        return;
+    }
     // 1. Per-test workspace + port.
     let temp_dir = TempDir::new().expect("temp dir");
     let port = pick_ephemeral_port().await;
@@ -475,16 +503,21 @@ async fn poll_latest_slot_at_least(
 /// would propagate through this entire surface). Tracking issue:
 /// ligate-chain#201.
 ///
-/// `#[serial]` because this spawns a `ligate-node` binary on its own
-/// ephemeral port + tempdir, and running it in parallel with the
-/// other spawn-the-binary test in this file caused CI to time out
-/// both spawns at `wait_for_ready` on free-tier runners (a single
-/// chain boot saturates the runner's CPU; two parallel boots get
-/// neither across the 60s readiness budget). Same `#[serial]` tag
-/// as `restart_recovery.rs`'s file-level marker.
+/// `#[file_serial(node_spawn)]` because this spawns a `ligate-node`
+/// binary on its own ephemeral port + tempdir, and running it in
+/// parallel with the other spawn-the-binary test in this file (or
+/// any in `restart_recovery.rs`) caused CI to time out both spawns
+/// at `wait_for_ready` on free-tier runners (a single chain boot
+/// saturates the runner's CPU; two parallel boots get neither across
+/// the readiness budget). Shares the `node_spawn` key with all
+/// `restart_recovery.rs` tests so the fslock serialises across the
+/// two test binaries (chain#540).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[serial]
+#[file_serial(node_spawn)]
 async fn rest_error_envelope_pin() {
+    if skip_under_llvm_cov() {
+        return;
+    }
     let temp_dir = TempDir::new().expect("temp dir");
     let port = pick_ephemeral_port().await;
     let base = format!("http://127.0.0.1:{port}");

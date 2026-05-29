@@ -22,6 +22,12 @@ thiserror.workspace = true
 attestation     = { path = "../attestation" }
 sov-modules-api = { workspace = true }
 sov-bank        = { workspace = true }
+# Composed via `#[module]` so handlers can read the current rollup /
+# DA height: real `delivered_at_block`, the auto-accept timeout flow,
+# and expiry enforcement (chain#536 lifecycle completion). Mirrors the
+# bounty module. The runtime already lists `chain_state`, so the
+# reference resolves without any runtime change.
+sov-chain-state = { workspace = true }
 
 # Prometheus counters behind the `metrics` feature; matches the
 # attestation + bounty modules.
@@ -29,7 +35,8 @@ prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Tier 1 (pure unit) + tier 2 (TestRunner-based integration) tests
-# both live in `tests/integration.rs`. sov-test-utils brings the
+# both live in `tests/integration.rs`. The lifecycle / time-gating
+# handler tests live in `tests/lifecycle.rs`. sov-test-utils brings the
 # `librocksdb-sys` transitive dep; CI handles libclang.
 contract        = { path = ".", features = ["native"] }
 attestation     = { path = "../attestation", features = ["native"] }
@@ -45,6 +52,7 @@ default = []
 native = [
     "sov-modules-api/native",
     "sov-bank/native",
+    "sov-chain-state/native",
     "attestation/native",
     "dep:prometheus",
 ]

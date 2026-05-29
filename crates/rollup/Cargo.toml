@@ -112,8 +112,11 @@ ligate-stf      = { path = "../stf", features = ["test-utils"] }
 ligate-client   = { path = "../client-rs", features = ["submit"] }
 sha2            = { workspace = true }
 bech32          = "0.11"
-# Used by `restart_recovery.rs` (#193) to serialise the four
-# kill-and-respawn scenarios. CI runners can't host 4 concurrent
-# ligate-node spawns; `#[serial]` forces sequential execution per-
-# test, leaving the rest of the rollup test suite parallel.
-serial_test     = "3"
+# Used by `restart_recovery.rs` + `binary_spawn_smoke.rs` to serialise
+# binary-spawn tests. `#[serial]` alone only serialises within a single
+# test binary; the two binary-spawn .rs files compile to separate test
+# binaries that `cargo test` runs in parallel. The `file_locks` feature
+# enables `#[file_serial(key)]` which uses fslock to serialise across
+# binary boundaries on the same filesystem, eliminating the
+# binary-spawn-port race documented in chain#540.
+serial_test     = { version = "3", features = ["file_locks"] }

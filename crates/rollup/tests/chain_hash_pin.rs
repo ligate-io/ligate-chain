@@ -32,18 +32,24 @@ use sov_modules_api::Runtime as RuntimeTrait;
 type Spec = MockRollupSpec<Native>;
 
 /// Currently expected runtime `CHAIN_HASH`, hex-encoded (lowercase, no
-/// `0x` prefix, 64 chars). Bumped when the `contract` module was added
-/// to the runtime composition in chain#536 (the v0 skeleton PR for the
-/// work-for-hire primitive). History of bumps:
+/// `0x` prefix, 64 chars). Bumped when the bounty + contract modules
+/// gained their time-gated lifecycle surface (chain#519 + chain#536):
+/// each module took a `#[module] chain_state` reference, bounty added
+/// three `StateMap`s (`claim_height`, `latest_claim_height`,
+/// `open_dispute_count`) plus a `FinaliseBounty` call message, and
+/// contract added a `FinalizeDelivery` call message. New state shape +
+/// new call variants both feed the schema, so the hash moves. History
+/// of bumps:
 ///
 /// - pre-bounty: `eec077f4736df42cddb547236468dad32f1fd6822aaad1e822ce596307552df2`
 /// - post-bounty, pre-contract: `0db23038539976d0eaeb57fe4e6843d1e32dd66d428af400e9caace1fb180efc`
-/// - **current** (post-contract): see below
+/// - post-contract skeleton: `b7e07380ab28c6632b339d3b1af0acda93f55ba94b7e52b4d1fb578cfc33aef8`
+/// - **current** (lifecycle: chain_state + new state/call variants): see below
 ///
 /// Updates require: bump this value, update `STATE.md`, note the reason
 /// in the commit message.
 const EXPECTED_CHAIN_HASH: &str =
-    "b7e07380ab28c6632b339d3b1af0acda93f55ba94b7e52b4d1fb578cfc33aef8";
+    "60ec4d0b085b326cc6f5bcdc221f7264d8a0d5ce6a15c3e79b5473ba89604126";
 
 #[test]
 fn chain_hash_matches_pinned_value() {

@@ -466,6 +466,18 @@ fn dispute_locks_bond_into_escrow_and_writes_dispute_state() {
     let attestation_id = submit_attestation_via_runner(&mut env, [0xCCu8; 32]);
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
 
+    // A dispute contests a settled claim, so claim first.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
+            bounty_id,
+            claims: SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
+                AttestationClaim { attestation_id },
+            ])
+            .expect("1 claim fits"),
+        }),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
+
     env.runner.execute_transaction(TransactionTestCase {
         input: env.disputer.create_plain_message::<RT, Bounty<S>>(
             CallMessage::DisputeAttestation {
@@ -506,6 +518,17 @@ fn resolve_dispute_accept_returns_bond_to_disputer() {
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xDDu8; 32]);
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
+    // A dispute contests a settled claim, so claim first.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
+            bounty_id,
+            claims: SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
+                AttestationClaim { attestation_id },
+            ])
+            .expect("1 claim fits"),
+        }),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
     env.runner.execute_transaction(TransactionTestCase {
         input: env.disputer.create_plain_message::<RT, Bounty<S>>(
             CallMessage::DisputeAttestation {
@@ -560,6 +583,17 @@ fn resolve_dispute_reject_forfeits_bond_to_poster() {
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xEEu8; 32]);
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
+    // A dispute contests a settled claim, so claim first.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
+            bounty_id,
+            claims: SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
+                AttestationClaim { attestation_id },
+            ])
+            .expect("1 claim fits"),
+        }),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
     env.runner.execute_transaction(TransactionTestCase {
         input: env.disputer.create_plain_message::<RT, Bounty<S>>(
             CallMessage::DisputeAttestation {
@@ -600,6 +634,17 @@ fn resolve_dispute_rejects_non_board_operator() {
     });
     let attestation_id = submit_attestation_via_runner(&mut env, [0xF1u8; 32]);
     let bounty_id = BountyId::derive(poster_addr.as_ref(), &board, 0);
+    // A dispute contests a settled claim, so claim first.
+    env.runner.execute_transaction(TransactionTestCase {
+        input: env.poster.create_plain_message::<RT, Bounty<S>>(CallMessage::ClaimBounty {
+            bounty_id,
+            claims: SafeVec::<AttestationClaim, MAX_CLAIMS_PER_CALL>::try_from(vec![
+                AttestationClaim { attestation_id },
+            ])
+            .expect("1 claim fits"),
+        }),
+        assert: Box::new(|r, _| assert!(r.tx_receipt.is_successful())),
+    });
     env.runner.execute_transaction(TransactionTestCase {
         input: env.disputer.create_plain_message::<RT, Bounty<S>>(
             CallMessage::DisputeAttestation {

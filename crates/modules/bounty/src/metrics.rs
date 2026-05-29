@@ -50,6 +50,17 @@ fn paid_out_counter() -> &'static IntCounter {
     })
 }
 
+fn finalise_bounty_counter() -> &'static IntCounter {
+    static CELL: OnceLock<IntCounter> = OnceLock::new();
+    CELL.get_or_init(|| {
+        register_int_counter!(
+            "ligate_bounty_finalised_total",
+            "Total `FinaliseBounty` calls accepted by the bounty module."
+        )
+        .expect("counter registration succeeds on first call")
+    })
+}
+
 /// Increment `ligate_bounty_posted_total`.
 pub fn record_post_bounty() {
     post_bounty_counter().inc();
@@ -58,6 +69,11 @@ pub fn record_post_bounty() {
 /// Increment `ligate_bounty_claimed_total`.
 pub fn record_claim_bounty() {
     claim_bounty_counter().inc();
+}
+
+/// Increment `ligate_bounty_finalised_total`.
+pub fn record_finalise_bounty() {
+    finalise_bounty_counter().inc();
 }
 
 /// Add to `ligate_bounty_avow_paid_out_total`. Reserved for the
