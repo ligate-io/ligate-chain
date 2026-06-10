@@ -312,11 +312,13 @@ ignore = [
   # --- Vulnerability ignores (synced with audit.toml) ---
   "RUSTSEC-2023-0071", # rsa Marvin attack via sqlx-mysql (no MySQL in our path)
   "RUSTSEC-2025-0055", # tracing-subscriber ANSI escape via deep risc0 chain
-  "RUSTSEC-2025-0134", # rustls-pemfile unmaintained, jsonrpsee transitive
   "RUSTSEC-2025-0141", # bincode 1.x unmaintained via sov-db
-  "RUSTSEC-2026-0066", # astral-tokio-tar dir-traversal via sov-test-utils dev-dep
-  "RUSTSEC-2026-0112", # astral-tokio-tar PAX header desync, same dep path
-  "RUSTSEC-2026-0113", # astral-tokio-tar chmod via symlinks, same dep path
+  # 2026-06-10: RustSec advisory DB upstream rotated/withdrew 4 advisories
+  # we used to ignore (RUSTSEC-2025-0134 rustls-pemfile, RUSTSEC-2026-0066 /
+  # -0112 / -0113 astral-tokio-tar); cargo-deny then errors with
+  # "advisory was not encountered" on ignore entries that no longer match
+  # any crate. Removed; -0145 (the surviving astral-tokio-tar PAX desync)
+  # is still detected so it stays.
   "RUSTSEC-2026-0145", # astral-tokio-tar 0.6.1 PAX desync, same dep path (fix >= 0.6.2)
 
   # --- Unmaintained-crate advisories ---
@@ -327,6 +329,7 @@ ignore = [
   "RUSTSEC-2024-0388", # derivative, archived, transitive via SDK proc-macros
   "RUSTSEC-2024-0436", # paste, archived (still works), transitive deep
   "RUSTSEC-2025-0057", # fxhash, archived, transitive via SDK dep graph
+  "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained, transitive via sov-mock-da -> sea-orm-macros -> sea-bae
 ]
 
 [bans]
