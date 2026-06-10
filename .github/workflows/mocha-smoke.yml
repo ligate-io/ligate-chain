@@ -172,9 +172,12 @@ jobs:
           # reachable from outside -- so skipping auth is safe here and
           # avoids plumbing a token through. Real deploys keep auth on
           # and set `SOV_CELESTIA_RPC_AUTH_TOKEN`.
+          # Pin trusted peers to v9-aware operators; defaults cycle through stale peers and time out the 20s node start.
           nohup celestia light start \
               --core.ip "${MOCHA_BRIDGE}" \
               --p2p.network mocha \
+              --headers.trusted-peers /dnsaddr/mocha-boot.pops.one/p2p/12D3KooWDzNyDSvTBdKQAmnsUdAyQCQWwM3ReXTmPaaf6LzfNwRs \
+              --headers.trusted-peers /dnsaddr/da-bootstrapper-1-mocha-4.celestia-mocha.com/p2p/12D3KooWCBAbQbJSpCpCGKzqz3rAN4ixYbc63K68zJg9aisuAajg \
               --rpc.addr 127.0.0.1 \
               --rpc.port 26658 \
               --rpc.skip-auth \
