@@ -225,7 +225,7 @@ Wiring:
 Workflow flow:
 
 1. Build `ligate-node` + `ligate-genesis-tool` (cold cache ~50 min; warm ~10-15).
-2. Install celestia-node v0.30.2, start it against `${MOCHA_BRIDGE}` (default `rpc-mocha.pops.one`).
+2. Install celestia-node v0.31.1-mocha or later (required for celestia-app v9 support; the 2026-06-01 Mocha v9 fork makes v0.30.2 and earlier reject all new headers). Start it against `${MOCHA_BRIDGE}` (default `rpc-mocha.pops.one`).
 3. Generate ephemeral keys (operator + demo1 + demo2), substitute all four placeholder addresses (3 `lig1` + 1 `celestia1`), run `ligate-genesis-tool generate --da celestia` to produce + verify a valid genesis, then anchor `genesis_da_height` to a live Mocha block.
 4. Boot `ligate-node --da-layer celestia` against the ephemeral genesis.
 5. Run steps 1-7 of the manual procedure (chain identity, slot encoding, DA metrics) against the running node.
