@@ -74,8 +74,14 @@ jobs:
       # `signer_private_key`). The runner has no co-located
       # `celestia-appd`, so this points at a public Mocha consensus
       # endpoint; override via the `MOCHA_GRPC_URL` repo variable to
-      # switch providers (e.g. during celestia-mocha.com maintenance).
-      SOV_CELESTIA_GRPC_URL: ${{ vars.MOCHA_GRPC_URL || 'http://full.consensus.mocha-4.celestia-mocha.com:9090' }}
+      # switch providers (e.g. during pops.one maintenance).
+      #
+      # 2026-06-01: the previous fallback (`full.consensus.mocha-4.celestia-mocha.com:9090`)
+      # went unreachable around the v9 fork. `rpc-mocha.pops.one:9090` is
+      # what the production sequencer + every other surviving Mocha
+      # operator points at; matching that here keeps the smoke and prod
+      # paths on the same consensus core.
+      SOV_CELESTIA_GRPC_URL: ${{ vars.MOCHA_GRPC_URL || 'http://rpc-mocha.pops.one:9090' }}
       # `celestia1...` bech32 of the operator's TIA wallet. Public
       # value (derived from the public key of `MOCHA_TIA_SIGNER_KEY`),
       # so it lives in a repo variable rather than a secret. Used to
@@ -138,9 +144,17 @@ jobs:
       # Install + initialize the Celestia light node. Pin to a known
       # version; bump as upstream releases land. Asset name is the
       # tarball; extract the `celestia` binary out of it.
+      #
+      # 2026-06-01: Mocha hard-forked to celestia-app v9; v0.30.2 and
+      # earlier reject every new header ("version 9, this node supports
+      # up to version 8") and freeze the light node. v0.31.0-mocha was
+      # the first release with v9 support; v0.31.1-mocha is the current
+      # patch. Same fork is what took down the public sequencer VM the
+      # week of 06-01 -- runbook `docs/development/runbooks/mocha-smoke.md`
+      # carries the operator-side note.
       - name: Install Celestia light node
         run: |
-          CELESTIA_VERSION=v0.30.2
+          CELESTIA_VERSION=v0.31.1-mocha
           curl -fL "https://github.com/celestiaorg/celestia-node/releases/download/${CELESTIA_VERSION}/celestia-node_Linux_x86_64.tar.gz" \
             -o /tmp/celestia.tar.gz
           tar -xzf /tmp/celestia.tar.gz -C /usr/local/bin celestia
