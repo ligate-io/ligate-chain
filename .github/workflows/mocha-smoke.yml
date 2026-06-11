@@ -202,7 +202,8 @@ jobs:
           echo "Waiting for light node to catch up to NetworkHead..."
           HEAD=0
           NETWORK_HEAD=0
-          for i in {1..120}; do
+          # 240 iters * 5s = 20 min; trusted-state anchor in v0.31.x sits ~65k blocks behind head, ~205 blocks/s sync rate.
+          for i in {1..240}; do
               HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
                   -H 'Content-Type: application/json' \
                   -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}' \
@@ -226,7 +227,7 @@ jobs:
           # exact 503 Syncing trap that motivated this wait.
           GAP=$((NETWORK_HEAD - HEAD))
           if [ "${HEAD:-0}" -le 0 ] || [ "${NETWORK_HEAD:-0}" -le 0 ] || [ "$GAP" -gt 10 ]; then
-              echo "FAIL: light node didn't catch up within 10 min (LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD}, gap=${GAP})." >&2
+              echo "FAIL: light node didn't catch up within 20 min (LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD}, gap=${GAP})." >&2
               exit 1
           fi
 
