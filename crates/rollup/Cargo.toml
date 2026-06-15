@@ -111,7 +111,7 @@ ligate-stf      = { path = "../stf", features = ["test-utils"] }
 # in-process `e2e_smoke.rs` can't reach.
 ligate-client   = { path = "../client-rs", features = ["submit"] }
 sha2            = { workspace = true }
-bech32          = "0.11"
+bech32          = "0.12"
 # Used by `restart_recovery.rs` + `binary_spawn_smoke.rs` to serialise
 # binary-spawn tests. `#[serial]` alone only serialises within a single
 # test binary; the two binary-spawn .rs files compile to separate test
