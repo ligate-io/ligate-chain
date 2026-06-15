@@ -824,6 +824,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
 
 [[package]]
+name = "bech32"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efbd3e1070bbdf4cd88a75264e18e8a26f7cb5c6949eadf0ceb85fb159cf08f8"
+
+[[package]]
 name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1346,7 +1352,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "394ae3bd14f0a3792c312fd0ffc1a1719fd3c8d28cf1f8016afd01cce6197001"
 dependencies = [
  "base64 0.22.1",
- "bech32",
+ "bech32 0.11.1",
  "bitvec",
  "blockstore",
  "bytes",
@@ -2027,7 +2033,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4340,7 +4346,7 @@ dependencies = [
  "async-trait",
  "attestation",
  "axum",
- "bech32",
+ "bech32 0.12.0",
  "borsh",
  "bounty",
  "clap",
@@ -7947,7 +7953,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
- "bech32",
+ "bech32 0.11.1",
  "borsh",
  "celestia-client",
  "celestia-types",
@@ -8193,7 +8199,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "bech32",
+ "bech32 0.11.1",
  "borsh",
  "bs58",
  "clap",
@@ -8235,7 +8241,7 @@ version = "0.3.0"
 source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=ffff9dfe6b615d8fbb1f71515adc760e295eb7a5#ffff9dfe6b615d8fbb1f71515adc760e295eb7a5"
 dependencies = [
  "anyhow",
- "bech32",
+ "bech32 0.11.1",
  "blake2",
  "convert_case 0.6.0",
  "darling 0.21.3",
@@ -8486,7 +8492,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backon",
- "bech32",
+ "bech32 0.11.1",
  "borsh",
  "bytes",
  "derive_more",
@@ -8712,7 +8718,7 @@ source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=ffff9dfe6b615d8
 dependencies = [
  "alloy-primitives",
  "arrayvec",
- "bech32",
+ "bech32 0.11.1",
  "borsh",
  "bs58",
  "hex",
@@ -8731,7 +8737,7 @@ name = "sov-universal-wallet-macro-helpers"
 version = "0.3.0"
 source = "git+https://github.com/ligate-io/sovereign-sdk.git?rev=ffff9dfe6b615d8fbb1f71515adc760e295eb7a5#ffff9dfe6b615d8fbb1f71515adc760e295eb7a5"
 dependencies = [
- "bech32",
+ "bech32 0.11.1",
  "borsh",
  "bs58",
  "darling 0.21.3",
