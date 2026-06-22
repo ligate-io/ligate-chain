@@ -34,9 +34,9 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
-          # actions/checkout@v6 persists its own `Authorization` header in
+          # actions/checkout@v7 persists its own `Authorization` header in
           # the local git config. When `peter-evans/create-pull-request@v8`
           # later pushes the auto-PR branch, it adds its own header too,
           # producing `Duplicate header: "Authorization"` and a git HTTP

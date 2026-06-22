@@ -58,7 +58,7 @@ jobs:
             arch_label: arm64
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Docker buildx
         uses: docker/setup-buildx-action@v4
