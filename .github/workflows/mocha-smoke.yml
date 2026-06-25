@@ -172,9 +172,12 @@ jobs:
           # reachable from outside -- so skipping auth is safe here and
           # avoids plumbing a token through. Real deploys keep auth on
           # and set `SOV_CELESTIA_RPC_AUTH_TOKEN`.
+          # Pin trusted peers to v9-aware operators; defaults cycle through stale peers and time out the 20s node start.
           nohup celestia light start \
               --core.ip "${MOCHA_BRIDGE}" \
               --p2p.network mocha \
+              --headers.trusted-peers /dnsaddr/mocha-boot.pops.one/p2p/12D3KooWDzNyDSvTBdKQAmnsUdAyQCQWwM3ReXTmPaaf6LzfNwRs \
+              --headers.trusted-peers /dnsaddr/da-bootstrapper-1-mocha-4.celestia-mocha.com/p2p/12D3KooWCBAbQbJSpCpCGKzqz3rAN4ixYbc63K68zJg9aisuAajg \
               --rpc.addr 127.0.0.1 \
               --rpc.port 26658 \
               --rpc.skip-auth \
@@ -199,7 +202,8 @@ jobs:
           echo "Waiting for light node to catch up to NetworkHead..."
           HEAD=0
           NETWORK_HEAD=0
-          for i in {1..120}; do
+          # 240 iters * 5s = 20 min; trusted-state anchor in v0.31.x sits ~65k blocks behind head, ~205 blocks/s sync rate.
+          for i in {1..240}; do
               HEAD=$(curl -s -X POST http://127.0.0.1:26658 \
                   -H 'Content-Type: application/json' \
                   -d '{"jsonrpc":"2.0","id":1,"method":"header.LocalHead","params":[]}' \
@@ -223,7 +227,7 @@ jobs:
           # exact 503 Syncing trap that motivated this wait.
           GAP=$((NETWORK_HEAD - HEAD))
           if [ "${HEAD:-0}" -le 0 ] || [ "${NETWORK_HEAD:-0}" -le 0 ] || [ "$GAP" -gt 10 ]; then
-              echo "FAIL: light node didn't catch up within 10 min (LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD}, gap=${GAP})." >&2
+              echo "FAIL: light node didn't catch up within 20 min (LocalHead=${HEAD}, NetworkHead=${NETWORK_HEAD}, gap=${GAP})." >&2
               exit 1
           fi
 
