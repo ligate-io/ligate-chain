@@ -95,7 +95,7 @@ jobs:
           # runner is wired up. Original add: PR #227 (closes #210).
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Need full history for the changelog excerpt step.
           fetch-depth: 0
@@ -233,7 +233,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout (for CHANGELOG access)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
