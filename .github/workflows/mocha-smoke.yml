@@ -22,11 +22,10 @@ on:
         required: false
         default: 'main'
 
-  # Nightly at 06:00 UTC. Catches Celestia upgrades, DA adapter
-  # regressions, blob-submission breakage, and TIA-balance issues
-  # before the operator notices them in business hours.
-  schedule:
-    - cron: '0 6 * * *'
+  # Nightly schedule disabled: paused until the v0.31.x trusted-peers + 20-min sync
+  # wait fix in #560 merges. Re-enable by uncommenting the schedule + cron lines.
+  # schedule:
+  #   - cron: '0 6 * * *'
 
 env:
   CARGO_TERM_COLOR: always
